@@ -37,6 +37,19 @@ object PocketCcdColors {
     val LensBlueDeep = Color(0xFF0B1520)
     val LensCore = Color(0xFF07131F)
     val Flash = Color(0xFFFFF3D6)
+
+    // Camera body / viewfinder surfaces. Keep these few: the brief asks for
+    // restrained industrial design, not stacked glassmorphism layers.
+    val CameraPanelTop = Color(0xFF1A1A1F)
+    val CameraPanelBottom = Color(0xFF0A0A0C)
+    val CameraPanelHighlight = Color(0x22FFFFFF)
+    val ViewfinderTop = Color(0xFF0A1315)
+    val ViewfinderBottom = Color(0xFF020405)
+    val ViewfinderGlow = Color(0x1A7FB4B8)
+    val ShutterOuter = Color(0xFF303036)
+    val ShutterInner = Color(0xFFFF5A36)
+    val ShutterInnerPressed = Color(0xFFE04A2A)
+    val ShutterHighlight = Color(0x88FFFFFF)
 }
 
 object PocketCcdSpacing {
@@ -54,8 +67,10 @@ object PocketCcdRadius {
     val xs = 4.dp
     val sm = 8.dp
     val md = 12.dp
+    val viewfinder = 18.dp
     val lg = 20.dp
     val xl = 28.dp
+    val xxl = 36.dp
     val pill = 100.dp
 }
 
@@ -73,8 +88,6 @@ object PocketCcdSizes {
     val icon = 22.dp
     val hintIcon = 20.dp
     val flashDot = 6.dp
-    val viewfinderWidth = 38.dp
-    val viewfinderHeight = 24.dp
     val accentStripWidth = 44.dp
     val accentStripHeight = 4.dp
     val actionHeight = 64.dp
@@ -85,6 +98,18 @@ object PocketCcdSizes {
     val lensArcInset = 10.dp
     val lensArcSizeInset = 20.dp
     val lensArcStroke = 3.dp
+
+    // Camera page geometry
+    val cameraPanelMargin = 16.dp
+    val cameraPanelPadding = 16.dp
+    val viewfinderPadding = 20.dp
+    val viewfinderInnerBorder = 1.dp
+    val shutterOuter = 104.dp
+    val shutterRing = 96.dp
+    val sideControl = 52.dp
+    val topBarHeight = 48.dp
+    val nameplateHeight = 32.dp
+    val pullThreshold = 88.dp
 }
 
 object PocketCcdMotion {

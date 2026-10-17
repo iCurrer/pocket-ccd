@@ -31,6 +31,16 @@
 | `LensBlueDeep` | `#0B1520` | 镜头玻璃过渡 | 临时 |
 | `LensCore` | `#07131F` | 镜头中心 | 临时 |
 | `Flash` | `#FFF3D6` | 闪光灯点 | 临时 |
+| `CameraPanelTop` | `#1A1A1F` | 拍摄页机身上缘 | 临时 |
+| `CameraPanelBottom` | `#0A0A0C` | 拍摄页机身下缘 | 临时 |
+| `CameraPanelHighlight` | `#22FFFFFF` | 机身内高光/内边框 | 临时 |
+| `ViewfinderTop` | `#0A1315` | 取景框上缘 | 临时 |
+| `ViewfinderBottom` | `#020405` | 取景框下缘 | 临时 |
+| `ViewfinderGlow` | `#1A7FB4B8` | 取景框微弱反射 | 临时 |
+| `ShutterOuter` | `#303036` | 快门金属外环 | 临时 |
+| `ShutterInner` | `#FF5A36` | 快门橙红面 | 临时 |
+| `ShutterInnerPressed` | `#E04A2A` | 快门按压面 | 临时 |
+| `ShutterHighlight` | `#88FFFFFF` | 快门高光 | 临时 |
 
 **对比度检查（待 T1-014 用工具复测）：**
 - `TextPrimary` on `Background`：高对比，预计 > 12:1；
@@ -55,10 +65,13 @@
 
 | 令牌 | 值 | 用途 |
 |---|---|---|
+| `xs` | 4dp | 小装饰 |
 | `sm` | 8dp | 小控件 |
 | `md` | 12dp | 缩略图 |
+| `viewfinder` | 18dp | 取景框 |
 | `lg` | 20dp | 卡片 |
-| `xl` | 28dp | 机身/大卡片 |
+| `xl` | 28dp | 大卡片 |
+| `xxl` | 36dp | 拍摄页机身 |
 | `pill` | 100dp | 胶囊按钮 |
 
 ## 4. 尺寸
@@ -78,12 +91,21 @@
 | `icon` | 22dp | 顶栏图标 |
 | `hintIcon` | 20dp | 下拉提示图标 |
 | `flashDot` | 6dp | 闪光灯指示点 |
-| `viewfinderWidth` / `viewfinderHeight` | 38dp / 24dp | 取景窗装饰 |
 | `accentStripWidth` / `accentStripHeight` | 44dp / 4dp | 机身强调条 |
 | `actionHeight` | 64dp | 底部按钮/卡片高度 |
 | `ctaMinWidth` | 144dp | 主 CTA 最小宽度 |
 | `hairline` | 1dp | 细边框 |
 | `lensBorder` | 2dp | 镜头边框 |
+| `cameraPanelMargin` | 16dp | 拍摄页机身外边距 |
+| `cameraPanelPadding` | 16dp | 机身内边距 |
+| `viewfinderPadding` | 20dp | 取景框四周机身留白 |
+| `viewfinderInnerBorder` | 1dp | 取景框内边框 |
+| `shutterOuter` | 104dp | 快门总触摸区 |
+| `shutterRing` | 96dp | 快门金属环 |
+| `sideControl` | 52dp | 闪光灯/切换按钮 |
+| `topBarHeight` | 48dp | 拍摄页顶栏 |
+| `nameplateHeight` | 32dp | 型号铭牌 |
+| `pullThreshold` | 88dp | 首页下拉触发阈值（待真机调参） |
 
 ## 5. 字体
 

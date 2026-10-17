@@ -4,6 +4,7 @@
     <string name="home_subtitle">迷你数码相机 · 原型</string>
     <string name="home_open_camera">进入相机</string>
     <string name="home_privacy_note">本地拍摄 · 不上传</string>
+    <string name="home_pull_hint">下拉进入相机</string>
     <string name="gallery_count_zero">0 张</string>
     <string name="action_gallery">图库</string>
     <string name="action_settings">设置</string>
@@ -11,6 +12,19 @@
     <string name="camera_title">拍摄</string>
     <string name="camera_placeholder">相机占位\n阶段 1 不申请权限</string>
     <string name="camera_fake_capture">模拟拍摄</string>
+    <string name="camera_top_label">DIGITAL CAMERA</string>
+    <string name="camera_model">MODEL DC-01</string>
+    <string name="camera_filter">DAYLIGHT</string>
+    <string name="camera_preview_placeholder">相机预览占位</string>
+    <string name="camera_preview_caption">静态预览 · 相机未接入</string>
+    <string name="camera_collapse">收起拍摄界面</string>
+    <string name="camera_flash_on">闪光灯开</string>
+    <string name="camera_flash_off">闪光灯关</string>
+    <string name="camera_flip_front">切换到前置摄像头</string>
+    <string name="camera_flip_back">切换到后置摄像头</string>
+    <string name="camera_shutter">快门</string>
+    <string name="camera_gallery">打开图库</string>
+    <string name="camera_static_badge">STATIC PREVIEW</string>
     <string name="gallery_title">图库</string>
     <string name="gallery_empty">还没有照片</string>
     <string name="gallery_open_sample">打开示例照片</string>

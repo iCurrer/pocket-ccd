@@ -139,8 +139,9 @@
 | TC-P1-013 | 横屏、≥600dp 宽度、分屏/自由窗口 | 布局可用；不拉伸；不遮挡系统栏；Camera 页控制区可达 | 手工 + 截图 | 否 | `NOT_RUN` |
 | TC-P1-019 | 依次触发每个页面的 loading/empty/error/正常态 | 每个状态有明确 UI；无死路；错误有动作 | UI | 是 | `NOT_RUN` |
 | TC-P1-023 | 在 Camera/Gallery 按 Home 键后从最近任务恢复；开发者选项“不保留活动” | 恢复到合理页面；不崩溃；不丢失关键状态 | 手工 | 否 | `NOT_RUN` |
-| TC-P1-025 | 静态检查阶段 1 代码/依赖 | 无 CameraX/Camera2 类；无相机权限；无相机初始化 | 静态 | 是 | `PASS`（仅骨架；T1-008 后需复检） |
+| TC-P1-025 | 静态检查阶段 1 代码/依赖 | 无 CameraX/Camera2 类；无相机权限；无相机初始化 | 静态 | 是 | `PASS`（2026-10-17 复检：`ui/camera` 无 CameraX/Camera2 import；Manifest 无 CAMERA） |
 | TC-P1-026 | 运行 `AppStateTest` 覆盖 HOME/CAMERA/GALLERY/RESULT/SETTINGS 转换、非法转换、重复事件、返回 | 12 个测试全部通过；非法转换不改变状态 | 单元 | 是 | `PASS`（2026-10-17，12/12，0 failures） |
+| TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 取景框有 16dp 机身外边距/20dp 内留白/4:3；快门≥48dp；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
 
 ### 5.3 无障碍与视觉
 
@@ -188,13 +189,15 @@
 | T1-005 单测结果 | `AppStateTest`：12 tests / 0 failures / 0 errors |
 | T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B` |
 | T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
-| T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574`（随代码变化，不作为固定指纹） |
+| T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
+| T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 8s`；42 tasks（18 executed） |
+| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `2FB153782477EBF484ACB02022B7C98521A4DE9DAFDAC9069DD6DF2B60B4B3E6`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006 的代码可编译，静态硬编码检查通过。T1-003/T1-004/T1-005/T1-006 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008 的代码可编译，静态硬编码/无相机依赖检查通过。T1-007 仅实现了 88dp 距离阈值和下拉跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -402,6 +405,7 @@ test-evidence/
 | Android 构建 | `PASS` | 2026-10-17 `assembleDebug` 成功；APK/哈希见 5.6 |
 | 状态机单元测试 | `PASS` | `AppStateTest` 12/12；见 5.6 |
 | 设计令牌/首页静态检查 | `PASS` | 页面使用令牌；仅 Preview 背景色例外；见 5.6 |
+| 拍摄页静态检查 | `PASS` | 无 CameraX/Camera2；无 CAMERA；机身内取景框；见 `TC-P1-028` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |
@@ -409,7 +413,7 @@ test-evidence/
 | 性能/内存 | `NOT_RUN` | 无设备 |
 | 视觉评审 | `NOT_RUN` | 无截图 |
 
-**结论：** 截至目前，**构建链路、导航状态机逻辑、设计令牌的结构化使用**已实际验证；**没有任何页面/相机/滤镜/性能被实际验证**。不得在 `PROJECT_STATE.md` 或对外表述中写“App 已通过”“相机/滤镜/性能已通过”。
+**结论：** 截至目前，**构建链路、导航状态机逻辑、设计令牌的结构化使用、拍摄页静态约束**已实际验证；**没有任何页面在设备上运行、没有相机/滤镜/性能验证**。不得在 `PROJECT_STATE.md` 或对外表述中写“App 已通过”“相机/滤镜/性能已通过”“UI 已完成验收”。
 
 ---
 

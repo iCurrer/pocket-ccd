@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +38,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,6 +59,10 @@ fun HomeScreen(
     onOpenGallery: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val density = LocalDensity.current
+    val pullThresholdPx = with(density) { PocketCcdSizes.pullThreshold.toPx() }
+    val dragDistance = remember { mutableFloatStateOf(0f) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -64,11 +74,36 @@ fun HomeScreen(
                         PocketCcdColors.Background,
                     ),
                 ),
-            ),
+            )
+            .pointerInput(pullThresholdPx) {
+                detectVerticalDragGestures(
+                    onDragStart = { dragDistance.floatValue = 0f },
+                    onDragEnd = {
+                        if (dragDistance.floatValue >= pullThresholdPx) {
+                            onOpenCamera()
+                        }
+                        dragDistance.floatValue = 0f
+                    },
+                    onDragCancel = { dragDistance.floatValue = 0f },
+                    onVerticalDrag = { change, dragAmount ->
+                        // Only downward pull participates; horizontal taps/buttons still work.
+                        if (dragAmount > 0f || dragDistance.floatValue > 0f) {
+                            dragDistance.floatValue =
+                                (dragDistance.floatValue + dragAmount).coerceAtLeast(0f)
+                            change.consume()
+                        }
+                    },
+                )
+            },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    // Small follow-through during the pull; the full expansion is
+                    // the AppRoot AnimatedContent transition.
+                    translationY = dragDistance.floatValue * 0.10f
+                }
                 .padding(
                     horizontal = PocketCcdSpacing.xl,
                     vertical = PocketCcdSpacing.lg,
@@ -278,19 +313,6 @@ private fun CameraIllustration() {
 
         Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(
-                    width = PocketCcdSizes.viewfinderWidth,
-                    height = PocketCcdSizes.viewfinderHeight,
-                )
-                .border(
-                    PocketCcdSizes.hairline,
-                    PocketCcdColors.Outline,
-                    RoundedCornerShape(PocketCcdRadius.xs),
-                ),
-        )
-        Box(
-            modifier = Modifier
                 .align(Alignment.BottomStart)
                 .width(PocketCcdSizes.accentStripWidth)
                 .height(PocketCcdSizes.accentStripHeight)
@@ -310,7 +332,7 @@ private fun PullDownHint() {
             modifier = Modifier.size(PocketCcdSizes.hintIcon),
         )
         Text(
-            text = "下拉进入相机",
+            text = stringResource(R.string.home_pull_hint),
             style = MaterialTheme.typography.labelSmall,
             color = PocketCcdColors.TextTertiary,
         )

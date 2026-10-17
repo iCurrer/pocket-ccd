@@ -2,6 +2,15 @@ package com.pocketccd.prototype.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -33,6 +42,7 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
+import com.pocketccd.prototype.ui.camera.CameraScreen
 import com.pocketccd.prototype.ui.home.HomeScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
@@ -59,6 +69,45 @@ fun PocketCcdApp(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing),
+            transitionSpec = {
+                when {
+                    initialState == AppDestination.HOME && targetState == AppDestination.CAMERA -> {
+                        (
+                            expandVertically(
+                                animationSpec = tween(
+                                    durationMillis = 360,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                                expandFrom = Alignment.Top,
+                            ) + fadeIn(tween(220))
+                            ) togetherWith (
+                            fadeOut(tween(160)) + scaleOut(
+                                targetScale = 0.985f,
+                                animationSpec = tween(220),
+                            )
+                            )
+                    }
+
+                    initialState == AppDestination.CAMERA && targetState == AppDestination.HOME -> {
+                        (
+                            fadeIn(tween(220)) + scaleIn(
+                                initialScale = 0.985f,
+                                animationSpec = tween(240),
+                            )
+                            ) togetherWith (
+                            shrinkVertically(
+                                animationSpec = tween(
+                                    durationMillis = 320,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                                shrinkTowards = Alignment.Top,
+                            ) + fadeOut(tween(180))
+                            )
+                    }
+
+                    else -> fadeIn(tween(200)) togetherWith fadeOut(tween(160))
+                }
+            },
             label = "app-destination",
         ) { destination ->
             when (destination) {
@@ -68,10 +117,10 @@ fun PocketCcdApp(
                     onOpenSettings = { onEvent(AppEvent.OpenSettings) },
                 )
 
-                AppDestination.CAMERA -> CameraPlaceholder(
-                    onFakeCapture = { onEvent(AppEvent.OpenResult) },
+                AppDestination.CAMERA -> CameraScreen(
+                    onCollapse = { onEvent(AppEvent.NavigateBack) },
                     onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                    onBack = { onEvent(AppEvent.NavigateBack) },
+                    onShutter = { onEvent(AppEvent.OpenResult) },
                 )
 
                 AppDestination.GALLERY -> GalleryPlaceholder(
@@ -89,28 +138,6 @@ fun PocketCcdApp(
                     onBack = { onEvent(AppEvent.NavigateBack) },
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun CameraPlaceholder(
-    onFakeCapture: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onBack: () -> Unit,
-) {
-    PlaceholderScreen(
-        title = stringResource(R.string.camera_title),
-        body = stringResource(R.string.camera_placeholder),
-    ) {
-        Button(onClick = onFakeCapture) {
-            Text(stringResource(R.string.camera_fake_capture))
-        }
-        OutlinedButton(onClick = onOpenGallery) {
-            Text(stringResource(R.string.action_gallery))
-        }
-        TextButton(onClick = onBack) {
-            Text(stringResource(R.string.action_back))
         }
     }
 }
