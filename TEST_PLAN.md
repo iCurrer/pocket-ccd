@@ -158,6 +158,8 @@
 | TC-P1-042 | 检查系统栏与页面同色/图标对比 | HOME/CAMERA 的 `Surface` 用 `RetroRed`；其他页用浅薄荷；状态栏/导航栏图标随之切换 | 静态 | 是 | `PASS`（2026-10-17；真机未验） |
 | TC-P1-043 | 检查共享转场 overlay 防矩形闪角 | `sharedBounds` 有 36dp `OverlayClip` + `zIndexInOverlay=1f` + `Enter/Exit None`；红页底 non-cream | 静态 | 是 | `PASS`（2026-10-17；真机慢放未验） |
 | TC-P1-044 | 检查首页品牌区无多余线条 | 已删 `PULL DOWN`、外圈白线、闪光窗分割线、镜头弧线；品牌 16sp/1.5sp | 静态 | 是 | `PASS`（2026-10-17） |
+| TC-P1-045 | 检查首页/拍摄页单一持久 Stage | HOME/CAMERA 不为两个 `AnimatedContent` 页面；`CameraStageScreen` 共用机身；拖拽 progress 驱动 | 静态 | 是 | `PASS`（2026-10-17；真机跟手未验） |
+| TC-P1-046 | 检查红框机身全页统一 | `ToyCameraBody` 外框为红、内面板奶油；首页/拍摄/照片墙/成片/设置同一外框 | 静态 | 是 | `PASS`（2026-10-17；真机视觉未验） |
 
 ### 5.3 无障碍与视觉
 
@@ -220,12 +222,15 @@
 | 红色首页构建（打磨后） | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 996ms`（增量，全部 up-to-date）；44 tasks |
 | 红色首页当前 APK | 30,865,797 bytes；SHA-256 `40EDEF5EBBEAA775F360952CCF94090B79472AB3A0EFBBAE470510B04668F2AB`（随代码变化，不作为固定指纹） |
 | 红色首页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 6s`；`app-release-unsigned.apk` 23,446,442 bytes；SHA-256 `7C952C5771EE25A04418F7E629DB019C8C3C7252AB921CEBF79CB9A239059332`；未签名，未安装 |
+| Stage 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 2s`；44 tasks（8 executed） |
+| Stage 当前 APK | 30,865,856 bytes；SHA-256 `FA1D7F7A3A1DFA053684DF7C2B4B7B9CA0628CFBE69DE4528E906B65F6B092B9`（随代码变化，不作为固定指纹） |
+| Stage Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 5s`；`app-release-unsigned.apk` 23,511,978 bytes；SHA-256 `60165770A1573CDE1442925973B37C5C8997E21AD03596387C948AD425D3B56A`；未签名，未安装 |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；V2 玩具材质重构 + 红色首页/拍摄页后的代码可编译，静态硬编码/无相机依赖/Result 状态变体/设置页 Debug 门控/机身结构/红色页面结构检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010/T1-011 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；红色外框 + 持久 Stage 后的代码可编译，静态硬编码/无相机依赖/Result 状态变体/设置页 Debug 门控/机身结构/红色页面结构检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010/T1-011 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -447,6 +452,8 @@ test-evidence/
 | 系统栏同色检查 | `PASS` | 红页 Surface/图标动态切换；见 `TC-P1-042` |
 | 转场 overlay 裁剪检查 | `PASS` | 36dp OverlayClip 防矩形闪角；运行时未验；见 `TC-P1-043` |
 | 品牌区线条精简检查 | `PASS` | 删除多余说明/边线/弧线；见 `TC-P1-044` |
+| 持久 Stage 静态检查 | `PASS` | HOME/CAMERA 单一机身，无跨页 sharedBounds；见 `TC-P1-045` |
+| 红框机身统一检查 | `PASS` | 五页外框红/内面板奶油；见 `TC-P1-046` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

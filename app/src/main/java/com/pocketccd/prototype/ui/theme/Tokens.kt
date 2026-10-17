@@ -40,9 +40,9 @@ object PocketCcdColors {
     val Flash = Color(0xFFF7D774)
 
     // Body and display surfaces.
-    val CameraPanelTop = Color(0xFFF2C14E)      // butter yellow
-    val CameraPanelBottom = Color(0xFFDFA92F)
-    val CameraPanelHighlight = Color(0xFFFFF2C7)
+    val CameraPanelTop = Color(0xFFEE5B4A)      // red plastic frame
+    val CameraPanelBottom = Color(0xFFA8231C)
+    val CameraPanelHighlight = Color(0xFFF7E9D7)
     val ViewfinderTop = Color(0xFF173B3A)       // deep teal LCD/viewfinder
     val ViewfinderBottom = Color(0xFF0C2423)
     val ViewfinderInk = Color(0xFFD8F1E6)

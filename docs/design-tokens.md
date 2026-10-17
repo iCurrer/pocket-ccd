@@ -36,9 +36,9 @@
 | `LensBlueDeep` | `#143C39` | 镜头玻璃过渡 | 临时 |
 | `LensCore` | `#071B1A` | 镜头中心 | 临时 |
 | `Flash` | `#F7D774` | 黄油闪光灯窗 | 临时 |
-| `CameraPanelTop` | `#F2C14E` | 机身黄油亮部 | 临时 |
-| `CameraPanelBottom` | `#DFA92F` | 机身黄油暗部 | 临时 |
-| `CameraPanelHighlight` | `#FFF2C7` | 机身内高光 | 临时 |
+| `CameraPanelTop` | `#EE5B4A` | 红色机身外框亮部 | 临时 |
+| `CameraPanelBottom` | `#A8231C` | 红色机身外框暗部 | 临时 |
+| `CameraPanelHighlight` | `#F7E9D7` | 红色外框高光/奶油内面板边 | 临时 |
 | `ViewfinderTop` | `#173B3A` | 取景窗/LCD 深青 | 临时 |
 | `ViewfinderBottom` | `#0C2423` | 取景窗暗部 | 临时 |
 | `ViewfinderInk` | `#D8F1E6` | 取景窗文字 | 临时 |
@@ -72,9 +72,7 @@
 | 前景/背景 | 对比度 |
 |---|---:|
 | `#2F2923` on `#FFF4E2` | 13.19:1 |
-| `#2F2923` on `#F2C14E` | 8.56:1 |
 | `#5B4F43` on `#FFF4E2` | 7.30:1 |
-| `#5B4F43` on `#F2C14E` | 4.73:1 |
 | `#B84F38` on `#FFF4E2` | 4.58:1 |
 | `#D8F1E6` on `#173B3A` | 10.24:1 |
 | `#2B1710` on `#E76F51` | 5.51:1 |

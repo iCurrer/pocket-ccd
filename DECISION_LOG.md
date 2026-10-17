@@ -605,3 +605,21 @@
 - **后果：** 红页系统栏与内容同色；品牌区更安静；转场矩形角理论上被裁剪，但仍需真机慢放确认。
 - **验证：** `TC-P1-042`、`TC-P1-043`、`TC-P1-044` 静态检查；`assembleDebug`/`assembleRelease` 通过；12/12 单测。
 - **复审触发：** 真机仍看到闪角/系统栏色差；红色仍被反馈刺眼或廉价。
+
+---
+
+## D-031 — 首页/拍摄页改为单一持久机身 Stage，废除 sharedBounds 跨页
+
+- **日期：** 2026-10-17
+- **状态：** IMPLEMENTED（真机动画未验证）
+- **类型：** 架构 / 动画
+- **背景：** 用户要求跟手动画、按钮在新页面重新排列；下拉开相机时页面闪动。排查发现旧方案是 `AnimatedContent` 两个页面 + `sharedBounds` overlay：Home 退出、Camera 进入时，overlay/圆角/背景层可能各画一帧，产生矩形边角闪动；且无法跟手。
+- **决定：**
+  1. 新增 `CameraStageScreen`，HOME/CAMERA 共用**同一个** `ToyCameraBody`，不再用 `AnimatedContent` 在两个页面间切换；
+  2. 纵向拖动直接驱动 `Animatable<Float> progress`（0=首页，1=拍摄页）；机身从 300×300 的红框放大到接近全屏；
+  3. 快门/闪光灯是同一个控件，位置和大小随 progress 插值；品牌上下移动；镜头淡出/取景器淡入；FILM/设置淡出，翻转键淡入；
+  4. 移除 `SharedTransitionLayout`/`sharedBounds`；只保留 Gallery/Result/Settings 的轻量 `AnimatedContent` 淡入淡出；
+  5. 首页/拍摄页红色外框 + 奶油内面板，照片墙/设置页的 `ToyCameraBody` 也统一为红色外框。
+- **后果：** 下拉不再有第二个页面层；动画跟手。风险是自定义归一化布局需要真机调位置，按钮插值可能在小屏上偏位。
+- **验证：** `TC-P1-045`、`TC-P1-046` 静态检查；`assembleDebug`/`assembleRelease` 通过；12/12 单测；无设备慢放。
+- **复审触发：** 真机发现按钮重叠/比例不对；或 Stage 影响性能。

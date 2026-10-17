@@ -1,6 +1,6 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 20:51（Asia/Shanghai）
+**快照时间：** 2026-10-17 21:04（Asia/Shanghai）
 **当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
@@ -71,7 +71,8 @@
 | P-019 | V2 玩具相机材质重构 | `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`；首页/照片墙/成片/设置改为机身/屏幕结构；拍摄页另走红色变体 | `DONE`（真机视觉待验证） |
 | P-020 | 拍摄页红色复古前面板 | 全屏红塑料、厚重黑取景器、绿色闪光灯、橙色快门、红色循环键、紧凑品牌 | `DONE`（预览仍为静态画面） |
 | P-021 | 首页统一红色主题 | 红色机身面板、黑色大镜头、绿色闪光窗、橙色快门、FILM 键、设置键 | `DONE`（真机视觉待验证） |
-| P-022 | 红色主题细节打磨 | 降刺激红 `#D9382E`；删多余线条/说明；系统栏随页面换色/图标；sharedBounds overlay 裁剪防矩形闪角 | `DONE`（真机动画/系统栏未验证） |
+| P-022 | 红色主题细节打磨（初版） | 降刺激红 `#D9382E`；删多余线条/说明；系统栏随页面换色/图标；曾用 overlay 裁剪 | `DONE`（已由 P-023 取代） |
+| P-023 | 持久机身 Stage + 跟手动画 | `CameraStageScreen`；HOME/CAMERA 共用机身；拖拽驱动 progress；快门/闪光灯移动，镜头→取景器，按钮重排；移除 sharedBounds | `DONE`（真机动画未验证） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -164,8 +165,11 @@
 | 红色拍摄页当前 APK | 30,865,797 bytes；SHA-256 `3D3DB517EEAFE18AFB554F8E5DE4D6E520A3701BFF77021BEEDCB86353D00953` |
 | 红色拍摄页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 14s`；`app-release-unsigned.apk` 23,462,826 bytes；SHA-256 `990A9A9AF781B894E0DB024D2EA484A759772C7A0408A0E6A3CE96A67B94FB00` |
 | 红色首页构建（打磨后） | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 996ms`（增量，全部 up-to-date）；44 tasks |
-| 红色首页当前 APK | 30,865,797 bytes；SHA-256 `40EDEF5EBBEAA775F360952CCF94090B79472AB3A0EFBBAE470510B04668F2AB`（随代码变化，不作为固定指纹） |
-| 红色首页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 6s`；`app-release-unsigned.apk` 23,446,442 bytes；SHA-256 `7C952C5771EE25A04418F7E629DB019C8C3C7252AB921CEBF79CB9A239059332`；未签名/未安装 |
+| 红色首页当前 APK | 30,865,797 bytes；SHA-256 `40EDEF5EBBEAA775F360952CCF94090B79472AB3A0EFBBAE470510B04668F2AB` |
+| 红色首页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 6s`；`app-release-unsigned.apk` 23,446,442 bytes；SHA-256 `7C952C5771EE25A04418F7E629DB019C8C3C7252AB921CEBF79CB9A239059332` |
+| Stage 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 2s`；44 tasks（8 executed） |
+| Stage 当前 APK | 30,865,856 bytes；SHA-256 `FA1D7F7A3A1DFA053684DF7C2B4B7B9CA0628CFBE69DE4528E906B65F6B092B9`（随代码变化，不作为固定指纹） |
+| Stage Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 5s`；`app-release-unsigned.apk` 23,511,978 bytes；SHA-256 `60165770A1573CDE1442925973B37C5C8997E21AD03596387C948AD425D3B56A`；未签名/未安装 |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -351,6 +355,7 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 拍摄页红色复古前面板 | 红塑料/黑取景器/绿闪光灯/橙快门；相册区按用户要求暂缓 |
 | 2026-10-17 | 首页统一红色主题 | 红色机身面板/黑镜头/绿闪光窗/橙快门/FILM/设置；与拍摄页同一套红色材质 |
 | 2026-10-17 | 红色主题细节打磨 | 降刺激红、删多余线条、系统栏同色、转场 overlay 裁剪 |
+| 2026-10-17 | 持久机身 Stage | 首页/拍摄页共用同一个红框机身，拖拽 progress 驱动，按钮移动重排 |
 
 ---
 

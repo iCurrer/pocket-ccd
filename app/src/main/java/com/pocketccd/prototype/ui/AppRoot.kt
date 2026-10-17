@@ -3,21 +3,15 @@ package com.pocketccd.prototype.ui
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -25,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,12 +26,11 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
-import com.pocketccd.prototype.ui.camera.CameraScreen
 import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
-import com.pocketccd.prototype.ui.home.HomeScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
 import com.pocketccd.prototype.ui.result.ResultStatus
 import com.pocketccd.prototype.ui.settings.SettingsScreen
+import com.pocketccd.prototype.ui.stage.CameraStageScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
@@ -48,7 +40,6 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
     PocketCcdApp(state = state, onEvent = viewModel::onEvent)
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PocketCcdApp(
     state: AppUiState,
@@ -64,66 +55,47 @@ fun PocketCcdApp(
         controller.isAppearanceLightStatusBars = !isRedPage
         controller.isAppearanceLightNavigationBars = !isRedPage
     }
-    SharedTransitionLayout {
-        val sharedScope = this
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = if (isRedPage) {
-                PocketCcdColors.RetroRed
-            } else {
-                PocketCcdColors.Background
-            },
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = if (isRedPage) {
+            PocketCcdColors.RetroRed
+        } else {
+            PocketCcdColors.Background
+        },
+    ) {
+        BackHandler(enabled = state.destination != AppDestination.HOME) {
+            onEvent(AppEvent.NavigateBack)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            BackHandler(enabled = state.destination != AppDestination.HOME) {
-                onEvent(AppEvent.NavigateBack)
-            }
-            AnimatedContent(
-                targetState = state.destination,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing),
-                // The camera body itself is a shared element; the surrounding
-                // chrome only needs a quiet crossfade.
-                transitionSpec = {
-                    fadeIn(tween(220)) togetherWith fadeOut(tween(180))
-                },
-                label = "app-destination",
-            ) { destination ->
-                val animatedScope = this
-                with(sharedScope) {
-                    val cameraBodyModifier = Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "camera-body"),
-                        animatedVisibilityScope = animatedScope,
-                        enter = EnterTransition.None,
-                        exit = ExitTransition.None,
-                        boundsTransform = { _, _ ->
-                            tween(
-                                durationMillis = 320,
-                                easing = FastOutSlowInEasing,
-                            )
-                        },
-                        resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                        // The camera body is a rounded red slab. Clip the overlay
-                        // during the morph so the full-screen page cannot flash
-                        // square corners while the bounds are animating.
-                        clipInOverlayDuringTransition = OverlayClip(
-                            RoundedCornerShape(36.dp),
-                        ),
-                        zIndexInOverlay = 1f,
-                    )
+            if (state.destination == AppDestination.HOME ||
+                state.destination == AppDestination.CAMERA
+            ) {
+                // One persistent body for home + shooting: the pull gesture
+                // drives the same frame, shutter, flash and lens/viewfinder
+                // instead of cross-fading two page layers.
+                CameraStageScreen(
+                    expanded = state.destination == AppDestination.CAMERA,
+                    onExpand = { onEvent(AppEvent.OpenCamera) },
+                    onCollapse = { onEvent(AppEvent.NavigateBack) },
+                    onOpenGallery = { onEvent(AppEvent.OpenGallery) },
+                    onOpenSettings = { onEvent(AppEvent.OpenSettings) },
+                    onShutter = { onEvent(AppEvent.OpenResult) },
+                )
+            } else {
+                AnimatedContent(
+                    targetState = state.destination,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = {
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(160))
+                    },
+                    label = "app-overlay-destination",
+                ) { destination ->
                     when (destination) {
-                        AppDestination.HOME -> HomeScreen(
-                            onOpenCamera = { onEvent(AppEvent.OpenCamera) },
-                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                            onOpenSettings = { onEvent(AppEvent.OpenSettings) },
-                            cameraBodyModifier = cameraBodyModifier,
-                        )
-
-                        AppDestination.CAMERA -> CameraScreen(
-                            onShutter = { onEvent(AppEvent.OpenResult) },
-                            panelModifier = cameraBodyModifier,
-                        )
-
                         AppDestination.GALLERY -> PhotoWallScreen(
                             onBack = { onEvent(AppEvent.NavigateBack) },
                             // Runtime has no captures yet; only app-owned records
@@ -142,6 +114,10 @@ fun PocketCcdApp(
                         AppDestination.SETTINGS -> SettingsScreen(
                             onBack = { onEvent(AppEvent.NavigateBack) },
                         )
+
+                        AppDestination.HOME,
+                        AppDestination.CAMERA,
+                        -> Unit
                     }
                 }
             }
@@ -149,7 +125,7 @@ fun PocketCcdApp(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF4EFE6)
+@Preview(showBackground = true, backgroundColor = 0xFFD9382E)
 @Composable
 private fun HomePreview() {
     PocketCcdTheme {

@@ -90,17 +90,22 @@
 
 原因判断：
 
-- `sharedBounds` 默认在 overlay 中渲染；
+- 旧方案是 `AnimatedContent` 两个页面 + `sharedBounds` overlay；
 - 首页是 36dp 圆角红板，拍摄页是全屏红色容器；
-- overlay 层在动画中可能以矩形 bounds 出现，边角先闪一下，再被目标页面覆盖；
-- 加上底层 `Surface` 是奶油色，矩形边角会更明显。
+- Home 退出/Camera 进入时，overlay 层可能以矩形 bounds 出现，边角先闪一下；
+- 加上底层 `Surface` 曾是奶油色，矩形边角更明显。
 
-修正：
+先做的临时修正：
 
-- `sharedBounds` 增加 `clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(36.dp))`；
-- `zIndexInOverlay = 1f`；
-- 红页的 `Surface` 改为红色，即使 overlay 有短暂时序问题，也不会闪出奶油矩形；
-- 保持 `EnterTransition.None` / `ExitTransition.None`，避免机身本体淡入淡出。
+- `sharedBounds` 增加 36dp `OverlayClip` 和 `zIndexInOverlay=1f`；
+- 红页 `Surface` 改红，避免闪奶油矩形。
+
+最终修正（当前实现）：
+
+- 不再让 Home/Camera 是两个页面；`CameraStageScreen` 用**同一个** `ToyCameraBody`；
+- `Animatable<Float>` 直接由拖拽驱动，机身、快门、闪光灯、品牌、镜头/取景器在同一个布局里插值；
+- `SharedTransitionLayout`/`sharedBounds` 从 Home/Camera 路径移除，闪角来源消失；
+- 只保留 Gallery/Result/Settings 的轻量 `AnimatedContent` 淡入淡出。
 
 ## 6. 仍未验证
 
