@@ -5,7 +5,13 @@
     <string name="home_open_camera">进入相机</string>
     <string name="home_privacy_note">本地拍摄 · 不上传</string>
     <string name="home_pull_hint">下拉进入相机</string>
+    <string name="home_photo_wall">PHOTO WALL</string>
     <string name="gallery_count_zero">0 张</string>
+    <string name="photo_wall_title">PHOTO WALL</string>
+    <string name="photo_wall_owned_only">POCKET CCD ONLY</string>
+    <string name="photo_wall_back">返回首页</string>
+    <string name="photo_wall_empty_title">还没有 Pocket CCD 照片</string>
+    <string name="photo_wall_empty_body">这里只显示本应用拍摄的照片</string>
     <string name="action_gallery">图库</string>
     <string name="action_settings">设置</string>
     <string name="action_back">返回</string>

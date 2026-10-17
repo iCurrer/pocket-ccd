@@ -2,8 +2,12 @@ package com.pocketccd.prototype.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,6 +44,7 @@ import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
 import com.pocketccd.prototype.ui.camera.CameraScreen
+import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.home.HomeScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
@@ -81,6 +86,15 @@ fun PocketCcdApp(
                     val cameraBodyModifier = Modifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "camera-body"),
                         animatedVisibilityScope = animatedScope,
+                        enter = EnterTransition.None,
+                        exit = ExitTransition.None,
+                        boundsTransform = { _, _ ->
+                            tween(
+                                durationMillis = 320,
+                                easing = FastOutSlowInEasing,
+                            )
+                        },
+                        resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                     )
                     when (destination) {
                         AppDestination.HOME -> HomeScreen(
@@ -92,14 +106,15 @@ fun PocketCcdApp(
 
                         AppDestination.CAMERA -> CameraScreen(
                             onCollapse = { onEvent(AppEvent.NavigateBack) },
-                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
                             onShutter = { onEvent(AppEvent.OpenResult) },
                             panelModifier = cameraBodyModifier,
                         )
 
-                        AppDestination.GALLERY -> GalleryPlaceholder(
-                            onOpenSample = { onEvent(AppEvent.OpenResult) },
+                        AppDestination.GALLERY -> PhotoWallScreen(
                             onBack = { onEvent(AppEvent.NavigateBack) },
+                            // Runtime has no captures yet; only app-owned records
+                            // will be supplied here once the repository exists.
+                            photos = emptyList(),
                         )
 
                         AppDestination.RESULT -> ResultPlaceholder(
@@ -114,24 +129,6 @@ fun PocketCcdApp(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun GalleryPlaceholder(
-    onOpenSample: () -> Unit,
-    onBack: () -> Unit,
-) {
-    PlaceholderScreen(
-        title = stringResource(R.string.gallery_title),
-        body = stringResource(R.string.gallery_empty),
-    ) {
-        Button(onClick = onOpenSample) {
-            Text(stringResource(R.string.gallery_open_sample))
-        }
-        TextButton(onClick = onBack) {
-            Text(stringResource(R.string.action_back))
         }
     }
 }

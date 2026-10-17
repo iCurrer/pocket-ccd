@@ -78,18 +78,17 @@ fun HomeScreen(
                 detectVerticalDragGestures(
                     onDragStart = { dragDistance.floatValue = 0f },
                     onDragEnd = {
-                        if (dragDistance.floatValue >= pullThresholdPx) {
-                            onOpenCamera()
+                        when {
+                            dragDistance.floatValue >= pullThresholdPx -> onOpenCamera()
+                            dragDistance.floatValue <= -pullThresholdPx -> onOpenGallery()
                         }
                         dragDistance.floatValue = 0f
                     },
                     onDragCancel = { dragDistance.floatValue = 0f },
                     onVerticalDrag = { change, dragAmount ->
-                        if (dragAmount > 0f || dragDistance.floatValue > 0f) {
-                            dragDistance.floatValue =
-                                (dragDistance.floatValue + dragAmount).coerceAtLeast(0f)
-                            change.consume()
-                        }
+                        // Down = camera, up = app-owned photo wall.
+                        dragDistance.floatValue += dragAmount
+                        change.consume()
                     },
                 )
             },
@@ -158,7 +157,10 @@ fun HomeScreen(
                         contentColor = PocketCcdColors.TextSecondary,
                     ),
                 ) {
-                    Text(text = "GALLERY", style = PocketCcdType.MonoLabel)
+                    Text(
+                        text = stringResource(R.string.home_photo_wall),
+                        style = PocketCcdType.MonoLabel,
+                    )
                 }
                 Text(
                     text = "LOCAL ONLY",

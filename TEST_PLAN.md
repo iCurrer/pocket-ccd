@@ -119,13 +119,13 @@
 | ID | 用例/步骤 | 预期结果 | 层级 | 自动化 | 状态 |
 |---|---|---|---|---|---|
 | TC-P1-001 | 冷启动 App，停留在首页 10s；检查权限弹窗、日志、相机初始化 | 不请求 CAMERA；不出现权限弹窗；无相机初始化；首页正常显示 | 手工 + 日志 | 否 | `NOT_RUN` |
-| TC-P1-002 | 首页点击“图库” | 进入 Gallery；返回回到 Home；无崩溃 | UI | 是 | `NOT_RUN` |
+| TC-P1-002 | 首页点击 `PHOTO WALL` | 进入照片墙；返回回到 Home；无崩溃 | UI | 是 | `NOT_RUN` |
 | TC-P1-003 | 首页点击“进入相机”按钮 | 进入 Camera 静态页；无权限请求；返回 Home | UI | 是 | `NOT_RUN` |
 | TC-P1-004 | 首页从顶部向下拖拽超过阈值并释放 | 进入 Camera；动画完成后状态为 CAMERA | UI + 手工 | 部分 | `NOT_RUN` |
 | TC-P1-005 | 首页向下拖拽小于阈值后释放 | 回弹到 Home；不导航 | UI | 是 | `NOT_RUN` |
 | TC-P1-006 | 在转场动画期间快速重复下拉/点击 | 不重复入栈；最终只在一个 Camera 页面 | UI + 手工 | 部分 | `NOT_RUN` |
 | TC-P1-007 | Camera 页按返回/返回手势 | 回到 Home；相机占位不残留 | UI + 手工 | 是 | `NOT_RUN` |
-| TC-P1-008 | Camera 页点击图库 | 进入 Gallery；返回回到 Camera | UI | 是 | `NOT_RUN` |
+| TC-P1-008 | Camera 页按收起/返回 | 回到 Home；相机页无图库按钮，不出现图库路径 | UI + 静态 | 部分 | `NOT_RUN` |
 | TC-P1-009 | Result 页点击“返回拍摄” | 进入 Camera；无黑屏/重复页面 | UI | 是 | `NOT_RUN` |
 | TC-P1-010 | Result 页点击“图库” | 进入 Gallery；返回路径合理 | UI | 是 | `NOT_RUN` |
 | TC-P1-024 | 使用系统预测性返回手势从 Camera/Result 返回 | 不与应用手势冲突；返回目标正确；无闪烁/双导航 | 手工 | 否 | `NOT_RUN` |
@@ -144,6 +144,9 @@
 | TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 12dp 机身外边距、16dp 取景框内留白、4:3；快门 88dp 触摸区；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
 | TC-P1-029 | 检查首页→拍摄页的共享元素转场代码路径 | `SharedTransitionLayout` 包裹 `AnimatedContent`；首页机身与拍摄页机身使用同一 key `camera-body`；编译通过 | 静态 | 是 | `PASS`（2026-10-17；运行时连续性未验证） |
 | TC-P1-030 | 计算新色板关键前景/背景对比度 | 主文字≥4.5:1；次级/机身铭牌≥4.5:1；强调文字≥4.5:1；取景框文字≥4.5:1 | 静态 | 是 | `PASS`（2026-10-17 脚本：13.54/9.61/5.11/5.25/4.94/9.90） |
+| TC-P1-031 | 检查照片墙只接收 app-owned 记录、无系统图库扫描 | 运行时 `photos = emptyList()`；无媒体权限/MediaStore 查询；空态有说明；网格 key 稳定 | 静态 | 是 | `PASS`（2026-10-17；网格预览为合成色块） |
+| TC-P1-032 | 首页向上滑动进入照片墙 | 上拉超过 88dp 进入 `PHOTO WALL`；未达阈值回弹；反向返回首页 | UI + 手工 | 部分 | `NOT_RUN`（无设备） |
+| TC-P1-033 | 拍摄页右上角无图库按钮 | 顶栏只有收起 + 居中 DC-01；无 gallery 点击路径 | 静态 | 是 | `PASS`（2026-10-17） |
 
 ### 5.3 无障碍与视觉
 
@@ -193,7 +196,7 @@
 | T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
 | T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
-| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `8AC1D80CBEE4CB35B5C889C75CAB37B7A090B4FCEE66F8763D30BD395DB1D5F2`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
@@ -410,6 +413,8 @@ test-evidence/
 | 拍摄页静态检查 | `PASS` | 无 CameraX/Camera2；无 CAMERA；机身内取景框；见 `TC-P1-028` |
 | 共享转场静态检查 | `PASS` | 同一 `camera-body` key；`SharedTransitionLayout`；见 `TC-P1-029` |
 | 配色对比度检查 | `PASS` | 关键文字组合均≥4.5:1；见 `TC-P1-030` |
+| 照片墙静态检查 | `PASS` | 运行时只传 app-owned 空列表；无系统图库扫描；见 `TC-P1-031` |
+| 拍摄页无图库按钮检查 | `PASS` | 顶栏仅收起 + DC-01；见 `TC-P1-033` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

@@ -63,7 +63,6 @@ import com.pocketccd.prototype.ui.theme.PocketCcdType
 @Composable
 fun CameraScreen(
     onCollapse: () -> Unit,
-    onOpenGallery: () -> Unit,
     onShutter: () -> Unit,
     modifier: Modifier = Modifier,
     panelModifier: Modifier = Modifier,
@@ -112,10 +111,7 @@ fun CameraScreen(
                     .padding(PocketCcdSizes.cameraPanelPadding),
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    CameraTopBar(
-                        onCollapse = onCollapse,
-                        onOpenGallery = onOpenGallery,
-                    )
+                    CameraTopBar(onCollapse = onCollapse)
                     Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
                     Viewfinder()
                     Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
@@ -135,18 +131,16 @@ fun CameraScreen(
 }
 
 @Composable
-private fun CameraTopBar(
-    onCollapse: () -> Unit,
-    onOpenGallery: () -> Unit,
-) {
-    Row(
+private fun CameraTopBar(onCollapse: () -> Unit) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(PocketCcdSizes.topBarHeight),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onCollapse) {
+        IconButton(
+            onClick = onCollapse,
+            modifier = Modifier.align(Alignment.CenterStart),
+        ) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = stringResource(R.string.camera_collapse),
@@ -158,37 +152,8 @@ private fun CameraTopBar(
             text = "DC-01",
             style = PocketCcdType.MonoLabel,
             color = PocketCcdColors.TextSecondary,
+            modifier = Modifier.align(Alignment.Center),
         )
-        val galleryDescription = stringResource(R.string.camera_gallery)
-        IconButton(
-            onClick = onOpenGallery,
-            modifier = Modifier.semantics { contentDescription = galleryDescription },
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(PocketCcdRadius.xs))
-                    .background(PocketCcdColors.Surface)
-                    .border(
-                        width = PocketCcdSizes.hairline,
-                        color = PocketCcdColors.Outline,
-                        shape = RoundedCornerShape(PocketCcdRadius.xs),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(PocketCcdColors.LensGlass)
-                        .border(
-                            width = PocketCcdSizes.hairline,
-                            color = PocketCcdColors.LensRing,
-                            shape = CircleShape,
-                        ),
-                )
-            }
-        }
     }
 }
 
@@ -463,7 +428,6 @@ private fun CameraScreenPreview() {
     PocketCcdTheme {
         CameraScreen(
             onCollapse = {},
-            onOpenGallery = {},
             onShutter = {},
         )
     }
