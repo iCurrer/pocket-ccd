@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local machine configuration
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Test / design artifacts (large binaries stay local)
+test-evidence/
+*.hprof
+
+# Temporary official-doc snapshots used for the 2026-10-17 review
+.research/
+
+# OS
+.DS_Store
+Thumbs.db
