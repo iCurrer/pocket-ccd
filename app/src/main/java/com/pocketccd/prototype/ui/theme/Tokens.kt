@@ -32,6 +32,7 @@ object PocketCcdColors {
 
     val Error = Color(0xFFB85F4D)
     val OnError = Color(0xFFFFF8EF)
+    val Warning = Color(0xFFB8862F)
 
     val LensGlass = Color(0xFF1A2421)
     val LensRing = Color(0xFF6E7D6B)

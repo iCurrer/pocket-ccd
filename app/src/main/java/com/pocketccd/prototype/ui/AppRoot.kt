@@ -22,9 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +44,8 @@ import com.pocketccd.prototype.navigation.AppViewModel
 import com.pocketccd.prototype.ui.camera.CameraScreen
 import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.home.HomeScreen
+import com.pocketccd.prototype.ui.result.ResultScreen
+import com.pocketccd.prototype.ui.result.ResultStatus
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
 @Composable
@@ -117,10 +117,12 @@ fun PocketCcdApp(
                             photos = emptyList(),
                         )
 
-                        AppDestination.RESULT -> ResultPlaceholder(
+                        AppDestination.RESULT -> ResultScreen(
+                            status = ResultStatus.SAVED,
                             onBackToCamera = { onEvent(AppEvent.OpenCamera) },
-                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                            onBack = { onEvent(AppEvent.NavigateBack) },
+                            onOpenPhotoWall = { onEvent(AppEvent.OpenGallery) },
+                            onRetry = { /* T1-012 wires real retry states */ },
+                            demo = true,
                         )
 
                         AppDestination.SETTINGS -> SettingsPlaceholder(
@@ -129,28 +131,6 @@ fun PocketCcdApp(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ResultPlaceholder(
-    onBackToCamera: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onBack: () -> Unit,
-) {
-    PlaceholderScreen(
-        title = stringResource(R.string.result_title),
-        body = stringResource(R.string.result_placeholder),
-    ) {
-        Button(onClick = onBackToCamera) {
-            Text(stringResource(R.string.result_back_to_camera))
-        }
-        OutlinedButton(onClick = onOpenGallery) {
-            Text(stringResource(R.string.action_gallery))
-        }
-        TextButton(onClick = onBack) {
-            Text(stringResource(R.string.action_back))
         }
     }
 }

@@ -147,6 +147,8 @@
 | TC-P1-031 | 检查照片墙只接收 app-owned 记录、无系统图库扫描 | 运行时 `photos = emptyList()`；无媒体权限/MediaStore 查询；空态有说明；网格 key 稳定 | 静态 | 是 | `PASS`（2026-10-17；网格预览为合成色块） |
 | TC-P1-032 | 首页向上滑动进入照片墙 | 上拉超过 88dp 进入 `PHOTO WALL`；未达阈值回弹；反向返回首页 | UI + 手工 | 部分 | `NOT_RUN`（无设备） |
 | TC-P1-033 | 拍摄页右上角无图库按钮 | 顶栏只有收起 + 居中 DC-01；无 gallery 点击路径 | 静态 | 是 | `PASS`（2026-10-17） |
+| TC-P1-034 | 检查 Result 页状态变体与 demo 诚实性 | 4:3 测试图；SAVED/FAILED 预览；运行时 `DEMO · NOT SAVED`，不显示真实“已保存” | 静态 | 是 | `PASS`（2026-10-17；设备 UI 未跑） |
+| TC-P1-035 | 检查 Result 页无相机/存储依赖 | 只有状态与回调；无 CameraX/MediaStore/文件写入 | 静态 | 是 | `PASS`（2026-10-17） |
 
 ### 5.3 无障碍与视觉
 
@@ -196,13 +198,15 @@
 | T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
 | T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
-| T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472` |
+| T1-010 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 11s`；42 tasks（18 executed） |
+| T1-010 当前 APK | 30,857,502 bytes；SHA-256 `743A44AE230286FBC26FE8B15FB99A8BF48BC3EF7E8F975368E7464165D78C20`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008 的代码可编译，静态硬编码/无相机依赖检查通过。T1-007 仅实现了 88dp 距离阈值和下拉跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008/T1-010 的代码可编译，静态硬编码/无相机依赖/Result 状态变体检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -415,6 +419,7 @@ test-evidence/
 | 配色对比度检查 | `PASS` | 关键文字组合均≥4.5:1；见 `TC-P1-030` |
 | 照片墙静态检查 | `PASS` | 运行时只传 app-owned 空列表；无系统图库扫描；见 `TC-P1-031` |
 | 拍摄页无图库按钮检查 | `PASS` | 顶栏仅收起 + DC-01；见 `TC-P1-033` |
+| 成片页静态检查 | `PASS` | 状态变体/demo 诚实性/无相机依赖；见 `TC-P1-034`、`TC-P1-035` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

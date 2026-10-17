@@ -37,6 +37,17 @@
     <string name="result_title">成片</string>
     <string name="result_placeholder">成片占位 · 使用测试图</string>
     <string name="result_back_to_camera">返回拍摄</string>
+    <string name="result_header">RESULT</string>
+    <string name="result_demo">DEMO</string>
+    <string name="result_frame_test">TEST FRAME</string>
+    <string name="result_filter">DAYLIGHT</string>
+    <string name="result_status_processing">PROCESSING</string>
+    <string name="result_status_writing">WRITING FILE</string>
+    <string name="result_status_saved">SAVED TO PHOTO WALL</string>
+    <string name="result_status_failed">SAVE FAILED</string>
+    <string name="result_status_demo">DEMO · NOT SAVED</string>
+    <string name="result_retry">RETRY</string>
+    <string name="result_open_wall">PHOTO WALL</string>
     <string name="settings_title">设置</string>
     <string name="settings_placeholder">设置占位</string>
 </resources>

@@ -1,11 +1,11 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 19:22（Asia/Shanghai）  
+**快照时间：** 2026-10-17 19:36（Asia/Shanghai）  
 **当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
 **Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
-**App 代码：** Compose 空壳 + 导航状态机 + 暖色设计令牌 + 首页 + 拍摄页 + 照片墙（`MainActivity` + `AppRoot` + `HomeScreen` + `CameraScreen` + `PhotoWallScreen` + 2 个占位页面）  
+**App 代码：** Compose 空壳 + 导航状态机 + 暖色设计令牌 + 首页 + 拍摄页 + 照片墙 + 成片页（`MainActivity` + `AppRoot` + `HomeScreen` + `CameraScreen` + `PhotoWallScreen` + `ResultScreen` + 1 个占位页面）  
 **已执行 App 构建/测试：** `assembleDebug` 已通过；`AppStateTest` 12/12 通过；安装/启动/UI/相机未执行
 
 ---
@@ -66,6 +66,7 @@
 | P-014 | 拍摄页静态 UI + 下拉/展开原型 | `ui/camera/CameraScreen.kt`、`ui/components/CameraShutterButton.kt`、`AppRoot` 转场、首页下拉；构建通过 | `DONE`（T1-007 手势仍 `IN_PROGRESS`；UI/截图待设备） |
 | P-015 | 玩具相机配色研究与实现 | `docs/color-direction.md`；燕麦/灰绿/陶土色板；对比度脚本计算 | `DONE`（真机视觉评审待做） |
 | P-016 | 照片墙 + 上拉手势 + 相机页精简 | `PhotoWallScreen.kt`；首页上拉；移除拍摄页图库按钮；共享机身转场优化 | `DONE`（真机 UI/动画待验证） |
+| P-017 | 成片页静态 UI + 状态变体 | `ResultScreen.kt`；4:3 测试图；SAVED/FAILED 预览；运行时不伪造保存 | `DONE`（设备 UI 待验证） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -79,7 +80,7 @@
 | App 安装/启动 | `BLOCKED` | 无 AVD/真机（T1-015） |
 | Compose 主题/设计令牌 | `DONE` | T1-004；`docs/design-tokens.md`；对比度/字体待设备 |
 | 页面状态机/导航 | `DONE` | T1-005；`AppStateTest` 12/12；UI/旋转待设备 |
-| 五个静态页面 | `IN_PROGRESS` | 首页、拍摄页、照片墙已完成；成片/设置待做 |
+| 五个静态页面 | `IN_PROGRESS` | 首页、拍摄页、照片墙、成片页已完成；设置页待做 |
 | 下拉/上拉手势/转场 | `IN_PROGRESS` | 下拉 88dp 相机、上拉 88dp 照片墙；共享机身转场已优化；速度阈值/手势测试未做 |
 | 自适应/无障碍 | `NOT_STARTED` | T1-013 |
 | 截图基线/视觉评审 | `NOT_STARTED` | T1-014 |
@@ -147,7 +148,8 @@
 | T1-004/T1-006 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
 | T1-007/T1-008/T1-009 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（18 executed） |
-| T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472`（随代码变化，不作为固定指纹） |
+| T1-010 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 11s`；42 tasks（18 executed） |
+| T1-010 当前 APK | 30,857,502 bytes；SHA-256 `743A44AE230286FBC26FE8B15FB99A8BF48BC3EF7E8F975368E7464165D78C20`（随代码变化，不作为固定指纹） |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -232,8 +234,8 @@
 4. T1-007 下拉手势（`IN_PROGRESS`：距离阈值/跟随/转场已做；速度阈值与手势测试待补）；
 5. T1-008 拍摄页（已完成静态 UI；图库按钮已移除；UI/截图/横屏待设备）；
 6. T1-009 照片墙（已完成静态 UI/空态；真实 app-owned 数据待 T5）；
-7. T1-010 成片页（下一步）；
-8. T1-011 设置页；
+7. T1-010 成片页（已完成静态 UI；设备 UI 待设备）；
+8. T1-011 设置页（下一步）；
 9. T1-012 状态矩阵；
 10. T1-013 自适应/无障碍。
 
@@ -301,6 +303,7 @@ D:\Android\pocket ccd\
 │   │       ├── home/HomeScreen.kt   # 首页静态 UI + 下拉/上拉手势
 │   │       ├── camera/CameraScreen.kt
 │   │       ├── gallery/PhotoWallScreen.kt
+│   │       ├── result/ResultScreen.kt
 │   │       ├── components/CameraShutterButton.kt
 │   │       └── theme/               # Tokens/Type/Theme
 │   └── build/outputs/apk/debug/app-debug.apk
@@ -324,6 +327,7 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 拍摄页静态 UI + 下拉/展开原型 | `CameraScreen`/`CameraShutterButton`；机身内 4:3 取景框；88dp 下拉阈值；截图/手势测试待设备 |
 | 2026-10-17 | 玩具相机配色调整 | 燕麦/灰绿/陶土；`docs/color-direction.md`；对比度实测；真机视觉待评 |
 | 2026-10-17 | 照片墙 + 上拉手势 + 相机页精简 | 首页上拉进入照片墙；拍摄页移除图库按钮；共享机身转场优化 |
+| 2026-10-17 | 成片页静态 UI | 4:3 测试图；状态变体；demo 不伪造保存；设备 UI 待验 |
 
 ---
 
