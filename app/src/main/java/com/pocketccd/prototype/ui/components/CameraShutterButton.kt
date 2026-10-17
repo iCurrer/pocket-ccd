@@ -42,14 +42,14 @@ fun CameraShutterButton(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
+        targetValue = if (pressed) 0.96f else 1f,
         animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
         label = "shutter-scale",
     )
-    val glow by animateDpAsState(
-        targetValue = if (pressed) 4.dp else 14.dp,
+    val shadowElevation by animateDpAsState(
+        targetValue = if (pressed) 2.dp else 6.dp,
         animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
-        label = "shutter-glow",
+        label = "shutter-shadow",
     )
     val description = stringResource(R.string.camera_shutter)
 
@@ -61,11 +61,11 @@ fun CameraShutterButton(
                 scaleY = scale
             }
             .shadow(
-                elevation = glow,
+                elevation = shadowElevation,
                 shape = CircleShape,
                 clip = false,
-                ambientColor = PocketCcdColors.Accent.copy(alpha = 0.35f),
-                spotColor = PocketCcdColors.Accent.copy(alpha = 0.45f),
+                ambientColor = Color.Black,
+                spotColor = Color.Black,
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -84,11 +84,11 @@ fun CameraShutterButton(
                     Brush.radialGradient(
                         colors = listOf(
                             PocketCcdColors.ShutterOuter,
-                            Color(0xFF141417),
+                            PocketCcdColors.SurfaceHigh,
                         ),
                     ),
                 )
-                .border(1.dp, Color(0x33FFFFFF), CircleShape),
+                .border(PocketCcdSizes.hairline, PocketCcdColors.CameraPanelHighlight, CircleShape),
         )
         Box(
             modifier = Modifier
@@ -102,7 +102,7 @@ fun CameraShutterButton(
                         ),
                     ),
                 )
-                .border(1.dp, Color(0x55FFFFFF), CircleShape),
+                .border(PocketCcdSizes.hairline, Color(0x44FFFFFF), CircleShape),
         )
         Canvas(modifier = Modifier.size(PocketCcdSizes.shutter)) {
             drawArc(
@@ -110,11 +110,11 @@ fun CameraShutterButton(
                 startAngle = 200f,
                 sweepAngle = 85f,
                 useCenter = false,
-                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
             )
             drawCircle(
                 color = PocketCcdColors.ShutterHighlight,
-                radius = 3.dp.toPx(),
+                radius = 2.dp.toPx(),
                 center = androidx.compose.ui.geometry.Offset(
                     x = size.width * 0.34f,
                     y = size.height * 0.28f,

@@ -263,7 +263,7 @@ RESULT
 | 验收标准 | 拖拽超过阈值且速度足够才触发；未超过阈值回弹不导航；图库滚动/系统返回不误触；动画期间重复手势不叠加；TalkBack 可通过按钮进入相机；阈值有记录 |
 | 测试方式 | Compose 手势测试（`performTouchInput`）；真机/模拟器手测；慢动作录屏；`TC-P1-004..006` |
 | 证据/用例 | `TC-P1-004`、`TC-P1-005`、`TC-P1-006`、`TC-P1-024`（均待设备） |
-| 实际结果 | 2026-10-17 首页加入 `detectVerticalDragGestures`，88dp 距离阈值、下拉时轻微跟随、取消/未达阈值回弹；`AppRoot` 加入 Camera 展开/收起转场；`assembleDebug` 通过。**未实现速度阈值、未做 Compose 手势测试**，因此不标 `DONE` |
+| 实际结果 | 2026-10-17 首页加入 `detectVerticalDragGestures`，88dp 距离阈值、下拉时轻微跟随、取消/未达阈值回弹；`AppRoot` 改为 `SharedTransitionLayout` + `sharedBounds("camera-body")`，首页紧凑机身与拍摄页机身共用同一共享元素，反向自动收起；`assembleDebug` 通过。**未实现速度阈值、未做 Compose 手势测试/真机动画验收**，因此不标 `DONE` |
 | 风险/备注 | 下拉手势与系统通知栏/返回手势可能冲突；必须提供按钮替代，不能把手势作为唯一入口 |
 
 **当前阈值（`[H]`，待 EXP-09 真机调参）：** 距离 88dp；速度阈值尚未实现，暂不承诺“速度足够才触发”。
@@ -283,7 +283,7 @@ RESULT
 | 验收标准 | 无 CameraX/Camera2 类、无 `CAMERA` 权限；取景框不铺满全屏；竖屏布局可读；快门/图标≥48dp；按压反馈可感知；安全区不被刘海/手势条遮挡 |
 | 测试方式 | Compose UI 测试；`grep`/依赖检查；`aapt dump permissions`；截图 |
 | 证据/用例 | `TC-P1-003`、`TC-P1-008`、`TC-P1-017`、`TC-P1-020`、`TC-P1-028` |
-| 实际结果 | 2026-10-17 新增 `CameraScreen.kt` + `CameraShutterButton.kt`：机身面板有 16dp 外边距/36dp 圆角、取景框在机身上半部分、铭牌在取景框下、橙色快门带缩放/光晕按压反馈、两侧仅闪光灯/前后摄；首页取景窗装饰已移除；`assembleDebug` 通过 |
+| 实际结果 | 2026-10-17 新增 `CameraScreen.kt` + `CameraShutterButton.kt`：机身 12dp 外边距/28dp 圆角、取景框在机身上半部分（16dp 机身留白、6dp 圆角、1dp 内边框、四角细标记）、铭牌在取景框下、68dp 橙色快门带缩放按压反馈、两侧仅闪光灯/前后摄；首页取景窗装饰已移除；`assembleDebug` 通过 |
 | 风险/备注 | 取景占位比例必须与后续成片 4:3 策略一致；横屏/大屏适配归 T1-013；CAPTURING/PROCESSING/ERROR 状态变体归 T1-012 |
 
 ---

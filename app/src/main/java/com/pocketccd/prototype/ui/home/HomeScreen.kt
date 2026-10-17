@@ -3,11 +3,11 @@ package com.pocketccd.prototype.ui.home
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,18 +16,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -45,19 +44,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.R
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
 import com.pocketccd.prototype.ui.theme.PocketCcdRadius
 import com.pocketccd.prototype.ui.theme.PocketCcdSizes
 import com.pocketccd.prototype.ui.theme.PocketCcdSpacing
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
+import com.pocketccd.prototype.ui.theme.PocketCcdType
 
 @Composable
 fun HomeScreen(
     onOpenCamera: () -> Unit,
     onOpenGallery: () -> Unit,
     onOpenSettings: () -> Unit,
+    cameraBodyModifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val pullThresholdPx = with(density) { PocketCcdSizes.pullThreshold.toPx() }
@@ -71,7 +71,6 @@ fun HomeScreen(
                     colors = listOf(
                         PocketCcdColors.Background,
                         PocketCcdColors.BackgroundElevated,
-                        PocketCcdColors.Background,
                     ),
                 ),
             )
@@ -86,7 +85,6 @@ fun HomeScreen(
                     },
                     onDragCancel = { dragDistance.floatValue = 0f },
                     onVerticalDrag = { change, dragAmount ->
-                        // Only downward pull participates; horizontal taps/buttons still work.
                         if (dragAmount > 0f || dragDistance.floatValue > 0f) {
                             dragDistance.floatValue =
                                 (dragDistance.floatValue + dragAmount).coerceAtLeast(0f)
@@ -100,9 +98,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    // Small follow-through during the pull; the full expansion is
-                    // the AppRoot AnimatedContent transition.
-                    translationY = dragDistance.floatValue * 0.10f
+                    translationY = dragDistance.floatValue * 0.08f
                 }
                 .padding(
                     horizontal = PocketCcdSpacing.xl,
@@ -110,7 +106,19 @@ fun HomeScreen(
                 ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            TopBar(onOpenSettings = onOpenSettings)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.action_settings),
+                        tint = PocketCcdColors.TextTertiary,
+                        modifier = Modifier.size(PocketCcdSizes.icon),
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier
@@ -119,206 +127,182 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                BrandWordmark()
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                Text(
-                    text = stringResource(R.string.home_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PocketCcdColors.TextSecondary,
-                    textAlign = TextAlign.Center,
-                )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "POCKET",
+                        style = PocketCcdType.Brand,
+                        color = PocketCcdColors.TextPrimary,
+                    )
+                    Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
+                    Text(
+                        text = "CCD",
+                        style = PocketCcdType.Brand,
+                        color = PocketCcdColors.Accent,
+                    )
+                }
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.xxl))
-                CameraIllustration()
+                CompactCameraBody(modifier = cameraBodyModifier)
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.xl))
                 PullDownHint()
             }
 
-            BottomActions(
-                onOpenCamera = onOpenCamera,
-                onOpenGallery = onOpenGallery,
-            )
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
-            Text(
-                text = stringResource(R.string.home_privacy_note),
-                style = MaterialTheme.typography.labelSmall,
-                color = PocketCcdColors.TextTertiary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = onOpenGallery,
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = PocketCcdColors.TextSecondary,
+                    ),
+                ) {
+                    Text(text = "GALLERY", style = PocketCcdType.MonoLabel)
+                }
+                Text(
+                    text = "LOCAL ONLY",
+                    style = PocketCcdType.MonoMicro,
+                    color = PocketCcdColors.TextTertiary,
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(
+                    onClick = onOpenCamera,
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = PocketCcdColors.Accent,
+                    ),
+                ) {
+                    Text(text = "OPEN CAMERA", style = PocketCcdType.MonoLabel)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TopBar(onOpenSettings: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "POCKET CCD",
-            style = MaterialTheme.typography.labelSmall,
-            color = PocketCcdColors.TextSecondary,
-            letterSpacing = 2.sp,
-        )
-        IconButton(onClick = onOpenSettings) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = stringResource(R.string.action_settings),
-                tint = PocketCcdColors.TextSecondary,
-                modifier = Modifier.size(PocketCcdSizes.icon),
-            )
-        }
-    }
-}
-
-@Composable
-private fun BrandWordmark() {
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Text(
-            text = "POCKET",
-            style = MaterialTheme.typography.displayLarge,
-            color = PocketCcdColors.TextPrimary,
-        )
-        Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-        Text(
-            text = "CCD",
-            style = MaterialTheme.typography.displayLarge,
-            color = PocketCcdColors.Accent,
-        )
-    }
-}
-
-@Composable
-private fun CameraIllustration() {
-    val bodyShape = RoundedCornerShape(PocketCcdRadius.xl)
+private fun CompactCameraBody(modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(PocketCcdRadius.xl)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(
                 width = PocketCcdSizes.cameraBodyWidth,
                 height = PocketCcdSizes.cameraBodyHeight,
             )
-            .clip(bodyShape)
+            .clip(shape)
             .background(
-                Brush.linearGradient(
+                Brush.verticalGradient(
                     colors = listOf(
-                        PocketCcdColors.SurfaceHigh,
-                        PocketCcdColors.Surface,
-                        PocketCcdColors.BackgroundElevated,
+                        PocketCcdColors.CameraPanelTop,
+                        PocketCcdColors.CameraPanelBottom,
                     ),
                 ),
             )
-            .border(PocketCcdSizes.hairline, PocketCcdColors.OutlineSoft, bodyShape)
+            .border(
+                width = PocketCcdSizes.hairline,
+                color = PocketCcdColors.CameraPanelHighlight,
+                shape = shape,
+            )
             .padding(PocketCcdSpacing.lg),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "POCKET CCD",
-                style = MaterialTheme.typography.labelSmall,
+                style = PocketCcdType.MonoMicro,
                 color = PocketCcdColors.TextTertiary,
-                letterSpacing = 1.sp,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(PocketCcdSizes.flashDot)
-                        .clip(CircleShape)
-                        .background(PocketCcdColors.Flash),
-                )
-                Spacer(modifier = Modifier.width(PocketCcdSpacing.xs))
-                Text(
-                    text = "DIGITAL",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PocketCcdColors.TextTertiary,
-                    letterSpacing = 1.sp,
-                )
-            }
+            Text(
+                text = "01",
+                style = PocketCcdType.MonoMicro,
+                color = PocketCcdColors.TextTertiary,
+            )
         }
+
+        Lens(modifier = Modifier.align(Alignment.Center))
 
         Box(
             modifier = Modifier
-                .align(Alignment.Center)
-                .size(PocketCcdSizes.lensOuter)
+                .align(Alignment.BottomEnd)
+                .size(PocketCcdSizes.flashDot)
                 .clip(CircleShape)
-                .background(PocketCcdColors.LensGlass)
-                .border(PocketCcdSizes.lensBorder, PocketCcdColors.LensRing, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    color = PocketCcdColors.LensHighlight,
-                    radius = size.minDimension / 2f - PocketCcdSizes.lensCanvasInset.toPx(),
-                    style = Stroke(width = PocketCcdSizes.hairline.toPx()),
-                )
-                drawArc(
-                    color = PocketCcdColors.LensHighlight,
-                    startAngle = 205f,
-                    sweepAngle = 70f,
-                    useCenter = false,
-                    topLeft = Offset(
-                        PocketCcdSizes.lensArcInset.toPx(),
-                        PocketCcdSizes.lensArcInset.toPx(),
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = size.width - PocketCcdSizes.lensArcSizeInset.toPx(),
-                        height = size.height - PocketCcdSizes.lensArcSizeInset.toPx(),
-                    ),
-                    style = Stroke(
-                        width = PocketCcdSizes.lensArcStroke.toPx(),
-                        cap = StrokeCap.Round,
-                    ),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(PocketCcdSizes.lensInner)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                PocketCcdColors.LensBlue,
-                                PocketCcdColors.LensBlueDeep,
-                                PocketCcdColors.LensGlass,
-                            ),
+                .background(PocketCcdColors.Flash),
+        )
+    }
+}
+
+@Composable
+private fun Lens(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(PocketCcdSizes.lensOuter)
+            .clip(CircleShape)
+            .background(PocketCcdColors.LensGlass)
+            .border(PocketCcdSizes.lensBorder, PocketCcdColors.LensRing, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = PocketCcdColors.LensHighlight,
+                radius = size.minDimension / 2f - PocketCcdSizes.lensCanvasInset.toPx(),
+                style = Stroke(width = PocketCcdSizes.hairline.toPx()),
+            )
+            drawArc(
+                color = PocketCcdColors.LensHighlight,
+                startAngle = 205f,
+                sweepAngle = 70f,
+                useCenter = false,
+                topLeft = Offset(
+                    PocketCcdSizes.lensArcInset.toPx(),
+                    PocketCcdSizes.lensArcInset.toPx(),
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    width = size.width - PocketCcdSizes.lensArcSizeInset.toPx(),
+                    height = size.height - PocketCcdSizes.lensArcSizeInset.toPx(),
+                ),
+                style = Stroke(
+                    width = PocketCcdSizes.lensArcStroke.toPx(),
+                    cap = StrokeCap.Round,
+                ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(PocketCcdSizes.lensInner)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            PocketCcdColors.LensBlue,
+                            PocketCcdColors.LensBlueDeep,
+                            PocketCcdColors.LensGlass,
                         ),
                     ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(PocketCcdSizes.lensCore)
-                        .clip(CircleShape)
-                        .background(PocketCcdColors.LensCore)
-                        .border(PocketCcdSizes.hairline, PocketCcdColors.LensRing, CircleShape),
                 )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(
-                            start = PocketCcdSpacing.md,
-                            top = PocketCcdSpacing.md,
-                        )
-                        .size(PocketCcdSizes.lensHighlightDot)
-                        .clip(CircleShape)
-                        .background(PocketCcdColors.LensHighlight),
-                )
-            }
+                .border(PocketCcdSizes.hairline, PocketCcdColors.LensRing, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(PocketCcdSizes.lensCore)
+                    .clip(CircleShape)
+                    .background(PocketCcdColors.LensCore)
+                    .border(PocketCcdSizes.hairline, PocketCcdColors.LensRing, CircleShape),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(
+                        start = PocketCcdSpacing.sm,
+                        top = PocketCcdSpacing.sm,
+                    )
+                    .size(PocketCcdSizes.lensHighlightDot)
+                    .clip(CircleShape)
+                    .background(PocketCcdColors.LensHighlight),
+            )
         }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .width(PocketCcdSizes.accentStripWidth)
-                .height(PocketCcdSizes.accentStripHeight)
-                .clip(CircleShape)
-                .background(PocketCcdColors.Accent),
-        )
     }
 }
 
@@ -332,102 +316,14 @@ private fun PullDownHint() {
             modifier = Modifier.size(PocketCcdSizes.hintIcon),
         )
         Text(
-            text = stringResource(R.string.home_pull_hint),
-            style = MaterialTheme.typography.labelSmall,
+            text = "PULL DOWN",
+            style = PocketCcdType.MonoMicro,
             color = PocketCcdColors.TextTertiary,
         )
     }
 }
 
-@Composable
-private fun BottomActions(
-    onOpenCamera: () -> Unit,
-    onOpenGallery: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GalleryCard(
-            onClick = onOpenGallery,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(modifier = Modifier.width(PocketCcdSpacing.md))
-        Button(
-            onClick = onOpenCamera,
-            modifier = Modifier
-                .height(PocketCcdSizes.actionHeight)
-                .widthIn(min = PocketCcdSizes.ctaMinWidth),
-            shape = RoundedCornerShape(PocketCcdRadius.pill),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = PocketCcdColors.Accent,
-                contentColor = PocketCcdColors.OnAccent,
-            ),
-        ) {
-            Text(
-                text = stringResource(R.string.home_open_camera),
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
-}
-
-@Composable
-private fun GalleryCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(PocketCcdRadius.lg)
-    Row(
-        modifier = modifier
-            .height(PocketCcdSizes.actionHeight)
-            .clip(shape)
-            .background(PocketCcdColors.Surface)
-            .border(PocketCcdSizes.hairline, PocketCcdColors.OutlineSoft, shape)
-            .clickable(onClick = onClick)
-            .padding(PocketCcdSpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(PocketCcdSizes.galleryThumb)
-                .clip(RoundedCornerShape(PocketCcdRadius.md))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            PocketCcdColors.SurfaceHigh,
-                            PocketCcdColors.BackgroundElevated,
-                        ),
-                    ),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(PocketCcdSizes.galleryLens)
-                    .clip(CircleShape)
-                    .background(PocketCcdColors.LensGlass)
-                    .border(PocketCcdSizes.hairline, PocketCcdColors.LensRing, CircleShape),
-            )
-        }
-        Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-        Column {
-            Text(
-                text = stringResource(R.string.action_gallery),
-                style = MaterialTheme.typography.labelLarge,
-                color = PocketCcdColors.TextPrimary,
-            )
-            Text(
-                text = stringResource(R.string.gallery_count_zero),
-                style = MaterialTheme.typography.labelSmall,
-                color = PocketCcdColors.TextTertiary,
-            )
-        }
-    }
-}
-
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0B0D)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF070708)
 @Composable
 private fun HomeScreenPreview() {
     PocketCcdTheme {

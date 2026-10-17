@@ -141,7 +141,8 @@
 | TC-P1-023 | 在 Camera/Gallery 按 Home 键后从最近任务恢复；开发者选项“不保留活动” | 恢复到合理页面；不崩溃；不丢失关键状态 | 手工 | 否 | `NOT_RUN` |
 | TC-P1-025 | 静态检查阶段 1 代码/依赖 | 无 CameraX/Camera2 类；无相机权限；无相机初始化 | 静态 | 是 | `PASS`（2026-10-17 复检：`ui/camera` 无 CameraX/Camera2 import；Manifest 无 CAMERA） |
 | TC-P1-026 | 运行 `AppStateTest` 覆盖 HOME/CAMERA/GALLERY/RESULT/SETTINGS 转换、非法转换、重复事件、返回 | 12 个测试全部通过；非法转换不改变状态 | 单元 | 是 | `PASS`（2026-10-17，12/12，0 failures） |
-| TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 取景框有 16dp 机身外边距/20dp 内留白/4:3；快门≥48dp；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
+| TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 12dp 机身外边距、16dp 取景框内留白、4:3；快门 88dp 触摸区；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
+| TC-P1-029 | 检查首页→拍摄页的共享元素转场代码路径 | `SharedTransitionLayout` 包裹 `AnimatedContent`；首页机身与拍摄页机身使用同一 key `camera-body`；编译通过 | 静态 | 是 | `PASS`（2026-10-17；运行时连续性未验证） |
 
 ### 5.3 无障碍与视觉
 
@@ -190,8 +191,8 @@
 | T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B` |
 | T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
-| T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 8s`；42 tasks（18 executed） |
-| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `2FB153782477EBF484ACB02022B7C98521A4DE9DAFDAC9069DD6DF2B60B4B3E6`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
+| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `3AC2823DC057A136EA17185961A9D536AB9B93B29EF29AD52BAE99DEF887CD6B`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
@@ -406,6 +407,7 @@ test-evidence/
 | 状态机单元测试 | `PASS` | `AppStateTest` 12/12；见 5.6 |
 | 设计令牌/首页静态检查 | `PASS` | 页面使用令牌；仅 Preview 背景色例外；见 5.6 |
 | 拍摄页静态检查 | `PASS` | 无 CameraX/Camera2；无 CAMERA；机身内取景框；见 `TC-P1-028` |
+| 共享转场静态检查 | `PASS` | 同一 `camera-body` key；`SharedTransitionLayout`；见 `TC-P1-029` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

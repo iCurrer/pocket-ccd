@@ -6,50 +6,49 @@ import androidx.compose.ui.unit.dp
 /**
  * Structural design tokens for the prototype.
  *
- * These values are intentionally centralized but still provisional: T1-014's
- * visual review may replace the palette/type scale without touching screens.
+ * The palette is deliberately matte and low-chroma: a camera body, a few
+ * hairlines, and one orange accent. Avoid adding glows/gradients here unless a
+ * physical material needs them.
  */
 object PocketCcdColors {
-    val Background = Color(0xFF0B0B0D)
-    val BackgroundElevated = Color(0xFF151518)
-    val Surface = Color(0xFF1C1C21)
-    val SurfaceHigh = Color(0xFF26262C)
-    val SurfaceHighest = Color(0xFF313138)
-    val Outline = Color(0xFF3A3A42)
-    val OutlineSoft = Color(0xFF2A2A31)
+    val Background = Color(0xFF070708)
+    val BackgroundElevated = Color(0xFF0C0C0E)
+    val Surface = Color(0xFF121214)
+    val SurfaceHigh = Color(0xFF19191C)
+    val SurfaceHighest = Color(0xFF202024)
+    val Outline = Color(0xFF2B2B30)
+    val OutlineSoft = Color(0xFF1E1E22)
 
-    val TextPrimary = Color(0xFFF4F1EA)
-    val TextSecondary = Color(0xFFA9A49A)
-    val TextTertiary = Color(0xFF6F6A62)
+    val TextPrimary = Color(0xFFE7E2D8)
+    val TextSecondary = Color(0xFF8E887D)
+    val TextTertiary = Color(0xFF5C574F)
 
-    val Accent = Color(0xFFFF5A36)
-    val AccentPressed = Color(0xFFE04A2A)
-    val AccentSoft = Color(0x33FF5A36)
-    val OnAccent = Color(0xFF2A0B04)
+    val Accent = Color(0xFFE8562F)
+    val AccentPressed = Color(0xFFC44524)
+    val AccentSoft = Color(0x26E8562F)
+    val OnAccent = Color(0xFF1A0804)
 
-    val Error = Color(0xFFFFB4AB)
-    val OnError = Color(0xFF690005)
+    val Error = Color(0xFFD98B80)
+    val OnError = Color(0xFF2A0705)
 
-    val LensGlass = Color(0xFF070708)
-    val LensRing = Color(0xFF45454D)
-    val LensHighlight = Color(0x66FFFFFF)
-    val LensBlue = Color(0xFF24344A)
-    val LensBlueDeep = Color(0xFF0B1520)
-    val LensCore = Color(0xFF07131F)
-    val Flash = Color(0xFFFFF3D6)
+    val LensGlass = Color(0xFF060607)
+    val LensRing = Color(0xFF3D3D42)
+    val LensHighlight = Color(0x55FFFFFF)
+    val LensBlue = Color(0xFF1D2A38)
+    val LensBlueDeep = Color(0xFF091018)
+    val LensCore = Color(0xFF050A0E)
+    val Flash = Color(0xFFE8DFC8)
 
-    // Camera body / viewfinder surfaces. Keep these few: the brief asks for
-    // restrained industrial design, not stacked glassmorphism layers.
-    val CameraPanelTop = Color(0xFF1A1A1F)
-    val CameraPanelBottom = Color(0xFF0A0A0C)
-    val CameraPanelHighlight = Color(0x22FFFFFF)
-    val ViewfinderTop = Color(0xFF0A1315)
+    // Camera body / viewfinder surfaces.
+    val CameraPanelTop = Color(0xFF161619)
+    val CameraPanelBottom = Color(0xFF0B0B0D)
+    val CameraPanelHighlight = Color(0x18FFFFFF)
+    val ViewfinderTop = Color(0xFF071012)
     val ViewfinderBottom = Color(0xFF020405)
-    val ViewfinderGlow = Color(0x1A7FB4B8)
-    val ShutterOuter = Color(0xFF303036)
-    val ShutterInner = Color(0xFFFF5A36)
-    val ShutterInnerPressed = Color(0xFFE04A2A)
-    val ShutterHighlight = Color(0x88FFFFFF)
+    val ShutterOuter = Color(0xFF29292E)
+    val ShutterInner = Color(0xFFE8562F)
+    val ShutterInnerPressed = Color(0xFFC44524)
+    val ShutterHighlight = Color(0x66FFFFFF)
 }
 
 object PocketCcdSpacing {
@@ -67,53 +66,54 @@ object PocketCcdRadius {
     val xs = 4.dp
     val sm = 8.dp
     val md = 12.dp
-    val viewfinder = 18.dp
+    val viewfinder = 6.dp
     val lg = 20.dp
     val xl = 28.dp
-    val xxl = 36.dp
     val pill = 100.dp
 }
 
 object PocketCcdSizes {
     val touchTarget = 48.dp
-    val shutter = 84.dp
-    val cameraBodyWidth = 268.dp
-    val cameraBodyHeight = 208.dp
-    val lensOuter = 132.dp
-    val lensInner = 84.dp
-    val lensCore = 30.dp
-    val lensHighlightDot = 12.dp
-    val galleryThumb = 56.dp
-    val galleryLens = 22.dp
-    val icon = 22.dp
-    val hintIcon = 20.dp
-    val flashDot = 6.dp
-    val accentStripWidth = 44.dp
-    val accentStripHeight = 4.dp
-    val actionHeight = 64.dp
-    val ctaMinWidth = 144.dp
-    val hairline = 1.dp
-    val lensBorder = 2.dp
-    val lensCanvasInset = 8.dp
-    val lensArcInset = 10.dp
-    val lensArcSizeInset = 20.dp
-    val lensArcStroke = 3.dp
+    val shutter = 68.dp
+    val shutterOuter = 88.dp
+    val shutterRing = 80.dp
+    val sideControl = 44.dp
+    val topBarHeight = 44.dp
+    val nameplateHeight = 28.dp
 
-    // Camera page geometry
-    val cameraPanelMargin = 16.dp
+    val cameraBodyWidth = 236.dp
+    val cameraBodyHeight = 184.dp
+    val cameraPanelMargin = 12.dp
     val cameraPanelPadding = 16.dp
-    val viewfinderPadding = 20.dp
+    val viewfinderPadding = 16.dp
     val viewfinderInnerBorder = 1.dp
-    val shutterOuter = 104.dp
-    val shutterRing = 96.dp
-    val sideControl = 52.dp
-    val topBarHeight = 48.dp
-    val nameplateHeight = 32.dp
+
+    val lensOuter = 112.dp
+    val lensInner = 68.dp
+    val lensCore = 24.dp
+    val lensHighlightDot = 10.dp
+    val galleryThumb = 48.dp
+    val galleryLens = 18.dp
+    val icon = 20.dp
+    val hintIcon = 18.dp
+    val flashDot = 5.dp
+    val accentStripWidth = 36.dp
+    val accentStripHeight = 3.dp
+
+    val actionHeight = 56.dp
+    val ctaMinWidth = 120.dp
+    val hairline = 1.dp
+    val lensBorder = 1.dp
+    val lensCanvasInset = 7.dp
+    val lensArcInset = 9.dp
+    val lensArcSizeInset = 18.dp
+    val lensArcStroke = 2.dp
+
     val pullThreshold = 88.dp
 }
 
 object PocketCcdMotion {
     const val FastMs = 120
-    const val BaseMs = 200
+    const val BaseMs = 220
     const val SlowMs = 320
 }

@@ -2,14 +2,11 @@ package com.pocketccd.prototype.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,91 +49,70 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
     PocketCcdApp(state = state, onEvent = viewModel::onEvent)
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PocketCcdApp(
     state: AppUiState,
     onEvent: (AppEvent) -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-    ) {
-        BackHandler(enabled = state.destination != AppDestination.HOME) {
-            onEvent(AppEvent.NavigateBack)
-        }
-        AnimatedContent(
-            targetState = state.destination,
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing),
-            transitionSpec = {
-                when {
-                    initialState == AppDestination.HOME && targetState == AppDestination.CAMERA -> {
-                        (
-                            expandVertically(
-                                animationSpec = tween(
-                                    durationMillis = 360,
-                                    easing = FastOutSlowInEasing,
-                                ),
-                                expandFrom = Alignment.Top,
-                            ) + fadeIn(tween(220))
-                            ) togetherWith (
-                            fadeOut(tween(160)) + scaleOut(
-                                targetScale = 0.985f,
-                                animationSpec = tween(220),
-                            )
-                            )
-                    }
+    SharedTransitionLayout {
+        val sharedScope = this
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            BackHandler(enabled = state.destination != AppDestination.HOME) {
+                onEvent(AppEvent.NavigateBack)
+            }
+            AnimatedContent(
+                targetState = state.destination,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+                // The camera body itself is a shared element; the surrounding
+                // chrome only needs a quiet crossfade.
+                transitionSpec = {
+                    fadeIn(tween(220)) togetherWith fadeOut(tween(180))
+                },
+                label = "app-destination",
+            ) { destination ->
+                val animatedScope = this
+                with(sharedScope) {
+                    val cameraBodyModifier = Modifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "camera-body"),
+                        animatedVisibilityScope = animatedScope,
+                    )
+                    when (destination) {
+                        AppDestination.HOME -> HomeScreen(
+                            onOpenCamera = { onEvent(AppEvent.OpenCamera) },
+                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
+                            onOpenSettings = { onEvent(AppEvent.OpenSettings) },
+                            cameraBodyModifier = cameraBodyModifier,
+                        )
 
-                    initialState == AppDestination.CAMERA && targetState == AppDestination.HOME -> {
-                        (
-                            fadeIn(tween(220)) + scaleIn(
-                                initialScale = 0.985f,
-                                animationSpec = tween(240),
-                            )
-                            ) togetherWith (
-                            shrinkVertically(
-                                animationSpec = tween(
-                                    durationMillis = 320,
-                                    easing = FastOutSlowInEasing,
-                                ),
-                                shrinkTowards = Alignment.Top,
-                            ) + fadeOut(tween(180))
-                            )
-                    }
+                        AppDestination.CAMERA -> CameraScreen(
+                            onCollapse = { onEvent(AppEvent.NavigateBack) },
+                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
+                            onShutter = { onEvent(AppEvent.OpenResult) },
+                            panelModifier = cameraBodyModifier,
+                        )
 
-                    else -> fadeIn(tween(200)) togetherWith fadeOut(tween(160))
+                        AppDestination.GALLERY -> GalleryPlaceholder(
+                            onOpenSample = { onEvent(AppEvent.OpenResult) },
+                            onBack = { onEvent(AppEvent.NavigateBack) },
+                        )
+
+                        AppDestination.RESULT -> ResultPlaceholder(
+                            onBackToCamera = { onEvent(AppEvent.OpenCamera) },
+                            onOpenGallery = { onEvent(AppEvent.OpenGallery) },
+                            onBack = { onEvent(AppEvent.NavigateBack) },
+                        )
+
+                        AppDestination.SETTINGS -> SettingsPlaceholder(
+                            onBack = { onEvent(AppEvent.NavigateBack) },
+                        )
+                    }
                 }
-            },
-            label = "app-destination",
-        ) { destination ->
-            when (destination) {
-                AppDestination.HOME -> HomeScreen(
-                    onOpenCamera = { onEvent(AppEvent.OpenCamera) },
-                    onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                    onOpenSettings = { onEvent(AppEvent.OpenSettings) },
-                )
-
-                AppDestination.CAMERA -> CameraScreen(
-                    onCollapse = { onEvent(AppEvent.NavigateBack) },
-                    onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                    onShutter = { onEvent(AppEvent.OpenResult) },
-                )
-
-                AppDestination.GALLERY -> GalleryPlaceholder(
-                    onOpenSample = { onEvent(AppEvent.OpenResult) },
-                    onBack = { onEvent(AppEvent.NavigateBack) },
-                )
-
-                AppDestination.RESULT -> ResultPlaceholder(
-                    onBackToCamera = { onEvent(AppEvent.OpenCamera) },
-                    onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                    onBack = { onEvent(AppEvent.NavigateBack) },
-                )
-
-                AppDestination.SETTINGS -> SettingsPlaceholder(
-                    onBack = { onEvent(AppEvent.NavigateBack) },
-                )
             }
         }
     }

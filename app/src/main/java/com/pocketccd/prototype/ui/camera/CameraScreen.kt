@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -46,10 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.R
 import com.pocketccd.prototype.ui.components.CameraShutterButton
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
@@ -57,14 +53,12 @@ import com.pocketccd.prototype.ui.theme.PocketCcdRadius
 import com.pocketccd.prototype.ui.theme.PocketCcdSizes
 import com.pocketccd.prototype.ui.theme.PocketCcdSpacing
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
+import com.pocketccd.prototype.ui.theme.PocketCcdType
 
 /**
- * Static camera-page prototype. It deliberately contains no CameraX/Camera2
- * references: preview, capture and processing are separate modules.
- *
- * The body keeps a visible margin around it (the brief forbids a full-screen
- * camera viewfinder). The viewfinder occupies the upper part of the body;
- * controls stay at the bottom, like a small digital camera.
+ * Static camera-page prototype. No CameraX/Camera2, no permissions, no preview
+ * screenshot. The body is deliberately inset from the screen edges; the
+ * viewfinder sits in the upper half with visible body material around it.
  */
 @Composable
 fun CameraScreen(
@@ -72,6 +66,7 @@ fun CameraScreen(
     onOpenGallery: () -> Unit,
     onShutter: () -> Unit,
     modifier: Modifier = Modifier,
+    panelModifier: Modifier = Modifier,
 ) {
     var flashOn by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(false) }
@@ -84,7 +79,6 @@ fun CameraScreen(
                     colors = listOf(
                         PocketCcdColors.Background,
                         PocketCcdColors.BackgroundElevated,
-                        PocketCcdColors.Background,
                     ),
                 ),
             ),
@@ -98,17 +92,10 @@ fun CameraScreen(
         ) {
             val panelWidth = minOf(maxWidth, 520.dp)
             Box(
-                modifier = Modifier
+                modifier = panelModifier
                     .width(panelWidth)
                     .fillMaxHeight()
-                    .shadow(
-                        elevation = 28.dp,
-                        shape = RoundedCornerShape(PocketCcdRadius.xxl),
-                        clip = false,
-                        ambientColor = Color.Black,
-                        spotColor = Color.Black,
-                    )
-                    .clip(RoundedCornerShape(PocketCcdRadius.xxl))
+                    .clip(RoundedCornerShape(PocketCcdRadius.xl))
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -120,7 +107,7 @@ fun CameraScreen(
                     .border(
                         width = PocketCcdSizes.hairline,
                         color = PocketCcdColors.CameraPanelHighlight,
-                        shape = RoundedCornerShape(PocketCcdRadius.xxl),
+                        shape = RoundedCornerShape(PocketCcdRadius.xl),
                     )
                     .padding(PocketCcdSizes.cameraPanelPadding),
             ) {
@@ -131,7 +118,7 @@ fun CameraScreen(
                     )
                     Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
                     Viewfinder()
-                    Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
+                    Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
                     Nameplate()
                     Spacer(modifier = Modifier.weight(1f))
                     Controls(
@@ -140,14 +127,6 @@ fun CameraScreen(
                         onToggleFlash = { flashOn = !flashOn },
                         onToggleCamera = { frontCamera = !frontCamera },
                         onShutter = onShutter,
-                    )
-                    Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                    Text(
-                        text = stringResource(R.string.camera_static_badge),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = PocketCcdColors.TextTertiary,
-                        letterSpacing = 1.4.sp,
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
                     )
                 }
             }
@@ -175,20 +154,11 @@ private fun CameraTopBar(
                 modifier = Modifier.size(PocketCcdSizes.icon),
             )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "POCKET CCD",
-                style = MaterialTheme.typography.labelSmall,
-                color = PocketCcdColors.TextPrimary,
-                letterSpacing = 2.sp,
-            )
-            Text(
-                text = stringResource(R.string.camera_top_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = PocketCcdColors.TextTertiary,
-                letterSpacing = 1.sp,
-            )
-        }
+        Text(
+            text = "DC-01",
+            style = PocketCcdType.MonoLabel,
+            color = PocketCcdColors.TextTertiary,
+        )
         val galleryDescription = stringResource(R.string.camera_gallery)
         IconButton(
             onClick = onOpenGallery,
@@ -196,26 +166,19 @@ private fun CameraTopBar(
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(PocketCcdRadius.sm))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                PocketCcdColors.SurfaceHigh,
-                                PocketCcdColors.BackgroundElevated,
-                            ),
-                        ),
-                    )
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(PocketCcdRadius.xs))
+                    .background(PocketCcdColors.Surface)
                     .border(
                         width = PocketCcdSizes.hairline,
                         color = PocketCcdColors.Outline,
-                        shape = RoundedCornerShape(PocketCcdRadius.sm),
+                        shape = RoundedCornerShape(PocketCcdRadius.xs),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
                         .background(PocketCcdColors.LensGlass)
                         .border(
@@ -251,47 +214,84 @@ private fun Viewfinder() {
                 shape = shape,
             )
             .padding(PocketCcdSizes.viewfinderPadding),
-        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(PocketCcdRadius.md))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            PocketCcdColors.ViewfinderGlow,
-                            Color.Transparent,
-                        ),
-                    ),
-                )
                 .border(
                     width = PocketCcdSizes.hairline,
                     color = PocketCcdColors.CameraPanelHighlight,
-                    shape = RoundedCornerShape(PocketCcdRadius.md),
+                    shape = RoundedCornerShape(PocketCcdRadius.xs),
                 ),
         )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = stringResource(R.string.camera_preview_placeholder),
-                style = MaterialTheme.typography.labelLarge,
-                color = PocketCcdColors.TextTertiary,
-                textAlign = TextAlign.Center,
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val inset = 12.dp.toPx()
+            val length = 10.dp.toPx()
+            val color = PocketCcdColors.TextTertiary.copy(alpha = 0.5f)
+            val stroke = 1.dp.toPx()
+
+            // Four small corner marks, not a full HUD.
+            drawLine(color, Offset(inset, inset), Offset(inset + length, inset), stroke)
+            drawLine(color, Offset(inset, inset), Offset(inset, inset + length), stroke)
+            drawLine(
+                color,
+                Offset(size.width - inset, inset),
+                Offset(size.width - inset - length, inset),
+                stroke,
             )
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
-            Text(
-                text = stringResource(R.string.camera_preview_caption),
-                style = MaterialTheme.typography.labelSmall,
-                color = PocketCcdColors.TextTertiary.copy(alpha = 0.72f),
-                textAlign = TextAlign.Center,
+            drawLine(
+                color,
+                Offset(size.width - inset, inset),
+                Offset(size.width - inset, inset + length),
+                stroke,
+            )
+            drawLine(
+                color,
+                Offset(inset, size.height - inset),
+                Offset(inset + length, size.height - inset),
+                stroke,
+            )
+            drawLine(
+                color,
+                Offset(inset, size.height - inset),
+                Offset(inset, size.height - inset - length),
+                stroke,
+            )
+            drawLine(
+                color,
+                Offset(size.width - inset, size.height - inset),
+                Offset(size.width - inset - length, size.height - inset),
+                stroke,
+            )
+            drawLine(
+                color,
+                Offset(size.width - inset, size.height - inset),
+                Offset(size.width - inset, size.height - inset - length),
+                stroke,
             )
         }
+        Text(
+            text = "4:3",
+            style = PocketCcdType.MonoMicro,
+            color = PocketCcdColors.TextTertiary,
+            modifier = Modifier.align(Alignment.TopStart),
+        )
+        Text(
+            text = "PREVIEW",
+            style = PocketCcdType.MonoMicro,
+            color = PocketCcdColors.TextTertiary,
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
     }
 }
 
 @Composable
 private fun Nameplate() {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PocketCcdSizes.nameplateHeight),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -301,29 +301,25 @@ private fun Nameplate() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(PocketCcdSizes.nameplateHeight),
+                .weight(1f)
+                .padding(horizontal = PocketCcdSpacing.xs),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.camera_model),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PocketCcdColors.TextSecondary,
-                    letterSpacing = 1.5.sp,
-                )
-                Text(
-                    text = "POCKET CCD",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PocketCcdColors.TextTertiary,
-                    letterSpacing = 1.sp,
-                )
-            }
             Text(
-                text = stringResource(R.string.camera_filter),
-                style = MaterialTheme.typography.labelSmall,
+                text = "POCKET CCD",
+                style = PocketCcdType.MonoMicro,
+                color = PocketCcdColors.TextSecondary,
+            )
+            Text(
+                text = "DC-01",
+                style = PocketCcdType.MonoMicro,
                 color = PocketCcdColors.TextTertiary,
-                letterSpacing = 1.sp,
+            )
+            Text(
+                text = "DAYLIGHT",
+                style = PocketCcdType.MonoMicro,
+                color = PocketCcdColors.TextTertiary,
             )
         }
     }
@@ -373,19 +369,11 @@ private fun SideControl(
     highlighted: Boolean,
     icon: @Composable () -> Unit,
 ) {
-    val shape = CircleShape
     Box(
         modifier = Modifier
             .size(PocketCcdSizes.sideControl)
-            .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        PocketCcdColors.SurfaceHigh,
-                        PocketCcdColors.Surface,
-                    ),
-                ),
-            )
+            .clip(CircleShape)
+            .background(PocketCcdColors.Surface)
             .border(
                 width = PocketCcdSizes.hairline,
                 color = if (highlighted) {
@@ -393,7 +381,7 @@ private fun SideControl(
                 } else {
                     PocketCcdColors.OutlineSoft
                 },
-                shape = shape,
+                shape = CircleShape,
             )
             .clickable(
                 role = Role.Button,
@@ -427,10 +415,7 @@ private fun FlashIcon(on: Boolean) {
 private fun FlipCameraIcon(front: Boolean) {
     val color = if (front) PocketCcdColors.Accent else PocketCcdColors.TextSecondary
     Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
-        val stroke = Stroke(
-            width = 1.8.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
+        val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
         val inset = 2.dp.toPx()
         val arcSize = Size(
             width = size.width - inset * 2,
@@ -454,25 +439,25 @@ private fun FlipCameraIcon(front: Boolean) {
             size = arcSize,
             style = stroke,
         )
-        val arrow = 4.dp.toPx()
+        val arrow = 3.5.dp.toPx()
         drawLine(
             color = color,
             start = Offset(size.width - inset, size.height * 0.34f),
             end = Offset(size.width - inset - arrow, size.height * 0.34f - arrow),
-            strokeWidth = 1.8.dp.toPx(),
+            strokeWidth = 1.5.dp.toPx(),
             cap = StrokeCap.Round,
         )
         drawLine(
             color = color,
             start = Offset(inset, size.height * 0.66f),
             end = Offset(inset + arrow, size.height * 0.66f + arrow),
-            strokeWidth = 1.8.dp.toPx(),
+            strokeWidth = 1.5.dp.toPx(),
             cap = StrokeCap.Round,
         )
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0B0D)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF070708)
 @Composable
 private fun CameraScreenPreview() {
     PocketCcdTheme {

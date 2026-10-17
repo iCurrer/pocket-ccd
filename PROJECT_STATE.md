@@ -144,8 +144,8 @@
 | T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B` |
 | T1-004/T1-006 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
-| T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 8s`；42 tasks（18 executed） |
-| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `2FB153782477EBF484ACB02022B7C98521A4DE9DAFDAC9069DD6DF2B60B4B3E6`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
+| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `3AC2823DC057A136EA17185961A9D536AB9B93B29EF29AD52BAE99DEF887CD6B`（随代码变化，不作为固定指纹） |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -322,7 +322,7 @@ D:\Android\pocket ccd\
 
 ## 12. 诚实声明
 
-- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、构建（`TC-ENV-002`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）、拍摄页静态约束（`TC-P1-028`）。**没有任何页面在设备上运行、没有相机/图像/性能功能被实际验证。**
+- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、构建（`TC-ENV-002`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）、拍摄页静态约束（`TC-P1-028`）、共享转场代码路径（`TC-P1-029`）。**没有任何页面在设备上运行、没有相机/图像/性能功能被实际验证。**
 - 构建通过只证明“空壳能编译打包”；安装、启动、UI 测试仍被无设备阻塞。
 - 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。
