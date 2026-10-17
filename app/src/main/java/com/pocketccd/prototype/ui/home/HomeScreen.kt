@@ -1,6 +1,5 @@
 package com.pocketccd.prototype.ui.home
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,12 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -135,11 +130,6 @@ fun HomeScreen(
                             ),
                         ),
                     )
-                    .border(
-                        width = 2.dp,
-                        color = Color.White.copy(alpha = 0.25f),
-                        shape = RoundedCornerShape(PocketCcdRadius.body),
-                    )
                     .padding(PocketCcdSpacing.lg),
             ) {
                 HomeCameraFront(
@@ -148,13 +138,6 @@ fun HomeScreen(
                     onOpenSettings = onOpenSettings,
                 )
             }
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.lg))
-            Text(
-                text = "PULL DOWN · SHOOT",
-                style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.RetroInk,
-                textAlign = TextAlign.Center,
-            )
         }
     }
 }
@@ -169,8 +152,8 @@ private fun HomeCameraFront(
         Text(
             text = "POCKET CCD",
             style = PocketCcdType.Brand.copy(
-                fontSize = 20.sp,
-                letterSpacing = 4.sp,
+                fontSize = 16.sp,
+                letterSpacing = 1.5.sp,
             ),
             color = PocketCcdColors.RetroCream,
             modifier = Modifier.fillMaxWidth(),
@@ -286,15 +269,7 @@ private fun FlashWindow() {
                 color = PocketCcdColors.RetroInk.copy(alpha = 0.5f),
                 shape = RoundedCornerShape(PocketCcdRadius.xs),
             ),
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(0.7f)
-                .height(1.dp)
-                .background(Color.White.copy(alpha = 0.28f)),
-        )
-    }
+    )
 }
 
 @Composable
@@ -314,25 +289,6 @@ private fun HomeLens() {
             .border(PocketCcdSizes.lensBorder, PocketCcdColors.RetroGreenDeep, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                color = Color.White.copy(alpha = 0.12f),
-                radius = size.minDimension / 2f - 8.dp.toPx(),
-                style = Stroke(width = 1.dp.toPx()),
-            )
-            drawArc(
-                color = Color.White.copy(alpha = 0.28f),
-                startAngle = 205f,
-                sweepAngle = 70f,
-                useCenter = false,
-                topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
-                size = Size(
-                    width = size.width - 16.dp.toPx(),
-                    height = size.height - 16.dp.toPx(),
-                ),
-                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
-            )
-        }
         Box(
             modifier = Modifier
                 .size(96.dp)

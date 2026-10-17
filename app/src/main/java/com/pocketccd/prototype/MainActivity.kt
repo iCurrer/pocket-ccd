@@ -13,14 +13,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(
-                scrim = Color.TRANSPARENT,
-                darkScrim = Color.TRANSPARENT,
-            ),
-            navigationBarStyle = SystemBarStyle.light(
-                scrim = Color.TRANSPARENT,
-                darkScrim = Color.TRANSPARENT,
-            ),
+            // App launches on the red camera home; AppRoot switches icon
+            // appearance to dark on cream/mint pages.
+            statusBarStyle = SystemBarStyle.dark(scrim = Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(scrim = Color.TRANSPARENT),
         )
         setContent {
             PocketCcdTheme {

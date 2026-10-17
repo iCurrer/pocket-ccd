@@ -45,6 +45,7 @@
 | [`research/android-official-docs-2026-10-17.md`](research/android-official-docs-2026-10-17.md) | 官方文档版本与来源 | 升级依赖/核对事实时 |
 | [`docs/design-tokens.md`](docs/design-tokens.md) | 设计令牌（临时值） | 写页面前；视觉评审时 |
 | [`docs/color-direction.md`](docs/color-direction.md) | 玩具相机配色研究、对比度与选型 | 调整配色时 |
+| [`docs/red-camera-research.md`](docs/red-camera-research.md) | 红色玩具相机调研、降刺激选色、系统栏/转场修正 | 打磨红色主题时 |
 
 ---
 

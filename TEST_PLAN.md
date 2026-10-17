@@ -153,8 +153,11 @@
 | TC-P1-037 | 检查 Debug 诊断入口仅 debug | `if (BuildConfig.DEBUG)` 门控；Release 不进入该分支 | 静态 | 是 | `PASS`（2026-10-17；Release APK 构建通过，未在设备上打开 Release UI） |
 | TC-P1-038 | 检查 V2 玩具机身结构 | 首页/照片墙/成片/设置使用 `ToyCameraBody`/`ToyScreen`/物理按钮；首页无文本链接行 | 静态 | 是 | `PASS`（2026-10-17；运行时视觉未验） |
 | TC-P1-039 | 检查红色拍摄页结构 | 红色全屏、厚重黑取景器、绿色闪光灯（不可用态）、橙色快门、红色循环键、紧凑品牌、无顶部导航；预览为静态测试画面 | 静态 | 是 | `PASS`（2026-10-17；非实时相机） |
-| TC-P1-040 | 计算红色拍摄页关键对比度 | 品牌大字/取景器/LCD 文字达到对应阈值；小字不在红底上用奶油色 | 静态 | 是 | `PASS`（2026-10-17 脚本：奶油/红 3.72 仅大字；深字/绿 10.48；深字/橙 7.44；红/黑 4.66） |
+| TC-P1-040 | 计算红色页面关键对比度 | 品牌 logo/取景器/LCD 文字达到对应阈值；小字不在红底上用奶油色 | 静态 | 是 | `PASS`（2026-10-17 脚本：奶油/红 3.86 仅 logo；奶油/深红 6.02；深字/绿 9.17；深字/橙 7.00） |
 | TC-P1-041 | 检查首页红色统一主题 | 首页与拍摄页同一红塑料/黑镜头/绿闪光/橙快门语言；无网页文本链接；快门/FILM/设置可达 | 静态 | 是 | `PASS`（2026-10-17；真机视觉未验） |
+| TC-P1-042 | 检查系统栏与页面同色/图标对比 | HOME/CAMERA 的 `Surface` 用 `RetroRed`；其他页用浅薄荷；状态栏/导航栏图标随之切换 | 静态 | 是 | `PASS`（2026-10-17；真机未验） |
+| TC-P1-043 | 检查共享转场 overlay 防矩形闪角 | `sharedBounds` 有 36dp `OverlayClip` + `zIndexInOverlay=1f` + `Enter/Exit None`；红页底 non-cream | 静态 | 是 | `PASS`（2026-10-17；真机慢放未验） |
+| TC-P1-044 | 检查首页品牌区无多余线条 | 已删 `PULL DOWN`、外圈白线、闪光窗分割线、镜头弧线；品牌 16sp/1.5sp | 静态 | 是 | `PASS`（2026-10-17） |
 
 ### 5.3 无障碍与视觉
 
@@ -214,9 +217,9 @@
 | V2 当前 APK | 30,865,377 bytes；SHA-256 `A9BD98091019EAF6D7D98C01C71B8A2316C83114E1CF9F5E22FA6D8FD734FD69` |
 | 红色拍摄页构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 9s`；44 tasks（7 executed） |
 | 红色拍摄页当前 APK | 30,865,797 bytes；SHA-256 `3D3DB517EEAFE18AFB554F8E5DE4D6E520A3701BFF77021BEEDCB86353D00953` |
-| 红色首页构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 6s`；44 tasks（8 executed） |
-| 红色首页当前 APK | 30,865,797 bytes；SHA-256 `7000DF74EC63D5A479D012B5A0AB0D74CDE8646AA858BD69A88B002CD3812E47`（随代码变化，不作为固定指纹） |
-| 红色首页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 7s`；`app-release-unsigned.apk` 23,446,442 bytes；SHA-256 `4639CC2AFA7A3AC39A040C40E24F8CD10E24DF1CE54A3D09C943DD3E3DC2D224`；未签名，未安装 |
+| 红色首页构建（打磨后） | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 996ms`（增量，全部 up-to-date）；44 tasks |
+| 红色首页当前 APK | 30,865,797 bytes；SHA-256 `40EDEF5EBBEAA775F360952CCF94090B79472AB3A0EFBBAE470510B04668F2AB`（随代码变化，不作为固定指纹） |
+| 红色首页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 6s`；`app-release-unsigned.apk` 23,446,442 bytes；SHA-256 `7C952C5771EE25A04418F7E629DB019C8C3C7252AB921CEBF79CB9A239059332`；未签名，未安装 |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
@@ -441,6 +444,9 @@ test-evidence/
 | 红色拍摄页结构检查 | `PASS` | 红底/黑取景器/绿闪光灯/橙快门/品牌；见 `TC-P1-039` |
 | 红色拍摄页对比度检查 | `PASS` | 品牌仅 20sp 大字；小字不在红底用奶油色；见 `TC-P1-040` |
 | 首页红色统一检查 | `PASS` | 与拍摄页同一红塑料/黑镜头/绿闪光/橙快门语言；见 `TC-P1-041` |
+| 系统栏同色检查 | `PASS` | 红页 Surface/图标动态切换；见 `TC-P1-042` |
+| 转场 overlay 裁剪检查 | `PASS` | 36dp OverlayClip 防矩形闪角；运行时未验；见 `TC-P1-043` |
+| 品牌区线条精简检查 | `PASS` | 删除多余说明/边线/弧线；见 `TC-P1-044` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

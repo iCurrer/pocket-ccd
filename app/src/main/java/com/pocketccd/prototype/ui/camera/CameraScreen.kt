@@ -123,8 +123,8 @@ fun CameraScreen(
                 Text(
                     text = "POCKET CCD",
                     style = PocketCcdType.Brand.copy(
-                        fontSize = 20.sp,
-                        letterSpacing = 4.sp,
+                        fontSize = 18.sp,
+                        letterSpacing = 2.sp,
                     ),
                     color = PocketCcdColors.RetroCream,
                     textAlign = TextAlign.Center,

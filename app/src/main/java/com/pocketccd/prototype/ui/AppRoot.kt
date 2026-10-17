@@ -1,5 +1,6 @@
 package com.pocketccd.prototype.ui
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -16,12 +17,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pocketccd.prototype.navigation.AppDestination
@@ -34,6 +39,7 @@ import com.pocketccd.prototype.ui.home.HomeScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
 import com.pocketccd.prototype.ui.result.ResultStatus
 import com.pocketccd.prototype.ui.settings.SettingsScreen
+import com.pocketccd.prototype.ui.theme.PocketCcdColors
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
 @Composable
@@ -48,11 +54,25 @@ fun PocketCcdApp(
     state: AppUiState,
     onEvent: (AppEvent) -> Unit,
 ) {
+    val view = LocalView.current
+    val isRedPage = state.destination == AppDestination.HOME ||
+        state.destination == AppDestination.CAMERA
+    SideEffect {
+        val activity = view.context as? Activity ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(activity.window, view)
+        // Red pages use light system icons; cream/mint pages use dark icons.
+        controller.isAppearanceLightStatusBars = !isRedPage
+        controller.isAppearanceLightNavigationBars = !isRedPage
+    }
     SharedTransitionLayout {
         val sharedScope = this
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
+            color = if (isRedPage) {
+                PocketCcdColors.RetroRed
+            } else {
+                PocketCcdColors.Background
+            },
         ) {
             BackHandler(enabled = state.destination != AppDestination.HOME) {
                 onEvent(AppEvent.NavigateBack)
@@ -83,6 +103,13 @@ fun PocketCcdApp(
                             )
                         },
                         resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                        // The camera body is a rounded red slab. Clip the overlay
+                        // during the morph so the full-screen page cannot flash
+                        // square corners while the bounds are animating.
+                        clipInOverlayDuringTransition = OverlayClip(
+                            RoundedCornerShape(36.dp),
+                        ),
+                        zIndexInOverlay = 1f,
                     )
                     when (destination) {
                         AppDestination.HOME -> HomeScreen(
