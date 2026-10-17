@@ -1,6 +1,13 @@
 package com.pocketccd.prototype.ui.camera
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -8,16 +15,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,232 +30,273 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.R
-import com.pocketccd.prototype.ui.components.CameraShutterButton
-import com.pocketccd.prototype.ui.components.ToyCameraBody
 import com.pocketccd.prototype.ui.components.ToyRoundButton
-import com.pocketccd.prototype.ui.components.ToyScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
+import com.pocketccd.prototype.ui.theme.PocketCcdRadius
 import com.pocketccd.prototype.ui.theme.PocketCcdSizes
 import com.pocketccd.prototype.ui.theme.PocketCcdSpacing
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 import com.pocketccd.prototype.ui.theme.PocketCcdType
 
 /**
- * Toy-camera back panel: deep-teal viewfinder window, stamped nameplate,
- * chunky mint/coral controls. No CameraX/Camera2, no permissions.
+ * Retro red toy-camera front per the visual brief:
+ * red plastic shell, heavy black viewfinder, green flash, orange shutter,
+ * red cycle button, compact logo. The preview is static in phase 1; no
+ * CameraX/Camera2 or permissions are wired yet.
  */
 @Composable
 fun CameraScreen(
-    onCollapse: () -> Unit,
     onShutter: () -> Unit,
     modifier: Modifier = Modifier,
     panelModifier: Modifier = Modifier,
 ) {
     var flashOn by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(false) }
+    val flashAvailable = !frontCamera
 
-    BoxWithConstraints(
-        modifier = modifier
+    Box(
+        modifier = panelModifier
             .fillMaxSize()
-            .padding(PocketCcdSizes.cameraPanelMargin),
-        contentAlignment = Alignment.Center,
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        PocketCcdColors.RetroRedLight,
+                        PocketCcdColors.RetroRed,
+                        PocketCcdColors.RetroRedDeep,
+                    ),
+                ),
+            ),
     ) {
-        val panelWidth = minOf(maxWidth, 520.dp)
-        ToyCameraBody(
-            modifier = panelModifier
-                .width(panelWidth)
-                .fillMaxHeight(),
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = PocketCcdSpacing.xl,
+                    vertical = PocketCcdSpacing.md,
+                ),
         ) {
+            val viewfinderSize = minOf(
+                maxWidth - PocketCcdSpacing.xl,
+                maxHeight * 0.52f,
+            )
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(PocketCcdSpacing.md),
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                CameraHeader(onCollapse = onCollapse)
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
-                Viewfinder()
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                Nameplate()
                 Spacer(modifier = Modifier.weight(1f))
-                Controls(
+                RetroViewfinder(size = viewfinderSize)
+                Spacer(modifier = Modifier.height(PocketCcdSpacing.xl))
+                RetroControls(
                     flashOn = flashOn,
+                    flashAvailable = flashAvailable,
                     frontCamera = frontCamera,
-                    onToggleFlash = { flashOn = !flashOn },
-                    onToggleCamera = { frontCamera = !frontCamera },
+                    onToggleFlash = {
+                        if (flashAvailable) flashOn = !flashOn
+                    },
+                    onToggleCamera = {
+                        val nextFront = !frontCamera
+                        frontCamera = nextFront
+                        if (nextFront) flashOn = false
+                    },
                     onShutter = onShutter,
                 )
+                Spacer(modifier = Modifier.height(PocketCcdSpacing.lg))
+                Text(
+                    text = "POCKET CCD",
+                    style = PocketCcdType.Brand.copy(
+                        fontSize = 20.sp,
+                        letterSpacing = 4.sp,
+                    ),
+                    color = PocketCcdColors.RetroCream,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun CameraHeader(onCollapse: () -> Unit) {
-    Row(
+private fun RetroViewfinder(size: Dp) {
+    val outerShape = RoundedCornerShape(PocketCcdRadius.body)
+    val innerShape = RoundedCornerShape(PocketCcdRadius.xl)
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(PocketCcdSizes.topBarHeight),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+            .size(size)
+            .shadow(
+                elevation = 20.dp,
+                shape = outerShape,
+                clip = false,
+                ambientColor = PocketCcdColors.RetroInk.copy(alpha = 0.42f),
+                spotColor = PocketCcdColors.RetroInk.copy(alpha = 0.5f),
+            )
+            .clip(outerShape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        PocketCcdColors.RetroRedLight,
+                        PocketCcdColors.RetroRed,
+                        PocketCcdColors.RetroRedDeep,
+                    ),
+                ),
+            )
+            .border(
+                width = 2.dp,
+                color = Color.White.copy(alpha = 0.28f),
+                shape = outerShape,
+            )
+            .padding(10.dp),
     ) {
-        ToyRoundButton(
-            onClick = onCollapse,
-            contentDescription = stringResource(R.string.camera_collapse),
-            size = 38.dp,
-            color = PocketCcdColors.Mint,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(innerShape)
+                .background(PocketCcdColors.RetroBlack)
+                .border(
+                    width = 2.dp,
+                    color = PocketCcdColors.RetroInk,
+                    shape = innerShape,
+                ),
         ) {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = PocketCcdColors.TextPrimary,
-                modifier = Modifier.size(18.dp),
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(PocketCcdSpacing.md),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 3f)
+                        .clip(RoundedCornerShape(PocketCcdRadius.md))
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF1B2C2A),
+                                    Color(0xFF0B1211),
+                                ),
+                            ),
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(PocketCcdRadius.md),
+                        ),
+                ) {
+                    StaticPreview()
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = PocketCcdSpacing.sm)
+                    .size(9.dp)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = CircleShape,
+                        clip = false,
+                        ambientColor = PocketCcdColors.RetroGreen.copy(alpha = 0.8f),
+                        spotColor = PocketCcdColors.RetroGreen.copy(alpha = 0.9f),
+                    )
+                    .clip(CircleShape)
+                    .background(PocketCcdColors.RetroGreen)
+                    .border(
+                        width = 1.dp,
+                        color = PocketCcdColors.RetroInk.copy(alpha = 0.6f),
+                        shape = CircleShape,
+                    ),
             )
         }
-        Text(
-            text = "POCKET CCD",
-            style = PocketCcdType.Brand,
-            color = PocketCcdColors.TextPrimary,
-        )
-        Spacer(modifier = Modifier.width(38.dp))
     }
 }
 
 @Composable
-private fun Viewfinder() {
-    ToyScreen(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(4f / 3f),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val inset = 12.dp.toPx()
-            val length = 12.dp.toPx()
-            val color = PocketCcdColors.ViewfinderInk.copy(alpha = 0.55f)
-            val stroke = 1.5.dp.toPx()
-
-            drawLine(color, Offset(inset, inset), Offset(inset + length, inset), stroke)
-            drawLine(color, Offset(inset, inset), Offset(inset, inset + length), stroke)
-            drawLine(
-                color,
-                Offset(size.width - inset, inset),
-                Offset(size.width - inset - length, inset),
-                stroke,
-            )
-            drawLine(
-                color,
-                Offset(size.width - inset, inset),
-                Offset(size.width - inset, inset + length),
-                stroke,
-            )
-            drawLine(
-                color,
-                Offset(inset, size.height - inset),
-                Offset(inset + length, size.height - inset),
-                stroke,
-            )
-            drawLine(
-                color,
-                Offset(inset, size.height - inset),
-                Offset(inset, size.height - inset - length),
-                stroke,
-            )
-            drawLine(
-                color,
-                Offset(size.width - inset, size.height - inset),
-                Offset(size.width - inset - length, size.height - inset),
-                stroke,
-            )
-            drawLine(
-                color,
-                Offset(size.width - inset, size.height - inset),
-                Offset(size.width - inset, size.height - inset - length),
-                stroke,
-            )
-        }
-        Text(
-            text = "4:3",
-            style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.ViewfinderInk,
-            modifier = Modifier.align(Alignment.TopStart),
+private fun StaticPreview() {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF5E7B71),
+                    Color(0xFFB9A17E),
+                ),
+            ),
         )
-        Text(
-            text = "PREVIEW",
-            style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.ViewfinderInk.copy(alpha = 0.72f),
-            modifier = Modifier.align(Alignment.BottomStart),
+        drawRect(
+            color = Color(0xFF344D43),
+            topLeft = Offset(0f, size.height * 0.62f),
+            size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.38f),
+        )
+        drawCircle(
+            color = Color(0xFFE8C56A).copy(alpha = 0.75f),
+            radius = size.width * 0.055f,
+            center = Offset(size.width * 0.7f, size.height * 0.28f),
         )
     }
 }
 
 @Composable
-private fun Nameplate() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(PocketCcdSizes.nameplateHeight),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "POCKET CCD",
-            style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextSecondary,
-        )
-        Text(
-            text = "DC-01",
-            style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextSecondary,
-        )
-        Text(
-            text = "DAYLIGHT",
-            style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextSecondary,
-        )
-    }
-}
-
-@Composable
-private fun Controls(
+private fun RetroControls(
     flashOn: Boolean,
+    flashAvailable: Boolean,
     frontCamera: Boolean,
     onToggleFlash: () -> Unit,
     onToggleCamera: () -> Unit,
     onShutter: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(PocketCcdSizes.shutterOuter),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ToyRoundButton(
             onClick = onToggleFlash,
             contentDescription = stringResource(
-                if (flashOn) R.string.camera_flash_on else R.string.camera_flash_off,
+                when {
+                    !flashAvailable -> R.string.camera_flash_unavailable
+                    flashOn -> R.string.camera_flash_on
+                    else -> R.string.camera_flash_off
+                },
             ),
-            size = PocketCcdSizes.sideControl,
-            color = PocketCcdColors.Mint,
+            size = 58.dp,
+            color = if (flashAvailable) {
+                if (flashOn) PocketCcdColors.RetroGreen else PocketCcdColors.RetroGreenDeep
+            } else {
+                PocketCcdColors.RetroRedDeep
+            },
+            enabled = flashAvailable,
         ) {
-            FlashIcon(on = flashOn)
+            FlashIcon(
+                on = flashOn,
+                enabled = flashAvailable,
+            )
         }
-        CameraShutterButton(onClick = onShutter)
+        RetroShutterButton(onClick = onShutter)
         ToyRoundButton(
             onClick = onToggleCamera,
             contentDescription = stringResource(
                 if (frontCamera) R.string.camera_flip_front else R.string.camera_flip_back,
             ),
-            size = PocketCcdSizes.sideControl,
-            color = PocketCcdColors.Butter,
+            size = 58.dp,
+            color = PocketCcdColors.RetroRedDeep,
         ) {
             FlipCameraIcon(front = frontCamera)
         }
@@ -259,8 +304,84 @@ private fun Controls(
 }
 
 @Composable
-private fun FlashIcon(on: Boolean) {
-    val color = if (on) PocketCcdColors.AccentText else PocketCcdColors.TextPrimary
+private fun RetroShutterButton(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "retro-shutter-scale",
+    )
+    val description = stringResource(R.string.camera_shutter)
+
+    Box(
+        modifier = Modifier
+            .size(104.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = 18.dp,
+                shape = CircleShape,
+                clip = false,
+                ambientColor = PocketCcdColors.RetroInk.copy(alpha = 0.5f),
+                spotColor = PocketCcdColors.RetroInk.copy(alpha = 0.62f),
+            )
+            .clip(CircleShape)
+            .background(PocketCcdColors.RetroInk)
+            .border(
+                width = 3.dp,
+                color = PocketCcdColors.RetroInk,
+                shape = CircleShape,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = description }
+            .padding(6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            PocketCcdColors.RetroOrange,
+                            PocketCcdColors.RetroOrangeDeep,
+                        ),
+                    ),
+                )
+                .border(
+                    width = 2.dp,
+                    color = PocketCcdColors.RetroCream.copy(alpha = 0.58f),
+                    shape = CircleShape,
+                ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = PocketCcdSpacing.lg, top = PocketCcdSpacing.md)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.16f)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FlashIcon(on: Boolean, enabled: Boolean) {
+    val color = when {
+        !enabled -> PocketCcdColors.RetroCream.copy(alpha = 0.35f)
+        on -> PocketCcdColors.RetroInk
+        else -> PocketCcdColors.RetroCream
+    }
     Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
         val path = Path().apply {
             moveTo(size.width * 0.56f, 0f)
@@ -277,17 +398,17 @@ private fun FlashIcon(on: Boolean) {
 
 @Composable
 private fun FlipCameraIcon(front: Boolean) {
-    val color = if (front) PocketCcdColors.AccentText else PocketCcdColors.TextPrimary
     Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
+        val color = PocketCcdColors.RetroCream
         val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
         val inset = 2.dp.toPx()
-        val arcSize = Size(
+        val arcSize = androidx.compose.ui.geometry.Size(
             width = size.width - inset * 2,
             height = size.height - inset * 2,
         )
         drawArc(
             color = color,
-            startAngle = 25f,
+            startAngle = if (front) 205f else 25f,
             sweepAngle = 145f,
             useCenter = false,
             topLeft = Offset(inset, inset),
@@ -296,7 +417,7 @@ private fun FlipCameraIcon(front: Boolean) {
         )
         drawArc(
             color = color,
-            startAngle = 205f,
+            startAngle = if (front) 25f else 205f,
             sweepAngle = 145f,
             useCenter = false,
             topLeft = Offset(inset, inset),
@@ -321,13 +442,10 @@ private fun FlipCameraIcon(front: Boolean) {
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFE6F0EA)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFF12D27)
 @Composable
 private fun CameraScreenPreview() {
     PocketCcdTheme {
-        CameraScreen(
-            onCollapse = {},
-            onShutter = {},
-        )
+        CameraScreen(onShutter = {})
     }
 }

@@ -53,6 +53,18 @@ object PocketCcdColors {
     val Mint = Color(0xFF9FD8C4)
     val MintDeep = Color(0xFF6FB7A4)
     val Butter = Color(0xFFF7D774)
+
+    // Retro red toy-camera front (camera page only for now).
+    val RetroRed = Color(0xFFF12D27)
+    val RetroRedLight = Color(0xFFFF5A45)
+    val RetroRedDeep = Color(0xFFC91E1A)
+    val RetroInk = Color(0xFF2A0B09)
+    val RetroBlack = Color(0xFF101010)
+    val RetroOrange = Color(0xFFF28C28)
+    val RetroOrangeDeep = Color(0xFFD86F18)
+    val RetroGreen = Color(0xFF7FD6A4)
+    val RetroGreenDeep = Color(0xFF4FAF7C)
+    val RetroCream = Color(0xFFFFF3E0)
 }
 
 object PocketCcdSpacing {

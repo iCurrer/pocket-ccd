@@ -93,7 +93,6 @@ fun PocketCcdApp(
                         )
 
                         AppDestination.CAMERA -> CameraScreen(
-                            onCollapse = { onEvent(AppEvent.NavigateBack) },
                             onShutter = { onEvent(AppEvent.OpenResult) },
                             panelModifier = cameraBodyModifier,
                         )

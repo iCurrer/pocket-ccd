@@ -1,6 +1,6 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 19:56（Asia/Shanghai）
+**快照时间：** 2026-10-17 20:27（Asia/Shanghai）
 **当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
@@ -68,7 +68,8 @@
 | P-016 | 照片墙 + 上拉手势 + 相机页精简 | `PhotoWallScreen.kt`；首页上拉；移除拍摄页图库按钮；共享机身转场优化 | `DONE`（真机 UI/动画待验证） |
 | P-017 | 成片页静态 UI + 状态变体 | `ResultScreen.kt`；4:3 测试图；SAVED/FAILED 预览；运行时不伪造保存 | `DONE`（设备 UI 待验证） |
 | P-018 | 设置页静态 UI + Debug 诊断 | `SettingsScreen.kt`；保存位置/默认滤镜/质量占位/版本/隐私；`BuildConfig` 门控诊断 | `DONE`（设备 UI/Release 构建待验证） |
-| P-019 | V2 玩具相机材质重构 | `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`；首页/拍摄/照片墙/成片/设置全部改为机身/屏幕结构 | `DONE`（真机视觉待验证） |
+| P-019 | V2 玩具相机材质重构 | `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`；首页/照片墙/成片/设置改为机身/屏幕结构；拍摄页另走红色变体 | `DONE`（真机视觉待验证） |
+| P-020 | 拍摄页红色复古前面板 | 全屏红塑料、厚重黑取景器、绿色闪光灯、橙色快门、红色循环键、紧凑品牌 | `DONE`（预览仍为静态画面） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -156,8 +157,10 @@
 | T1-011 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 34s`；44 tasks（12 executed） |
 | T1-011 当前 APK | 30,865,377 bytes；SHA-256 `CC4BF7E8C6102646F6003AC19035D7881290FC5AB4AB54F8194A6DC2C90FE760` |
 | V2 玩具材质重构构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 4s`；42+ tasks |
-| V2 当前 APK | 30,865,377 bytes；SHA-256 `A9BD98091019EAF6D7D98C01C71B8A2316C83114E1CF9F5E22FA6D8FD734FD69`（随代码变化，不作为固定指纹） |
-| T1-011 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 12s`（V2 重构后）；`app-release-unsigned.apk` 23,446,026 bytes；SHA-256 `55147C27A0D13DF166E496F40AC4B625F4271978EAAA13DF10F5A7577689D0A5`；未签名/未安装 |
+| V2 当前 APK | 30,865,377 bytes；SHA-256 `A9BD98091019EAF6D7D98C01C71B8A2316C83114E1CF9F5E22FA6D8FD734FD69` |
+| 红色拍摄页构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 9s`；44 tasks（7 executed） |
+| 红色拍摄页当前 APK | 30,865,797 bytes；SHA-256 `3D3DB517EEAFE18AFB554F8E5DE4D6E520A3701BFF77021BEEDCB86353D00953`（随代码变化，不作为固定指纹） |
+| 红色拍摄页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 14s`；`app-release-unsigned.apk` 23,462,826 bytes；SHA-256 `990A9A9AF781B894E0DB024D2EA484A759772C7A0408A0E6A3CE96A67B94FB00`；未签名/未安装 |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -340,6 +343,7 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 成片页静态 UI | 4:3 测试图；状态变体；demo 不伪造保存；设备 UI 待验 |
 | 2026-10-17 | 设置页静态 UI | 保存位置/默认滤镜/质量占位/版本/隐私；Debug 诊断仅 debug |
 | 2026-10-17 | V2 玩具相机材质重构 | 黄油机身/奶油面板/薄荷按键/珊瑚快门/深青 LCD；五页统一机身结构 |
+| 2026-10-17 | 拍摄页红色复古前面板 | 红塑料/黑取景器/绿闪光灯/橙快门；相册区按用户要求暂缓 |
 
 ---
 

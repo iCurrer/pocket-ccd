@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -125,8 +126,10 @@ fun ToyRoundButton(
     modifier: Modifier = Modifier,
     size: Dp = PocketCcdSizes.sideControl,
     color: Color = PocketCcdColors.Mint,
+    enabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val fill = if (enabled) color else color.copy(alpha = 0.38f)
     Box(
         modifier = modifier
             .size(size)
@@ -142,8 +145,8 @@ fun ToyRoundButton(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.White.copy(alpha = 0.35f),
-                        color,
-                        color.copy(alpha = 0.92f),
+                        fill,
+                        fill.copy(alpha = 0.92f),
                     ),
                 ),
             )
@@ -152,8 +155,11 @@ fun ToyRoundButton(
                 color = Color.White.copy(alpha = 0.45f),
                 shape = CircleShape,
             )
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription },
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics {
+                this.contentDescription = contentDescription
+                if (!enabled) disabled()
+            },
         contentAlignment = Alignment.Center,
         content = content,
     )

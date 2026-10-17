@@ -26,6 +26,7 @@
     <string name="camera_collapse">收起拍摄界面</string>
     <string name="camera_flash_on">闪光灯开</string>
     <string name="camera_flash_off">闪光灯关</string>
+    <string name="camera_flash_unavailable">闪光灯不可用</string>
     <string name="camera_flip_front">切换到前置摄像头</string>
     <string name="camera_flip_back">切换到后置摄像头</string>
     <string name="camera_shutter">快门</string>
