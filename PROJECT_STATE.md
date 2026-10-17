@@ -1,18 +1,18 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 17:51（Asia/Shanghai）  
-**当前阶段：** 开发前工程准备（M0 完成，M1 待启动）  
+**快照时间：** 2026-10-17 18:20（Asia/Shanghai）  
+**当前阶段：** M1 进行中（T1-002/T1-003 已完成；静态 UI 未开始）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
-**Git：** 尚未初始化  
-**App 代码：** 无  
-**已执行 App 构建/测试：** 无
+**Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
+**App 代码：** Compose 空壳（`MainActivity` + 主题骨架）  
+**已执行 App 构建/测试：** `assembleDebug` 已通过；安装/启动/UI/相机未执行
 
 ---
 
 ## 1. 一句话状态
 
-规范已读完并完成工程审查；已建立任务板、决策记录、测试计划和官方文档研究记录。**尚未创建 Android 工程、尚未构建 APK、尚未运行任何相机/图像/设备测试。** 下一阶段是 M1：项目初始化 + 静态 UI 原型。
+规范已读完并完成工程审查；已建立任务板、决策记录、测试计划和官方文档研究记录。**已创建可构建的 Compose 空壳并通过 `assembleDebug`；尚未安装/启动 App，尚未运行任何 UI、相机、图像或设备测试。** 下一步是准备设备/模拟器（T1-015），然后进入 T1-004 设计令牌与 T1-005 状态机。
 
 ---
 
@@ -38,7 +38,9 @@
 | `TEST_PLAN.md` | 测试层级、用例、证据、性能协议 | 本次新建 |
 | `PROJECT_STATE.md` | 本文件 | 本次新建 |
 | `research/android-official-docs-2026-10-17.md` | 官方文档版本、来源、核查结论 | 本次新建 |
-| `.research/` | 官方文档抓取缓存（Markdown 快照） | 临时研究材料，不进入发布包；可保留供复查 |
+| `app/`、`gradle/`、`build.gradle.kts`、`settings.gradle.kts` | Compose 空壳工程；可构建 `app-debug.apk` | 本次新建；T1-003 构建通过 |
+| `.gitignore`、`.gitattributes`、`.editorconfig` | 仓库规范 | 本次新建 |
+| `.research/` | 官方文档抓取缓存（Markdown 快照） | 临时研究材料；已在 `.gitignore` 中排除 |
 
 > `.research/` 中的内容是从官方页面抓取的原始文本快照，仅用于核查；正式结论以 `research/android-official-docs-2026-10-17.md` 和官方链接为准。
 
@@ -57,8 +59,10 @@
 | P-007 | 拆分任务并建立任务板 | `TASK_BOARD.md` | `DONE` |
 | P-008 | 建立测试计划与实验计划 | `TEST_PLAN.md`、`TASK_BOARD.md` | `DONE` |
 | P-009 | 建立项目状态文档 | 本文件 | `DONE` |
+| P-010 | Git 仓库初始化与基线提交 | `main` 分支；初始提交 `482b804` | `DONE` |
+| P-011 | Gradle/Compose 空壳构建 | `assembleDebug` 成功；APK/哈希见第 5 节 | `DONE`（构建通过；安装未执行） |
 
-**注意：** 以上 `DONE` 指文档交付物存在；不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证。
+**注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
 ---
 
@@ -66,15 +70,16 @@
 
 | 事项 | 状态 | 说明 |
 |---|---|---|
-| Android 工程初始化 | `NOT_STARTED` | T1-002/T1-003 |
-| Compose 主题/设计令牌 | `NOT_STARTED` | T1-004 |
+| Android 工程初始化 | `DONE` | T1-002/T1-003；可构建空壳 |
+| App 安装/启动 | `BLOCKED` | 无 AVD/真机（T1-015） |
+| Compose 主题/设计令牌 | `IN_PROGRESS` | 仅有临时主题骨架；T1-004 未开始 |
 | 页面状态机/导航 | `NOT_STARTED` | T1-005 |
 | 五个静态页面 | `NOT_STARTED` | T1-006..T1-011 |
 | 下拉手势/转场 | `NOT_STARTED` | T1-007 |
 | 自适应/无障碍 | `NOT_STARTED` | T1-013 |
 | 截图基线/视觉评审 | `NOT_STARTED` | T1-014 |
 | AVD/真机 | `BLOCKED` | 无 AVD、无 system image、无设备 |
-| Gradle 构建验证 | `NOT_RUN` | 无工程；工具链版本未实测 |
+| Gradle 构建验证 | `PASS` | 2026-10-17 `assembleDebug` 成功；APK/哈希见第 5 节 |
 | 相机预览/拍摄 | `NOT_STARTED` | 阶段 2；当前明确不做 |
 | 图像处理/滤镜 | `NOT_STARTED` | 阶段 3/4 |
 | MediaStore/Room | `NOT_STARTED` | 阶段 5 |
@@ -116,9 +121,26 @@
 | ExifInterface 缓存 | 1.4.2 |
 | `java`/`gradle`/`adb` in PATH | 否 |
 | 系统代理 | `127.0.0.1:7897`（Java/Node 可用；Windows schannel curl 失败） |
-| Git | 工作区不是仓库 |
+| Git | `main` 分支；初始提交 `482b804`；`.gitattributes` 强制 LF/CRLF 规则 |
+| Gradle wrapper | 9.6.1；`./gradlew :app:assembleDebug` 已通过 |
+| 构建警告 | SDK 目录同时存在 `android-37.0` 与 `android-37.0-2`，AGP 报 inconsistent location；未阻断构建 |
 
 **工作区权限说明：** 本次开始时，DSH 的 Windows 沙箱无法为工作区授予写权限（`SetNamedSecurityInfoW ... grantWrite`）。已按 DSH 技能运行一次诊断修复，为当前用户补充了工作区目录的完全控制条目；恢复脚本与报告位于 `D:\Android\pocket-ccd-acl-report`。文件内容和所有者未被修改。`[F]`
+
+### 5.1 构建证据（2026-10-17）
+
+| 项目 | 结果 |
+|---|---|
+| 构建命令 | `JAVA_HOME=D:\software\Android\Android Studio\jbr; ./gradlew :app:assembleDebug` |
+| 首次构建 | `BUILD SUCCESSFUL in 59s`（36 tasks executed） |
+| Wrapper 复跑 | `BUILD SUCCESSFUL in 1s`（36 tasks up-to-date） |
+| 实际解析 | Kotlin stdlib 2.3.21；Compose UI 1.12.0；Material3 1.4.0（BOM 2026.08.00） |
+| APK | `app/build/outputs/apk/debug/app-debug.apk`；29,570,230 bytes；SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C` |
+| SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
+| 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
+| 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
+
+**注意：** 构建成功不等于 App 已验证。安装/启动仍被 B-01 阻塞。
 
 ---
 
@@ -131,7 +153,7 @@
 | API level | Android 17 = 37；Android 16 = 36；Android 15 = 35 | compileSdk 37 可用；targetSdk 36 满足 Play 2026 要求 |
 | Play target | 2026-08-31 起新应用/更新 target 36+ | 不能再用 target 35 发布 |
 | Compose | 1.12.1 / Material3 1.4.0（2026-10-07）；BOM 最新 2026.09.00 | Compose 1.12 要求 compileSdk 37 + AGP 9.2+ |
-| AGP | 9.4 最高 API 37 / Gradle 9.6.0；8.13.2 最高 API 36 / Gradle 8.13 | 本机缓存 AGP 9.3.3，建议作为候选 |
+| AGP | 9.4 最高 API 37 / Gradle 9.6.0；8.13.2 最高 API 36 / Gradle 8.13 | T1-003 已用 AGP 9.3.3 + Gradle 9.6.1 构建通过 |
 | AGP 9 Kotlin | 内建 Kotlin；`org.jetbrains.kotlin.android` 与新 DSL 不兼容 | 工程不能照搬旧模板 |
 | CameraX | 1.6.2 stable（2026-08-26）；1.7.0-alpha03 | 阶段 2 用 1.6.2；不用 alpha |
 | CameraX 底层 | 1.6.0 起 CameraPipe；修复 API 37 动态范围崩溃 | 目标 API 37 设备应使用 1.6.2+ |
@@ -158,7 +180,7 @@
 | B-04 | 原图保留策略未定 | “重新处理”语义/存储设计 | 确认 D-014 | 产品 |
 | B-05 | 目标设备清单未定 | M2/M6 验收范围 | 登记 3 档设备 | 测试 |
 | B-06 | 视觉参考/原型图缺失 | “精致”无法对标 | 提供参考/设计稿，或接受一致性评审 | 设计 |
-| B-07 | Gradle 依赖下载未验证 | 首构建可能失败 | T1-003 实测；必要时配置代理 | 开发 |
+| B-07 | ~~Gradle 依赖下载未验证~~ | 已解除：T1-003 构建成功 | 记录构建警告；后续升级时重新验证 | 开发 |
 
 ### 7.2 开放决策
 
@@ -169,24 +191,25 @@
 
 ## 8. 下一步执行计划（按顺序）
 
-### 第 1 步：确认边界（0.5 天）
+### 第 1 步：确认边界（待产品，T1-001）
 
 - 阅读 `SPEC_REVIEW.md` 第 7 节；
 - 确认 D-020（应用 ID/名称）、D-003/D-025（minSdk/目标设备）、D-014（原图保留）；
-- 若无最终值，允许 T1-003 使用临时 ID，但标注“禁止发布”。
+- 当前 T1-003 已使用临时 ID `com.pocketccd.prototype`，**禁止发布**，发布前必须替换。
 
-### 第 2 步：初始化仓库与工程（1–1.5 天）
+### 第 2 步：初始化仓库与工程（已完成 2026-10-17）
 
-- T1-002：`git init`、`.gitignore`、`.editorconfig`、README；
-- T1-003：创建 `:app` + Compose 空工程，按 D-004 候选工具链构建；
-- 执行 `TC-ENV-002`，记录构建日志/APK 路径；
-- 若 AGP 9.3.3 组合失败：按 D-004 回退到 AGP 9.2.0/BOM 2026.06.01，仍失败再评估 AGP 8.13.2/Compose 1.11.4。
+- T1-002：`git init`、`.gitignore`、`.editorconfig`、`.gitattributes`、README；
+- T1-003：创建 `:app` + Compose 空壳，使用 AGP 9.3.3 + Gradle 9.6.1 + JDK 21 + BOM 2026.08.00；
+- `TC-ENV-002` 已 `PASS`；`TC-P1-017` 已 `PASS`；构建日志/APK 哈希见第 5 节；
+- 未使用回退方案；AGP 9.2.0/8.13.2 仅保留为未来升级/回归备选。
 
-### 第 3 步：准备测试环境（0.5–1 天）
+### 第 3 步：准备测试环境（0.5–1 天，当前阻塞）
 
 - T1-015：安装 API 36/37 system image，创建 AVD；或连接真机；
 - 执行 `TC-ENV-004`，登记设备信息；
 - 确认 `adb install`/`screencap` 可用。
+- **在设备就绪前，T1-004/T1-005 可以先做，但 T1-006 之后的页面验收不能算完成。**
 
 ### 第 4 步：静态 UI 原型（5–7 天）
 
@@ -222,7 +245,7 @@
 
 | ID | 风险 | 概率 | 影响 | 缓解 | 触发信号 |
 |---|---|---|---|---|---|
-| R-01 | 工具链组合（AGP 9.3.3/Compose BOM 2026.08.00）首次构建失败 | 中 | 阻塞 M1 | 保留 AGP 9.2.0/8.13.2 回退；记录错误 | `assembleDebug` 失败 |
+| R-01 | 工具链组合（AGP 9.3.3/Compose BOM 2026.08.00）首次构建失败 | 低（已通过） | 阻塞 M1 | 已用 D-004 构建通过；升级时保留 AGP 9.2.0/8.13.2 回退 | `assembleDebug` 失败 |
 | R-02 | 无测试设备/AVD 导致 UI 验收无法执行 | 高 | 阻塞 M1 退出 | 立即安装 system image/借真机 | `adb devices` 空 |
 | R-03 | 依赖下载受网络/代理影响 | 中 | 构建慢/失败 | 用本地缓存；配置 Gradle 代理；锁定版本 | 依赖解析超时 |
 | R-04 | “CCD 风格”无法用 Android JPEG 编码器达到预期 | 高 | 核心产品差异不足 | EXP-03 评估可控编码器；明确限制 | 盲评差距集中在 JPEG 伪影 |
@@ -232,6 +255,7 @@
 | R-08 | 参考素材/品牌名称侵权 | 低–中 | 发布受阻 | EXP-08 + 法务审查；不用品牌 Logo | 商店审核/投诉 |
 | R-09 | 主观验收导致返工 | 高 | 进度 | 盲评+指标+评审签字 | “感觉不对”无记录 |
 | R-10 | 过早引入 Camera2/GPU 导致复杂度失控 | 中 | 进度/稳定性 | 决策门槛；先 CameraX/CPU | 无基准就重构 |
+| R-11 | SDK `android-37.0` 与 `android-37.0-2` 重复目录导致后续解析/platform 选择异常 | 中 | 构建环境不稳定 | 在 SDK Manager 中整理；暂记录警告 | 构建报 wrong platform / 重复包 |
 
 ---
 
@@ -248,8 +272,16 @@ D:\Android\pocket ccd\
 ├── SPEC_REVIEW.md                   # 规范审查
 ├── research/
 │   └── android-official-docs-2026-10-17.md
-├── .research/                       # 官方文档抓取缓存（临时）
-└── app/                             # 尚未创建（T1-003）
+├── .research/                       # 官方文档抓取缓存（临时，已 gitignore）
+├── gradle/
+│   ├── libs.versions.toml           # 版本目录
+│   └── wrapper/                     # Gradle 9.6.1 wrapper
+├── app/                             # Compose 空壳（可构建）
+│   └── build/outputs/apk/debug/app-debug.apk
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradle.properties
+└── local.properties                 # 本机 SDK 路径（已 gitignore）
 ```
 
 ---
@@ -260,12 +292,14 @@ D:\Android\pocket ccd\
 |---|---|---|
 | 2026-10-17 | 建立工程准备文档集 | 未创建 App 代码；未执行构建/设备测试 |
 | 2026-10-17 | 修复工作区 ACL 写入问题 | 仅主机权限；不涉及项目文件内容 |
+| 2026-10-17 | 初始化 Git + Compose 空壳 | `assembleDebug` 通过；APK 已生成；安装/启动未执行 |
 
 ---
 
 ## 12. 诚实声明
 
-- 本文件中的 `PASS` 仅出现在环境盘点（`TC-ENV-001`）；没有任何 App 功能测试通过。
-- 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，T1-003 必须再次核对。
+- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、构建（`TC-ENV-002`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）。**没有任何页面/相机/图像/性能功能被实际验证。**
+- 构建通过只证明“空壳能编译打包”；安装、启动、UI 测试仍被无设备阻塞。
+- 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。
 - 未执行的测试在 `TEST_PLAN.md` 中保持 `NOT_RUN` 或 `BLOCKED`，不会因为文档完成而自动变成通过。

@@ -21,8 +21,8 @@
 |---|---|---|---|---|
 | D-001 | 以 `DEVELOPMENT_SPEC.md` 为产品意图基线，先文档后实现 | ACCEPTED | 全部 | 规范大版本更新 |
 | D-002 | 研究结论强制区分事实/推断/假设，未执行测试不得标通过 | ACCEPTED | 全部 | 无 |
-| D-003 | 平台基线：compileSdk 37、targetSdk 36、minSdk 29 | PROPOSED | 1 | 首次构建 + 产品确认 |
-| D-004 | 构建工具链：AGP 9.3.3 + Gradle 9.6.1 + JDK 21 | PROPOSED | 1 | T1-003 构建验证 |
+| D-003 | 平台基线：compileSdk 37、targetSdk 36、minSdk 29 | PROPOSED（构建已验证；minSdk 待确认） | 1 | 产品确认 minSdk |
+| D-004 | 构建工具链：AGP 9.3.3 + Gradle 9.6.1 + JDK 21 | ACCEPTED（T1-003 构建通过） | 1 | 依赖升级/构建回归 |
 | D-005 | 相机 API：CameraX 优先，Camera2 仅按缺口接入 | PROPOSED | 2 | EXP-01/EXP-02 |
 | D-006 | UI 相机预览使用 `PreviewView`，暂不使用 `camera-compose` | PROPOSED | 2 | T2-002 原型 |
 | D-007 | 页面导航使用显式状态机 + `AnimatedContent`，不引入 Navigation-Compose | PROPOSED | 1 | T1-005 评审 |
@@ -83,7 +83,7 @@
 ## D-003 — 平台基线：compileSdk 37 / targetSdk 36 / minSdk 29
 
 - **日期：** 2026-10-17
-- **状态：** PROPOSED（待 T1-003 构建验证与产品确认）
+- **状态：** PROPOSED（compileSdk 37 / targetSdk 36 已由 T1-003 构建验证；minSdk 29 仍待产品确认）
 - **类型：** 平台兼容性
 - **背景：**
   - `[F]` Google Play 自 2026-08-31 起要求新应用/更新 target API 36+。
@@ -103,7 +103,7 @@
 - **后果：**
   - 放弃 Android 8.0/8.1/9 的官方支持；若产品认为旧手机是核心用户，需回到选项 2，并新增旧存储权限、`BitmapFactory` 兼容路径和额外测试。
   - targetSdk 36 会触发 Android 16 的 edge-to-edge、大屏方向/可调整尺寸行为，UI 必须适配。
-- **验证：** T1-003 构建 `assembleDebug`；`aapt dump badging` 检查 min/target/compile；Android 16 模拟器/真机检查 edge-to-edge。
+- **验证：** 2026-10-17 T1-003 `assembleDebug` 通过；`aapt dump badging` 确认 compileSdk 37 / targetSdk 36 / minSdk 29；Android 16 模拟器/真机检查 edge-to-edge 仍待 T1-015。
 - **复审触发：** 产品确认 minSdk；Google Play 2027 年 target 要求变化；Compose 1.13 要求 compileSdk 37.1 时。
 
 ---
@@ -111,7 +111,7 @@
 ## D-004 — 构建工具链：AGP 9.3.3 + Gradle 9.6.1 + JDK 21
 
 - **日期：** 2026-10-17
-- **状态：** PROPOSED（本机缓存存在，但本项目的构建尚未执行）
+- **状态：** ACCEPTED（2026-10-17 本机构建通过）
 - **类型：** 构建系统
 - **背景：**
   - `[F]` AGP 9.3 最高支持 API 37，最低 Gradle 9.5.0，最低 JDK 17，Build Tools 36.0.0。
@@ -133,10 +133,11 @@
   - 不再应用 `org.jetbrains.kotlin.android`；Compose 编译器插件版本需与内建 Kotlin 匹配。
   - `kotlinOptions` 迁移到 `kotlin { compilerOptions { } }`。
 - **验证：**
-  - `./gradlew :app:assembleDebug` 成功；
-  - `./gradlew :app:dependencies` 检查解析版本；
-  - `aapt dump badging` 检查 SDK 版本；
-  - 构建日志与 Gradle 版本写入 `TEST_PLAN.md` 证据。
+  - 2026-10-17 `./gradlew :app:assembleDebug` **BUILD SUCCESSFUL**（首次 59s；wrapper 复跑 up-to-date）；
+  - 实际解析：Kotlin stdlib 2.3.21、Compose UI 1.12.0；
+  - `aapt dump badging`：compileSdk 37 / targetSdk 36 / minSdk 29；
+  - APK：`app/build/outputs/apk/debug/app-debug.apk`，29,570,230 bytes，SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C`；
+  - 构建日志与 APK 证据已记录在 `PROJECT_STATE.md` / `TEST_PLAN.md`。
 - **复审触发：** AGP 9.4/9.5 稳定并需要 API 37.1；Gradle 升级；Compose 插件与内建 Kotlin 版本冲突。
 
 ---

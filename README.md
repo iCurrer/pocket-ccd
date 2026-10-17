@@ -1,6 +1,6 @@
 # Pocket CCD
 
-一个以早期消费级数码相机成像风格为核心的 Android 相机应用。当前处于**开发前工程准备**阶段，尚未创建 Android 工程，也未实现相机功能。
+一个以早期消费级数码相机成像风格为核心的 Android 相机应用。当前处于 **M1 静态 UI 原型**的准备阶段：Compose 空壳已可构建，尚未实现相机功能。
 
 ---
 
@@ -14,10 +14,11 @@
 | 任务拆分 | 已完成，见 `TASK_BOARD.md` |
 | 技术决策 | 已建立，见 `DECISION_LOG.md` |
 | 测试计划 | 已建立，见 `TEST_PLAN.md` |
-| Android 工程 | **尚未创建**（M1/T1-003） |
-| 构建/真机测试 | **尚未执行** |
+| Android 工程 | 已创建 Compose 空壳（T1-003） |
+| 构建 | `assembleDebug` 已通过（2026-10-17） |
+| 安装/启动/真机测试 | **未执行**（无 AVD/设备） |
 
-> 没有任何 App 功能被实际验证。文档中的 `PROPOSED` 是建议，`OPEN` 是待确认；未执行的测试均标 `NOT_RUN`/`BLOCKED`。
+> 构建通过不等于 App 已验证。页面、相机、滤镜、性能均未验证；未执行的测试均标 `NOT_RUN`/`BLOCKED`。
 
 ---
 
@@ -55,7 +56,7 @@
 | 语言/UI | Kotlin + Jetpack Compose |
 | 构建 | AGP 9.3.3 + Gradle 9.6.1 + JDK 21（Java target 17） |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29（待产品确认） |
-| Compose | BOM 2026.08.00（候选，待构建验证） |
+| Compose | BOM 2026.08.00（已构建验证 → Compose 1.12.0 / Material3 1.4.0） |
 | 相机 | CameraX 1.6.2（阶段 2；Camera2 仅按缺口接入） |
 | 存储 | MediaStore 成片 + Room 元数据 + 应用私有临时文件 |
 | 处理 | CPU 参考实现优先；GPU 仅在基准证明必要时引入 |
@@ -65,13 +66,30 @@
 
 ---
 
+## 本地构建
+
+前置：
+
+- Android SDK：`D:\software\Android\Sdk`（复制 `local.properties.example` 为 `local.properties` 并修改路径；该文件不提交）
+- JDK：`D:\software\Android\Android Studio\jbr`（JDK 21）
+- Gradle：项目自带 wrapper（9.6.1）
+
+```powershell
+$env:JAVA_HOME='D:\software\Android\Android Studio\jbr'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\gradlew.bat :app:assembleDebug
+```
+
+产物：`app/build/outputs/apk/debug/app-debug.apk`。
+
+> 当前构建使用临时包名 `com.pocketccd.prototype`，禁止发布。
+
 ## 下一步
 
 1. 阅读 `SPEC_REVIEW.md` 第 7 节，确认应用 ID、minSdk、目标设备、原图保留策略；
-2. 执行 `TASK_BOARD.md` 的 T1-002/T1-003，建立可构建空工程；
-3. 准备 AVD/真机（T1-015），否则 UI 验收无法执行；
-4. 按 T1-004 → T1-013 完成静态 UI 原型；
-5. 执行 `TEST_PLAN.md` 的 `TC-P1-*` 并记录证据。
+2. T1-002/T1-003 已完成；下一步准备 AVD/真机（T1-015）；
+3. 按 T1-004 → T1-013 完成静态 UI 原型；
+4. 执行 `TEST_PLAN.md` 的 `TC-P1-*` 并记录证据。
 
 ---
 

@@ -35,7 +35,7 @@
 | 里程碑 | 内容 | 任务数 | 状态 | 进入条件 |
 |---|---|---:|---|---|
 | M0 | 规范审查与工程文档 | 5 | `DONE`（文档已产出，待负责人评审） | 无 |
-| M1 | 项目初始化 + 静态 UI 原型 | 16 | `READY` / 部分 `BLOCKED` | 本板确认 |
+| M1 | 项目初始化 + 静态 UI 原型 | 16 | `IN_PROGRESS`（T1-002 `VERIFIED`；T1-003 构建 `DONE`、安装待设备；T1-001/T1-015 受阻） | 本板确认 |
 | M2 | 相机基础链路 | 8 | `TODO` | M1 退出 + EXP-01/02 |
 | M3 | 图像处理内核 | 7 | `TODO` | M2 采集样本 + EXP-03/04/06 |
 | M4 | 三个滤镜 | 5 | `TODO` | M3 管线稳定 + EXP-05/08/11 |
@@ -107,14 +107,15 @@
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P0 |
-| 状态 | `READY` |
+| 状态 | `VERIFIED`（Git 初始化、提交、忽略规则均已检查） |
 | 预估 | 0.5 天 |
 | 前置条件 | 工作区无 Git 仓库；不得覆盖 `DEVELOPMENT_SPEC.md` |
-| 涉及模块 | 仓库根目录、`.gitignore`、`.editorconfig`、`README.md` |
-| 交付物 | Git 仓库；`.gitignore`（排除 `.gradle/`、`build/`、`local.properties`、`.idea/`、`*.iml`、`captures/`、`test-evidence/` 中的大文件）；`.editorconfig`；提交规范；README 索引 |
+| 涉及模块 | 仓库根目录、`.gitignore`、`.gitattributes`、`.editorconfig`、`README.md` |
+| 交付物 | Git 仓库；`.gitignore`（排除 `.gradle/`、`build/`、`local.properties`、`.idea/`、`*.iml`、`captures/`、`test-evidence/`、`.research/`）；`.gitattributes`（LF/CRLF 规则）；`.editorconfig`；提交规范；README 索引 |
 | 验收标准 | `git status` 干净；`git check-ignore` 能忽略 `local.properties`/`build/`；规范文件不含密钥；`DEVELOPMENT_SPEC.md` 未被修改 |
 | 测试方式 | `git status`、`git check-ignore -v`、人工 review；`git diff -- DEVELOPMENT_SPEC.md` 为空 |
-| 证据/用例 | `TC-ENV-003`（新增） |
+| 证据/用例 | `TC-ENV-003` |
+| 实际结果 | Git `main` 初始化并提交（初始提交 `482b804`）；`git check-ignore -v` 确认忽略 `local.properties`、`app/build/.../app-debug.apk`、`.research/`；`git status` 干净；`DEVELOPMENT_SPEC.md` 未修改 |
 | 风险/备注 | 不提交签名文件、`local.properties`、设备照片；不引入 Git LFS 除非确定需要 |
 
 ---
@@ -124,7 +125,7 @@
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P0 |
-| 状态 | `READY`（设备/模拟器安装步骤可能 `BLOCKED`） |
+| 状态 | `DONE`（构建/manifest/SDK 已验证；安装/启动因无设备 `BLOCKED`，未达 `VERIFIED`） |
 | 预估 | 1–1.5 天 |
 | 前置条件 | Android SDK Platform 37、Build Tools 36.0.0；JDK 21（Studio JBR）；Gradle 9.6.1；网络/代理可拉取缺失依赖；T1-002 完成 |
 | 涉及模块 | `settings.gradle.kts`、根 `build.gradle.kts`、`app/build.gradle.kts`、`gradle/libs.versions.toml`、`gradle/wrapper/`、`app/src/main/`、`MainActivity` |
@@ -132,9 +133,10 @@
 | 验收标准 | `./gradlew :app:assembleDebug` 成功；APK 产物存在；Manifest 无 `CAMERA`/`INTERNET`/存储权限；`compileSdk=37`、`targetSdk=36`、`minSdk=29`；依赖无 alpha/beta（CameraX 本阶段不引入）；应用可启动（需设备/模拟器） |
 | 测试方式 | `./gradlew :app:assembleDebug`；`aapt dump badging`；`aapt dump permissions`；`adb install` + `am start`（环境具备时）；`./gradlew :app:dependencies` |
 | 证据/用例 | `TC-ENV-002`、`TC-P1-001`、`TC-P1-017` |
-| 风险/备注 | 本机无 AVD/设备时只能完成构建，不能完成安装/启动；不得把“构建成功”写成“App 已验证”。Gradle 代理/依赖下载可能失败；失败时记录错误并按 D-004 回退。 |
+| 实际结果 | 2026-10-17 `./gradlew :app:assembleDebug` **BUILD SUCCESSFUL**（首次 59s，wrapper 复跑 up-to-date）；APK `app/build/outputs/apk/debug/app-debug.apk`，29,570,230 bytes，SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C`；`aapt` 确认 compileSdk 37 / targetSdk 36 / minSdk 29；无 CAMERA/INTERNET/存储权限（仅有 AndroidX 自定义签名权限）；`TC-ENV-004` `BLOCKED`（无设备） |
+| 风险/备注 | 已把“构建成功”和“App 已验证”分开：安装/启动/UI 仍待 T1-015。首次构建出现 SDK platform `android-37.0` 与 `android-37.0-2` 重复目录警告，但不影响构建，记录在 `PROJECT_STATE.md`。 |
 
-**候选工具链（`[D]` D-004，待本任务验证）：**
+**已验证工具链（`[D]` D-004，2026-10-17 T1-003 构建通过）：**
 
 ```text
 AGP              9.3.3
@@ -148,7 +150,7 @@ targetSdk        36
 minSdk           29
 ```
 
-**备选：** 若 AGP 9.3.3 组合失败，可评估 AGP 9.4.0（官方最新，最高 API 37，最低 Gradle 9.6.0；本机未缓存，需要下载）。任何切换都必须重新执行 `TC-ENV-002`，不能因为“版本更新”就假定可用。
+**备选（本次未使用）：** AGP 9.4.0（官方最新，最高 API 37，最低 Gradle 9.6.0；本机未缓存）；若未来升级，必须重新执行 `TC-ENV-002`，不能因为“版本更新”就假定可用。
 
 **禁止：**
 - 在阶段 1 引入 `androidx.camera:*`；
@@ -439,8 +441,9 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 ## M1 退出清单
 
 - [ ] T1-001 决策完成（或明确延期，且临时值标记为禁止发布）
-- [ ] T1-002 Git/规范完成
-- [ ] T1-003 构建成功 + 安装/启动验证
+- [x] T1-002 Git/规范完成
+- [x] T1-003 构建成功（`assembleDebug`）
+- [ ] T1-003 安装/启动验证（待 T1-015 设备/模拟器）
 - [ ] T1-004 设计令牌完成
 - [ ] T1-005 状态机完成
 - [ ] T1-006..T1-011 五个页面完成
@@ -616,8 +619,8 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | ID | 任务 | 状态 | 关键产出 |
 |---|---|---|---|
 | T1-001 | 产品标识与平台基线 | `BLOCKED` | D-003/D-020/D-025 定稿 |
-| T1-002 | Git/工程规范 | `READY` | `.gitignore`/`.editorconfig`/README |
-| T1-003 | Gradle/Compose 空工程 | `READY` | 可构建 APK |
+| T1-002 | Git/工程规范 | `VERIFIED` | `.gitignore`/`.editorconfig`/README |
+| T1-003 | Gradle/Compose 空工程 | `DONE` | 可构建 APK；安装待设备 |
 | T1-004 | 设计令牌/主题 | `TODO` | `ui/theme` + 令牌文档 |
 | T1-005 | 页面状态机 | `TODO` | 状态机 + 导航骨架 |
 | T1-006 | 首页 | `TODO` | Home 静态 UI |

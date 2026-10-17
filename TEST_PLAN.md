@@ -68,7 +68,7 @@
 | Git | 工作区尚未初始化 | `[F]` |
 | 网络 | 系统代理 127.0.0.1:7897；Java/Node 可访问官方文档；Windows schannel curl 失败 | `[F]` |
 
-**结论：** 当前只能做静态检查、文档检查和（在代码建立后）Gradle 构建；**不能执行 UI 安装测试、Compose UI 测试、相机测试、性能测试**。`TC-ENV-004`/`TC-P1-*` 中的设备相关用例必须等 T1-015 完成。
+**结论：** 当前已能做静态检查、文档检查和 Gradle 构建（`assembleDebug` 已通过）；**不能执行 UI 安装测试、Compose UI 测试、相机测试、性能测试**。`TC-ENV-004`/`TC-P1-*` 中的设备相关用例必须等 T1-015 完成。
 
 ### 3.2 阶段 1 目标环境
 
@@ -139,7 +139,7 @@
 | TC-P1-013 | 横屏、≥600dp 宽度、分屏/自由窗口 | 布局可用；不拉伸；不遮挡系统栏；Camera 页控制区可达 | 手工 + 截图 | 否 | `NOT_RUN` |
 | TC-P1-019 | 依次触发每个页面的 loading/empty/error/正常态 | 每个状态有明确 UI；无死路；错误有动作 | UI | 是 | `NOT_RUN` |
 | TC-P1-023 | 在 Camera/Gallery 按 Home 键后从最近任务恢复；开发者选项“不保留活动” | 恢复到合理页面；不崩溃；不丢失关键状态 | 手工 | 否 | `NOT_RUN` |
-| TC-P1-025 | 静态检查阶段 1 代码/依赖 | 无 CameraX/Camera2 类；无相机权限；无相机初始化 | 静态 | 是 | `NOT_RUN` |
+| TC-P1-025 | 静态检查阶段 1 代码/依赖 | 无 CameraX/Camera2 类；无相机权限；无相机初始化 | 静态 | 是 | `PASS`（仅骨架；T1-008 后需复检） |
 
 ### 5.3 无障碍与视觉
 
@@ -155,10 +155,10 @@
 | ID | 用例/步骤 | 预期结果 | 层级 | 自动化 | 状态 |
 |---|---|---|---|---|---|
 | TC-ENV-001 | 盘点 SDK/Studio/JDK/Gradle/设备 | 版本与路径记录完整；与文档一致 | 环境 | 是 | `PASS`（2026-10-17，仅环境盘点） |
-| TC-ENV-002 | `./gradlew :app:assembleDebug` | 构建成功；APK 产物存在；无警告级阻塞 | 构建 | 是 | `NOT_RUN` |
-| TC-ENV-003 | `git status`、`git check-ignore` | 仓库干净；构建产物/本地配置被忽略；规范文件未修改 | 仓库 | 是 | `NOT_RUN` |
+| TC-ENV-002 | `./gradlew :app:assembleDebug` | 构建成功；APK 产物存在；无警告级阻塞 | 构建 | 是 | `PASS`（2026-10-17；有非阻塞 SDK 重复目录/strip 警告） |
+| TC-ENV-003 | `git status`、`git check-ignore` | 仓库干净；构建产物/本地配置被忽略；规范文件未修改 | 仓库 | 是 | `PASS`（2026-10-17；提交后复检） |
 | TC-ENV-004 | 创建 AVD 或连接真机；`adb devices` | 设备可见；可安装/启动/截图 | 环境 | 是 | `BLOCKED`（无 AVD/设备） |
-| TC-P1-017 | `aapt dump permissions` + Manifest 检查 | 无 CAMERA/INTERNET/存储/麦克风/位置权限 | 静态 | 是 | `NOT_RUN` |
+| TC-P1-017 | `aapt dump permissions` + Manifest 检查 | 无 CAMERA/INTERNET/存储/麦克风/位置权限 | 静态 | 是 | `PASS`（仅有 AndroidX 自定义签名权限 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`） |
 | TC-P1-018 | `assembleRelease`（未签名可）+ 检查 Debug 入口 | Release 不显示诊断入口；无调试日志 | 构建 + UI | 部分 | `NOT_RUN` |
 | TC-P1-021 | `adb shell am start -W` 冷启动 ×5 | 记录中位数/P95；建立基线，不承诺固定值 | 性能 | 是 | `NOT_RUN` |
 | TC-P1-022 | 页面往返 20 次；Perfetto/JankStats（可选） | 无崩溃/ANR；记录掉帧；不承诺固定帧率 | 性能 | 部分 | `NOT_RUN` |
@@ -173,6 +173,21 @@
 | TC-ENV-002 | T1-002/T1-003 完成 |
 | TC-P1-017/018/025 | T1-003/T1-011 完成 |
 | TC-P1-021/022 | T1-014/T1-015 完成 |
+
+### 5.6 已执行证据（2026-10-17）
+
+| 项目 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='D:\software\Android\Android Studio\jbr'; .\gradlew.bat :app:assembleDebug --console=plain` |
+| 首次构建 | `BUILD SUCCESSFUL in 59s`（36 tasks executed） |
+| Wrapper 复跑 | `BUILD SUCCESSFUL in 1s`（36 tasks up-to-date） |
+| APK | `app/build/outputs/apk/debug/app-debug.apk`；29,570,230 bytes；SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C` |
+| `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
+| 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
+| 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
+| 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
+
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-003 的“安装/启动”未执行，所以 T1-003 只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -377,15 +392,15 @@ test-evidence/
 | 项目 | 状态 | 说明 |
 |---|---|---|
 | 环境盘点（SDK/Studio/JDK/Gradle/设备） | `PASS` | 2026-10-17 本机命令；仅环境事实，不是 App 测试 |
-| Android 构建 | `NOT_RUN` | 尚无工程 |
-| Compose UI 测试 | `NOT_RUN` | 无工程、无 AVD |
+| Android 构建 | `PASS` | 2026-10-17 `assembleDebug` 成功；APK/哈希见 5.6 |
+| Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |
 | 图像处理/滤镜 | `NOT_RUN` | 阶段 3/4 |
 | 性能/内存 | `NOT_RUN` | 无工程/设备 |
 | 视觉评审 | `NOT_RUN` | 无截图 |
 
-**结论：** 截至目前，没有任何 App 功能被实际验证；不得在 `PROJECT_STATE.md` 或对外表述中写“相机/滤镜/性能已通过”。
+**结论：** 截至目前，**构建链路**已实际验证；**没有任何 App 功能/页面/相机/滤镜/性能被实际验证**。不得在 `PROJECT_STATE.md` 或对外表述中写“App 已通过”“相机/滤镜/性能已通过”。
 
 ---
 
