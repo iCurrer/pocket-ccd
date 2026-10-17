@@ -3,6 +3,7 @@ package com.pocketccd.prototype.ui.result
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,26 +19,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pocketccd.prototype.R
+import com.pocketccd.prototype.ui.components.ToyCameraBody
+import com.pocketccd.prototype.ui.components.ToyRoundButton
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
 import com.pocketccd.prototype.ui.theme.PocketCcdRadius
 import com.pocketccd.prototype.ui.theme.PocketCcdSizes
@@ -53,11 +59,8 @@ enum class ResultStatus {
 }
 
 /**
- * Result page prototype. It is a pure UI surface: it receives a status and
- * callbacks, and never touches the camera, files, or MediaStore.
- *
- * `demo = true` is used while the capture/save pipeline does not exist yet;
- * the UI must not claim a real save in that mode.
+ * Toy-camera print page. The image is a synthetic test frame; this surface
+ * receives state/callbacks and never touches camera, files, or MediaStore.
  */
 @Composable
 fun ResultScreen(
@@ -68,93 +71,106 @@ fun ResultScreen(
     modifier: Modifier = Modifier,
     demo: Boolean = false,
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(PocketCcdColors.Background)
-            .padding(
-                horizontal = PocketCcdSpacing.xl,
-                vertical = PocketCcdSpacing.md,
-            ),
-    ) {
-        ResultTopBar(
-            demo = demo,
-            onBackToCamera = onBackToCamera,
-        )
-        Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            TestPhotoFrame()
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
-            ResultNameplate()
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.md))
-            ResultStatusRow(
-                status = status,
-                demo = demo,
-                onRetry = onRetry,
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        PocketCcdColors.Background,
+                        PocketCcdColors.BackgroundElevated,
+                    ),
+                ),
             )
-        }
-        Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                onClick = onBackToCamera,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = PocketCcdColors.TextSecondary,
-                ),
+            .padding(PocketCcdSizes.cameraPanelMargin),
+        contentAlignment = Alignment.Center,
+    ) {
+        ToyCameraBody(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(PocketCcdSpacing.md),
             ) {
-                Text(
-                    text = stringResource(R.string.result_back_to_camera),
-                    style = PocketCcdType.MonoLabel,
+                ResultHeader(
+                    demo = demo,
+                    onBackToCamera = onBackToCamera,
                 )
-            }
-            TextButton(
-                onClick = onOpenPhotoWall,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = PocketCcdColors.AccentText,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.result_open_wall),
-                    style = PocketCcdType.MonoLabel,
+                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PhotoPrint()
+                }
+                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
+                ResultStatusRow(
+                    status = status,
+                    demo = demo,
+                    onRetry = onRetry,
                 )
+                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ToyRoundButton(
+                        onClick = onBackToCamera,
+                        contentDescription = stringResource(R.string.result_back_to_camera),
+                        size = 52.dp,
+                        color = PocketCcdColors.Mint,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = PocketCcdColors.TextPrimary,
+                            modifier = Modifier.size(PocketCcdSizes.icon),
+                        )
+                    }
+                    ToyRoundButton(
+                        onClick = onOpenPhotoWall,
+                        contentDescription = stringResource(R.string.result_open_wall),
+                        size = 52.dp,
+                        color = PocketCcdColors.Butter,
+                    ) {
+                        FilmIcon()
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ResultTopBar(
+private fun ResultHeader(
     demo: Boolean,
     onBackToCamera: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .height(44.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBackToCamera) {
+        ToyRoundButton(
+            onClick = onBackToCamera,
+            contentDescription = stringResource(R.string.result_back_to_camera),
+            size = 38.dp,
+            color = PocketCcdColors.Mint,
+        ) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = stringResource(R.string.result_back_to_camera),
-                tint = PocketCcdColors.TextSecondary,
-                modifier = Modifier.size(PocketCcdSizes.icon),
+                contentDescription = null,
+                tint = PocketCcdColors.TextPrimary,
+                modifier = Modifier.size(18.dp),
             )
         }
+        Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
         Text(
             text = stringResource(R.string.result_header),
-            style = PocketCcdType.MonoLabel,
+            style = PocketCcdType.Brand,
             color = PocketCcdColors.TextPrimary,
         )
         Spacer(modifier = Modifier.weight(1f))
@@ -169,96 +185,81 @@ private fun ResultTopBar(
 }
 
 @Composable
-private fun TestPhotoFrame() {
-    val outerShape = RoundedCornerShape(PocketCcdRadius.sm)
+private fun PhotoPrint() {
+    val paperShape = RoundedCornerShape(PocketCcdRadius.xs)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(4f / 3f)
-            .clip(outerShape)
-            .background(PocketCcdColors.Surface)
+            .padding(horizontal = PocketCcdSpacing.sm)
+            .rotate(-1.2f)
+            .shadow(
+                elevation = 10.dp,
+                shape = paperShape,
+                clip = false,
+                ambientColor = PocketCcdColors.TextPrimary.copy(alpha = 0.25f),
+                spotColor = PocketCcdColors.TextPrimary.copy(alpha = 0.35f),
+            )
+            .clip(paperShape)
+            .background(Color(0xFFFFFBF2))
             .border(
                 width = PocketCcdSizes.hairline,
                 color = PocketCcdColors.Outline,
-                shape = outerShape,
+                shape = paperShape,
             )
             .padding(PocketCcdSpacing.sm),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(PocketCcdRadius.xs))
-                .border(
-                    width = PocketCcdSizes.hairline,
-                    color = PocketCcdColors.OutlineSoft,
-                    shape = RoundedCornerShape(PocketCcdRadius.xs),
-                ),
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                // Muted synthetic test frame: sky, sun, ground. It is clearly
-                // a prototype image, not a real photograph.
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF9FB3AA),
-                            Color(0xFFD9C6A6),
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 3f)
+                    .clip(RoundedCornerShape(PocketCcdRadius.xs)),
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF8FB7AE),
+                                Color(0xFFF2D9A9),
+                            ),
                         ),
-                    ),
-                )
-                drawRect(
-                    color = Color(0xFF6E7F6A),
-                    topLeft = Offset(0f, size.height * 0.62f),
-                    size = Size(size.width, size.height * 0.38f),
-                )
-                drawCircle(
-                    color = Color(0xFFE8C56A).copy(alpha = 0.9f),
-                    radius = size.width * 0.055f,
-                    center = Offset(size.width * 0.72f, size.height * 0.28f),
+                    )
+                    drawRect(
+                        color = Color(0xFF6C9A83),
+                        topLeft = Offset(0f, size.height * 0.64f),
+                        size = Size(size.width, size.height * 0.36f),
+                    )
+                    drawCircle(
+                        color = Color(0xFFF7D774),
+                        radius = size.width * 0.06f,
+                        center = Offset(size.width * 0.72f, size.height * 0.28f),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.result_frame_test),
+                    style = PocketCcdType.MonoMicro,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(PocketCcdSpacing.sm),
                 )
             }
-            Text(
-                text = stringResource(R.string.result_frame_test),
-                style = PocketCcdType.MonoMicro,
-                color = Color.White.copy(alpha = 0.72f),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(PocketCcdSpacing.sm),
-            )
-            Text(
-                text = "4:3",
-                style = PocketCcdType.MonoMicro,
-                color = Color.White.copy(alpha = 0.72f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(PocketCcdSpacing.sm),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ResultNameplate() {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "POCKET CCD",
-                style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextSecondary,
-            )
-            Text(
-                text = "DC-01",
-                style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextSecondary,
-            )
-            Text(
-                text = stringResource(R.string.result_filter),
-                style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextSecondary,
-            )
+            Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "POCKET CCD",
+                    style = PocketCcdType.MonoMicro,
+                    color = PocketCcdColors.TextSecondary,
+                )
+                Text(
+                    text = stringResource(R.string.result_filter),
+                    style = PocketCcdType.MonoMicro,
+                    color = PocketCcdColors.TextSecondary,
+                )
+            }
         }
     }
 }
@@ -291,7 +292,7 @@ private fun ResultStatusRow(
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
+                .size(8.dp)
                 .clip(CircleShape)
                 .background(color),
         )
@@ -304,23 +305,53 @@ private fun ResultStatusRow(
         )
         if (status == ResultStatus.FAILED) {
             Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-            TextButton(
-                onClick = onRetry,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = PocketCcdColors.AccentText,
-                ),
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(PocketCcdRadius.pill))
+                    .background(PocketCcdColors.Accent)
+                    .clickable(role = Role.Button, onClick = onRetry)
+                    .padding(
+                        horizontal = PocketCcdSpacing.md,
+                        vertical = PocketCcdSpacing.xs,
+                    ),
             ) {
                 Text(
                     text = stringResource(R.string.result_retry),
-                    style = PocketCcdType.MonoLabel,
+                    style = PocketCcdType.MonoMicro,
+                    color = PocketCcdColors.OnAccent,
                 )
             }
         }
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFF4EFE6)
+@Composable
+private fun FilmIcon() {
+    val color = PocketCcdColors.TextPrimary
+    Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
+        drawRect(
+            color = color,
+            topLeft = Offset(0f, size.height * 0.18f),
+            size = Size(size.width, size.height * 0.64f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx()),
+        )
+        val hole = 2.dp.toPx()
+        listOf(0.08f, 0.3f, 0.52f, 0.74f, 0.96f).forEach { fraction ->
+            drawRect(
+                color = color,
+                topLeft = Offset(size.width * fraction - hole / 2, size.height * 0.08f),
+                size = Size(hole, hole),
+            )
+            drawRect(
+                color = color,
+                topLeft = Offset(size.width * fraction - hole / 2, size.height * 0.88f),
+                size = Size(hole, hole),
+            )
+        }
+    }
+}
+
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFE6F0EA)
 @Composable
 private fun ResultSavedPreview() {
     PocketCcdTheme {
@@ -334,7 +365,7 @@ private fun ResultSavedPreview() {
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFF4EFE6)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFE6F0EA)
 @Composable
 private fun ResultFailedPreview() {
     PocketCcdTheme {
