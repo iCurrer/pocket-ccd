@@ -333,11 +333,11 @@ RESULT
 | 预估 | 0.5 天 |
 | 前置条件 | T1-004、T1-005 |
 | 涉及模块 | `ui/settings/`、`BuildConfig` |
-| 交付物 | 保存位置说明；默认滤镜选择（本地 UI）；质量选项占位；版本信息；隐私说明；Debug 诊断入口（仅 debug） |
+| 交付物 | 红框机身内 App 式设置：24sp 标题、分组卡片、15/12sp 行、44dp 分段滤镜、保存位置/质量占位/版本/隐私/Debug 诊断 |
 | 验收标准 | Release 构建不显示 Debug 入口；无网络请求；无权限；文案可理解；版本号来自 `BuildConfig` |
 | 测试方式 | 静态代码检查；`assembleRelease`（未签名也可）检查 BuildConfig；`aapt dump permissions` |
-| 证据/用例 | `TC-P1-036`、`TC-P1-037`；`TC-P1-018`、`TC-P1-017`（待设备/Release） |
-| 实际结果 | 2026-10-17 新增 `SettingsScreen.kt`：机身奶油面板内的深青 LCD、app-owned 保存位置、DAYLIGHT/FLASH/NIGHT 薄荷/珊瑚选择键、JPEG 92 占位、版本/隐私、Debug 诊断对话框；`buildFeatures.buildConfig = true`；`assembleDebug` 通过；`assembleRelease` 通过（V2 后未签名 APK，23,446,026 bytes；Debug 入口由 `BuildConfig.DEBUG` 编译期门控） |
+| 证据/用例 | `TC-P1-036`、`TC-P1-037`、`TC-P1-047`；`TC-P1-018`、`TC-P1-017`（待设备/Release） |
+| 实际结果 | 2026-10-17 设置页保留红框机身，内容改为 App 式布局：24sp“设置”标题 + 副标题、PHOTOS/ABOUT/DEVELOPER 分组卡片、15sp 行标题 + 12sp 副标题、44dp 三段滤镜控件、LazyColumn 滚动；删除 8sp 深青 LCD 小字；`assembleDebug`/`assembleRelease` 通过；Debug 诊断仅 debug |
 | 风险/备注 | 默认滤镜/质量只是本地 UI，尚未持久化；真实设置持久化归后续 DataStore 任务 |
 
 ---
