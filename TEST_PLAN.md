@@ -143,7 +143,7 @@
 | TC-P1-026 | 运行 `AppStateTest` 覆盖 HOME/CAMERA/GALLERY/RESULT/SETTINGS 转换、非法转换、重复事件、返回 | 12 个测试全部通过；非法转换不改变状态 | 单元 | 是 | `PASS`（2026-10-17，12/12，0 failures） |
 | TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 12dp 机身外边距、16dp 取景框内留白、4:3；快门 88dp 触摸区；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
 | TC-P1-029 | 检查首页→拍摄页的共享元素转场代码路径 | `SharedTransitionLayout` 包裹 `AnimatedContent`；首页机身与拍摄页机身使用同一 key `camera-body`；编译通过 | 静态 | 是 | `PASS`（2026-10-17；运行时连续性未验证） |
-| TC-P1-030 | 计算 V2 玩具色板关键前景/背景对比度 | 主文字/机刻字/LCD/珊瑚底文字均≥4.5:1 | 静态 | 是 | `PASS`（2026-10-17 脚本：13.19/8.56/7.30/4.73/4.58/10.24/5.51/8.95） |
+| TC-P1-030 | 计算新色板关键前景/背景对比度 | 主文字≥4.5:1；次级/机身铭牌≥4.5:1；强调文字≥4.5:1；取景框文字≥4.5:1 | 静态 | 是 | `PASS`（2026-10-17 脚本：13.54/9.61/5.11/5.25/4.94/9.90） |
 | TC-P1-031 | 检查照片墙只接收 app-owned 记录、无系统图库扫描 | 运行时 `photos = emptyList()`；无媒体权限/MediaStore 查询；空态有说明；网格 key 稳定 | 静态 | 是 | `PASS`（2026-10-17；网格预览为合成色块） |
 | TC-P1-032 | 首页向上滑动进入照片墙 | 上拉超过 88dp 进入 `PHOTO WALL`；未达阈值回弹；反向返回首页 | UI + 手工 | 部分 | `NOT_RUN`（无设备） |
 | TC-P1-033 | 拍摄页右上角无图库按钮 | 顶栏只有收起 + 居中 DC-01；无 gallery 点击路径 | 静态 | 是 | `PASS`（2026-10-17） |
@@ -151,7 +151,6 @@
 | TC-P1-035 | 检查 Result 页无相机/存储依赖 | 只有状态与回调；无 CameraX/MediaStore/文件写入 | 静态 | 是 | `PASS`（2026-10-17） |
 | TC-P1-036 | 检查 Settings 页内容与依赖 | 保存位置/默认滤镜/质量占位/版本/隐私/Debug 诊断；无网络/权限 | 静态 | 是 | `PASS`（2026-10-17；BuildConfig 版本号） |
 | TC-P1-037 | 检查 Debug 诊断入口仅 debug | `if (BuildConfig.DEBUG)` 门控；Release 不进入该分支 | 静态 | 是 | `PASS`（2026-10-17；Release APK 构建通过，未在设备上打开 Release UI） |
-| TC-P1-038 | 检查 V2 玩具机身结构 | 五页使用 `ToyCameraBody`/`ToyScreen`/物理按钮；首页无文本链接行；设置/照片墙/成片不再是整页列表 | 静态 | 是 | `PASS`（2026-10-17；运行时视觉未验） |
 
 ### 5.3 无障碍与视觉
 
@@ -204,17 +203,15 @@
 | T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472` |
 | T1-010 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 11s`；42 tasks（18 executed） |
 | T1-010 当前 APK | 30,857,502 bytes；SHA-256 `743A44AE230286FBC26FE8B15FB99A8BF48BC3EF7E8F975368E7464165D78C20` |
-| T1-011 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 34s`；44 tasks（12 executed） |
-| T1-011 当前 APK | 30,865,377 bytes；SHA-256 `CC4BF7E8C6102646F6003AC19035D7881290FC5AB4AB54F8194A6DC2C90FE760` |
-| T1-011/V2 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 12s`（V2 重构后）；`app-release-unsigned.apk` 23,446,026 bytes；SHA-256 `55147C27A0D13DF166E496F40AC4B625F4271978EAAA13DF10F5A7577689D0A5`；未签名，未安装 |
-| V2 玩具材质重构构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 4s` |
-| V2 当前 APK | 30,865,377 bytes；SHA-256 `A9BD98091019EAF6D7D98C01C71B8A2316C83114E1CF9F5E22FA6D8FD734FD69`（随代码变化，不作为固定指纹） |
+| T1-011 构建 + 单测（恢复上一版后） | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；44 tasks（10 executed） |
+| T1-011 当前 APK | 30,865,377 bytes；SHA-256 `8E14F51CC1E85D076741F1BB36C43891449CFF3FADB34232698685F611B6E8DE`（随代码变化，不作为固定指纹） |
+| T1-011 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 7s`；`app-release-unsigned.apk` 23,429,642 bytes；SHA-256 `04E9F1A7ED74CC6AE91A4F372EA0D2A99D53B73EBE3D6C52CEEBAB055514CA19`；未签名，未安装 |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；V2 玩具材质重构后的代码可编译，静态硬编码/无相机依赖/Result 状态变体/设置页 Debug 门控/机身结构检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010/T1-011 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008/T1-010/T1-011 的代码可编译，静态硬编码/无相机依赖/Result 状态变体/设置页 Debug 门控检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010/T1-011 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -429,7 +426,6 @@ test-evidence/
 | 拍摄页无图库按钮检查 | `PASS` | 顶栏仅收起 + DC-01；见 `TC-P1-033` |
 | 成片页静态检查 | `PASS` | 状态变体/demo 诚实性/无相机依赖；见 `TC-P1-034`、`TC-P1-035` |
 | 设置页静态检查 | `PASS` | 内容/BuildConfig/Debug 门控；见 `TC-P1-036`、`TC-P1-037` |
-| V2 玩具机身结构检查 | `PASS` | 五页使用 `ToyCameraBody`/`ToyScreen`/物理按钮；无整页文本列表；见 `TC-P1-038` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

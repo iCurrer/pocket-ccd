@@ -7,53 +7,53 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Stamped/embossed toy-camera labels: rounded sans, tight caps, a little
- * tracking. Avoid monospace "web HUD" typography.
+ * Camera-facing type. The small monospaced labels mimic printed camera
+ * markings; the sans-serif brand stays quiet instead of becoming a poster.
  */
 object PocketCcdType {
     val Brand = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
-        fontSize = 18.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 3.sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 4.sp,
     )
 
     val MonoLabel = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 10.sp,
-        lineHeight = 13.sp,
-        letterSpacing = 1.2.sp,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Normal,
+        fontSize = 9.sp,
+        lineHeight = 12.sp,
+        letterSpacing = 1.sp,
     )
 
     val MonoMicro = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Normal,
         fontSize = 8.sp,
-        lineHeight = 11.sp,
-        letterSpacing = 0.7.sp,
+        lineHeight = 10.sp,
+        letterSpacing = 0.8.sp,
     )
 }
 
 val PocketCcdTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
+        fontWeight = FontWeight.Bold,
         fontSize = 40.sp,
         lineHeight = 44.sp,
-        letterSpacing = (-0.8).sp,
+        letterSpacing = (-1.2).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 26.sp,
         lineHeight = 32.sp,
-        letterSpacing = (-0.2).sp,
+        letterSpacing = (-0.3).sp,
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 26.sp,
     ),
@@ -71,16 +71,16 @@ val PocketCcdTypography = Typography(
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.Medium,
         fontSize = 13.sp,
         lineHeight = 17.sp,
-        letterSpacing = 0.4.sp,
+        letterSpacing = 0.2.sp,
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Normal,
         fontSize = 11.sp,
         lineHeight = 14.sp,
-        letterSpacing = 0.3.sp,
+        letterSpacing = 0.2.sp,
     ),
 )

@@ -173,7 +173,7 @@ minSdk           29
 | 验收标准 | 页面不出现散落硬编码颜色/尺寸；所有交互控件≥48dp；正文对比度≥4.5:1；字体放大 200% 不截断；令牌有“临时/待评审”标记 |
 | 测试方式 | Compose Preview；对比度计算（人工/脚本）；`grep` 检查硬编码；T1-013 字体缩放测试 |
 | 证据/用例 | `TC-P1-030`（对比度 PASS）；`TC-P1-012`、`TC-P1-015`、`TC-P1-016`（待设备）；`docs/design-tokens.md`、`docs/color-direction.md` |
-| 实际结果 | 2026-10-17 新增 `Tokens.kt`/`Type.kt`，重写 `Theme.kt`；V2 色板改为黄油机身 + 奶油面板 + 薄荷按钮 + 珊瑚快门 + 深青 LCD；`docs/color-direction.md` 记录 V2 方向/材质/对比度；关键组合 4.58–13.19:1；`assembleDebug` 通过；200% 字体/视觉评审待 T1-013/T1-014 |
+| 实际结果 | 2026-10-17 新增 `Tokens.kt`/`Type.kt`，重写 `Theme.kt`；色板从黑/橙改为燕麦纸面 + 灰绿机身 + 陶土快门；`docs/color-direction.md` 记录研究/备选/对比度；关键组合 4.94–13.54:1；`assembleDebug` 通过；200% 字体/视觉评审待 T1-013/T1-014 |
 | 风险/备注 | 规范 §2.1 明确“未完成视觉原型前不要固定全部数值”；本任务只固定结构令牌，视觉值可替换 |
 
 **建议令牌分组：**
@@ -283,7 +283,7 @@ RESULT
 | 验收标准 | 无 CameraX/Camera2 类、无 `CAMERA` 权限；取景框不铺满全屏；竖屏布局可读；快门/图标≥48dp；按压反馈可感知；安全区不被刘海/手势条遮挡；右上角没有图库入口 |
 | 测试方式 | Compose UI 测试；`grep`/依赖检查；`aapt dump permissions`；截图 |
 | 证据/用例 | `TC-P1-003`、`TC-P1-008`、`TC-P1-017`、`TC-P1-020`、`TC-P1-028` |
-| 实际结果 | 2026-10-17 新增 `CameraScreen.kt` + `CameraShutterButton.kt`：机身 12dp 外边距/36dp 圆角、深青取景窗（8dp 圆角、3dp 边框、四角标记）、奶油铭牌、72dp 珊瑚快门带缩放按压反馈、薄荷/黄油物理键；**右上角图库按钮已移除**，顶栏只保留小圆收起键 + 品牌；`assembleDebug` 通过 |
+| 实际结果 | 2026-10-17 新增 `CameraScreen.kt` + `CameraShutterButton.kt`：机身 12dp 外边距/28dp 圆角、取景框在机身上半部分（16dp 机身留白、6dp 圆角、1dp 内边框、四角细标记）、铭牌在取景框下、68dp 橙色快门带缩放按压反馈、两侧仅闪光灯/前后摄；**右上角图库按钮已移除**，顶栏只保留收起和居中的 DC-01；`assembleDebug` 通过 |
 | 风险/备注 | 取景占位比例必须与后续成片 4:3 策略一致；横屏/大屏适配归 T1-013；CAPTURING/PROCESSING/ERROR 状态变体归 T1-012 |
 
 ---
@@ -301,7 +301,7 @@ RESULT
 | 验收标准 | 不申请媒体权限；不扫描系统图库；空态有引导；网格 key 稳定；无照片时不伪造照片；后续接入 Room/MediaStore 只传本应用记录 |
 | 测试方式 | 静态代码检查；Compose Preview；真机 UI/滚动测试 |
 | 证据/用例 | `TC-P1-031`；`TC-P1-002`、`TC-P1-019`、`TC-P1-020`（待设备） |
-| 实际结果 | 2026-10-17 新增 `PhotoWallScreen.kt`：`ToyCameraBody` + 深青 `ToyScreen` 内的 2 列奶油照片纸、空态胶片头、app-owned 说明、日期/滤镜标签；运行时传入 `emptyList()`，不读取系统图库；预览用合成色块展示胶片格；首页上拉触发；`assembleDebug` 通过 |
+| 实际结果 | 2026-10-17 新增 `PhotoWallScreen.kt`：3 列网格、空态、app-owned 说明、日期/滤镜标签；运行时传入 `emptyList()`，不读取系统图库；预览用合成色块展示网格；首页上拉触发；`assembleDebug` 通过 |
 | 风险/备注 | 阶段 1 不实现真实 MediaStore；不要为了“看起来有照片”申请存储权限；真实数据/缩略图/状态徽标归 T5 |
 
 ---
@@ -319,7 +319,7 @@ RESULT
 | 验收标准 | 保存完成前不显示“保存成功”；失败态有明确动作；返回/照片墙路径可达；图片不因缩放变形；demo 模式明确显示“NOT SAVED” |
 | 测试方式 | 静态代码检查；Compose Preview；真机 UI/状态切换测试 |
 | 证据/用例 | `TC-P1-034`；`TC-P1-009`、`TC-P1-010`、`TC-P1-019`（待设备） |
-| 实际结果 | 2026-10-17 新增 `ResultScreen.kt`：`ToyCameraBody` 内的奶油相纸打印（轻微旋转/阴影）、4:3 合成测试图、状态 LED、失败重试、两个物理圆键（返回拍摄/照片墙）；运行时 `demo=true` 显示 `DEMO · NOT SAVED`，不伪造“已保存”；Preview 展示 SAVED/FAILED 变体；`assembleDebug` 通过 |
+| 实际结果 | 2026-10-17 新增 `ResultScreen.kt`：4:3 合成测试图、铭牌、状态行、失败重试、返回拍摄/照片墙；运行时 `demo=true` 显示 `DEMO · NOT SAVED`，不伪造“已保存”；Preview 展示 SAVED/FAILED 变体；`assembleDebug` 通过 |
 | 风险/备注 | 阶段 1 的保存状态是 UI 变体，不是实际文件写入；真实状态机/MediaStore 在 T5 |
 
 ---
@@ -337,7 +337,7 @@ RESULT
 | 验收标准 | Release 构建不显示 Debug 入口；无网络请求；无权限；文案可理解；版本号来自 `BuildConfig` |
 | 测试方式 | 静态代码检查；`assembleRelease`（未签名也可）检查 BuildConfig；`aapt dump permissions` |
 | 证据/用例 | `TC-P1-036`、`TC-P1-037`；`TC-P1-018`、`TC-P1-017`（待设备/Release） |
-| 实际结果 | 2026-10-17 新增 `SettingsScreen.kt`：机身奶油面板内的深青 LCD、app-owned 保存位置、DAYLIGHT/FLASH/NIGHT 薄荷/珊瑚选择键、JPEG 92 占位、版本/隐私、Debug 诊断对话框；`buildFeatures.buildConfig = true`；`assembleDebug` 通过；`assembleRelease` 通过（V2 后未签名 APK，23,446,026 bytes；Debug 入口由 `BuildConfig.DEBUG` 编译期门控） |
+| 实际结果 | 2026-10-17 新增 `SettingsScreen.kt`：PHOTOS/ABOUT/DEVELOPER 三段、app-owned 保存位置、DAYLIGHT/FLASH/NIGHT 本地选择、JPEG 92 占位、版本/隐私、Debug 诊断对话框；`buildFeatures.buildConfig = true`；`assembleDebug` 通过；`assembleRelease` 通过（未签名 APK，23,429,642 bytes；Debug 入口由 `BuildConfig.DEBUG` 编译期门控） |
 | 风险/备注 | 默认滤镜/质量只是本地 UI，尚未持久化；真实设置持久化归后续 DataStore 任务 |
 
 ---
