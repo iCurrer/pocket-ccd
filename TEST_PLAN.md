@@ -149,6 +149,8 @@
 | TC-P1-033 | 拍摄页右上角无图库按钮 | 顶栏只有收起 + 居中 DC-01；无 gallery 点击路径 | 静态 | 是 | `PASS`（2026-10-17） |
 | TC-P1-034 | 检查 Result 页状态变体与 demo 诚实性 | 4:3 测试图；SAVED/FAILED 预览；运行时 `DEMO · NOT SAVED`，不显示真实“已保存” | 静态 | 是 | `PASS`（2026-10-17；设备 UI 未跑） |
 | TC-P1-035 | 检查 Result 页无相机/存储依赖 | 只有状态与回调；无 CameraX/MediaStore/文件写入 | 静态 | 是 | `PASS`（2026-10-17） |
+| TC-P1-036 | 检查 Settings 页内容与依赖 | 保存位置/默认滤镜/质量占位/版本/隐私/Debug 诊断；无网络/权限 | 静态 | 是 | `PASS`（2026-10-17；BuildConfig 版本号） |
+| TC-P1-037 | 检查 Debug 诊断入口仅 debug | `if (BuildConfig.DEBUG)` 门控；Release 不进入该分支 | 静态 | 是 | `PASS`（2026-10-17；Release APK 构建通过，未在设备上打开 Release UI） |
 
 ### 5.3 无障碍与视觉
 
@@ -168,7 +170,7 @@
 | TC-ENV-003 | `git status`、`git check-ignore` | 仓库干净；构建产物/本地配置被忽略；规范文件未修改 | 仓库 | 是 | `PASS`（2026-10-17；提交后复检） |
 | TC-ENV-004 | 创建 AVD 或连接真机；`adb devices` | 设备可见；可安装/启动/截图 | 环境 | 是 | `BLOCKED`（无 AVD/设备） |
 | TC-P1-017 | `aapt dump permissions` + Manifest 检查 | 无 CAMERA/INTERNET/存储/麦克风/位置权限 | 静态 | 是 | `PASS`（仅有 AndroidX 自定义签名权限 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`） |
-| TC-P1-018 | `assembleRelease`（未签名可）+ 检查 Debug 入口 | Release 不显示诊断入口；无调试日志 | 构建 + UI | 部分 | `NOT_RUN` |
+| TC-P1-018 | `assembleRelease`（未签名可）+ 检查 Debug 入口 | Release 不显示诊断入口；无调试日志 | 构建 + UI | 部分 | `PASS`（构建；Release UI 未跑） |
 | TC-P1-021 | `adb shell am start -W` 冷启动 ×5 | 记录中位数/P95；建立基线，不承诺固定值 | 性能 | 是 | `NOT_RUN` |
 | TC-P1-022 | 页面往返 20 次；Perfetto/JankStats（可选） | 无崩溃/ANR；记录掉帧；不承诺固定帧率 | 性能 | 部分 | `NOT_RUN` |
 | TC-P1-027 | `grep` 检查 `HomeScreen`/`Theme` 的硬编码颜色/尺寸 | 页面只使用令牌；仅 Preview 注解允许硬编码背景色 | 静态 | 是 | `PASS`（2026-10-17；仅 Preview 背景色例外） |
@@ -200,13 +202,16 @@
 | T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
 | T1-007/T1-008/T1-009 当前 APK | 30,853,023 bytes；SHA-256 `F4C143A1288DBBEB5C338E57082E437186065B803D61762A15B61D3691D4B472` |
 | T1-010 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 11s`；42 tasks（18 executed） |
-| T1-010 当前 APK | 30,857,502 bytes；SHA-256 `743A44AE230286FBC26FE8B15FB99A8BF48BC3EF7E8F975368E7464165D78C20`（随代码变化，不作为固定指纹） |
+| T1-010 当前 APK | 30,857,502 bytes；SHA-256 `743A44AE230286FBC26FE8B15FB99A8BF48BC3EF7E8F975368E7464165D78C20` |
+| T1-011 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 34s`；44 tasks（12 executed） |
+| T1-011 当前 APK | 30,865,377 bytes；SHA-256 `CC4BF7E8C6102646F6003AC19035D7881290FC5AB4AB54F8194A6DC2C90FE760`（随代码变化，不作为固定指纹） |
+| T1-011 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 1m 59s`；`app-release-unsigned.apk` 23,429,642 bytes；SHA-256 `A7B848BBF4B63428DBA84D218F18854A9064993BAC5C57CF878140C0DC4E51D5`；未签名，未安装 |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008/T1-010 的代码可编译，静态硬编码/无相机依赖/Result 状态变体检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006/T1-008/T1-010/T1-011 的代码可编译，静态硬编码/无相机依赖/Result 状态变体/设置页 Debug 门控检查通过。T1-007 仅实现了上下 88dp 距离阈值和跟随，**速度阈值与手势测试未做**。T1-003/T1-004/T1-005/T1-006/T1-008/T1-010/T1-011 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -420,6 +425,7 @@ test-evidence/
 | 照片墙静态检查 | `PASS` | 运行时只传 app-owned 空列表；无系统图库扫描；见 `TC-P1-031` |
 | 拍摄页无图库按钮检查 | `PASS` | 顶栏仅收起 + DC-01；见 `TC-P1-033` |
 | 成片页静态检查 | `PASS` | 状态变体/demo 诚实性/无相机依赖；见 `TC-P1-034`、`TC-P1-035` |
+| 设置页静态检查 | `PASS` | 内容/BuildConfig/Debug 门控；见 `TC-P1-036`、`TC-P1-037` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

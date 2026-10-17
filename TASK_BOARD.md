@@ -35,7 +35,7 @@
 | 里程碑 | 内容 | 任务数 | 状态 | 进入条件 |
 |---|---|---:|---|---|
 | M0 | 规范审查与工程文档 | 5 | `DONE`（文档已产出，待负责人评审） | 无 |
-| M1 | 项目初始化 + 静态 UI 原型 | 16 | `IN_PROGRESS`（T1-002 `VERIFIED`；T1-003/T1-004/T1-005/T1-006/T1-008/T1-009/T1-010 `DONE`；T1-007 `IN_PROGRESS`；T1-001/T1-015 受阻） | 本板确认 |
+| M1 | 项目初始化 + 静态 UI 原型 | 16 | `IN_PROGRESS`（五个页面均 `DONE`；T1-002 `VERIFIED`；T1-007 `IN_PROGRESS`；T1-012/T1-013/T1-014/T1-016 待做；T1-001/T1-015 受阻） | 本板确认 |
 | M2 | 相机基础链路 | 8 | `TODO` | M1 退出 + EXP-01/02 |
 | M3 | 图像处理内核 | 7 | `TODO` | M2 采集样本 + EXP-03/04/06 |
 | M4 | 三个滤镜 | 5 | `TODO` | M3 管线稳定 + EXP-05/08/11 |
@@ -329,15 +329,16 @@ RESULT
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P1 |
-| 状态 | `TODO` |
+| 状态 | `DONE`（静态 UI/BuildConfig/Debug 诊断完成；设备 UI 待 T1-015） |
 | 预估 | 0.5 天 |
 | 前置条件 | T1-004、T1-005 |
 | 涉及模块 | `ui/settings/`、`BuildConfig` |
-| 交付物 | 保存位置说明；默认滤镜；质量选项占位；版本信息；隐私说明；Debug 诊断入口（仅 debug） |
+| 交付物 | 保存位置说明；默认滤镜选择（本地 UI）；质量选项占位；版本信息；隐私说明；Debug 诊断入口（仅 debug） |
 | 验收标准 | Release 构建不显示 Debug 入口；无网络请求；无权限；文案可理解；版本号来自 `BuildConfig` |
-| 测试方式 | Compose UI 测试；`assembleRelease`（未签名也可）检查 BuildConfig；`aapt dump permissions` |
-| 证据/用例 | `TC-P1-018`、`TC-P1-017` |
-| 风险/备注 | 质量选项在阶段 1 只是占位，不得暗示已实现 |
+| 测试方式 | 静态代码检查；`assembleRelease`（未签名也可）检查 BuildConfig；`aapt dump permissions` |
+| 证据/用例 | `TC-P1-036`、`TC-P1-037`；`TC-P1-018`、`TC-P1-017`（待设备/Release） |
+| 实际结果 | 2026-10-17 新增 `SettingsScreen.kt`：PHOTOS/ABOUT/DEVELOPER 三段、app-owned 保存位置、DAYLIGHT/FLASH/NIGHT 本地选择、JPEG 92 占位、版本/隐私、Debug 诊断对话框；`buildFeatures.buildConfig = true`；`assembleDebug` 通过；`assembleRelease` 通过（未签名 APK，23,429,642 bytes；Debug 入口由 `BuildConfig.DEBUG` 编译期门控） |
+| 风险/备注 | 默认滤镜/质量只是本地 UI，尚未持久化；真实设置持久化归后续 DataStore 任务 |
 
 ---
 
@@ -458,7 +459,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 - [x] T1-008 拍摄页静态 UI 完成（UI/截图待设备）
 - [x] T1-009 照片墙静态 UI 完成（空态/网格；真实数据待 T5）
 - [x] T1-010 成片页静态 UI 完成（状态变体/预览；设备 UI 待验）
-- [ ] T1-011 设置页完成
+- [x] T1-011 设置页完成（设备 UI 待验）
 - [ ] T1-012 状态矩阵完成
 - [ ] T1-013 自适应/无障碍完成
 - [ ] T1-014 视觉基线评审完成
@@ -640,7 +641,7 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | T1-008 | 拍摄页 | `DONE` | Camera 静态 UI + 快门 |
 | T1-009 | 图库 | `DONE` | 照片墙静态 UI + 空态 |
 | T1-010 | 成片页 | `DONE` | Result 静态 UI + 状态变体 |
-| T1-011 | 设置页 | `TODO` | Settings 静态 UI |
+| T1-011 | 设置页 | `DONE` | Settings 静态 UI + Debug 诊断 |
 | T1-012 | 状态矩阵 | `TODO` | Loading/Empty/Error |
 | T1-013 | 自适应/无障碍 | `TODO` | 多尺寸 + TalkBack |
 | T1-014 | 视觉基线 | `TODO` | 截图 + 评审 |

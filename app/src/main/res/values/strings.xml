@@ -50,4 +50,23 @@
     <string name="result_open_wall">PHOTO WALL</string>
     <string name="settings_title">设置</string>
     <string name="settings_placeholder">设置占位</string>
+    <string name="settings_header">SETTINGS</string>
+    <string name="settings_back">返回首页</string>
+    <string name="settings_section_photos">PHOTOS</string>
+    <string name="settings_section_about">ABOUT</string>
+    <string name="settings_section_developer">DEVELOPER</string>
+    <string name="settings_save_location">SAVE LOCATION</string>
+    <string name="settings_save_location_value">POCKET CCD ALBUM · APP-OWNED</string>
+    <string name="settings_default_filter">DEFAULT FILTER</string>
+    <string name="settings_quality">JPEG QUALITY</string>
+    <string name="settings_quality_value">92 · PROTOTYPE</string>
+    <string name="settings_version">VERSION</string>
+    <string name="settings_privacy">PRIVACY</string>
+    <string name="settings_privacy_value">LOCAL ONLY · NO UPLOAD</string>
+    <string name="settings_diagnostics">DIAGNOSTICS</string>
+    <string name="settings_diagnostics_value">DEBUG BUILD</string>
+    <string name="settings_diagnostics_title">DIAGNOSTICS</string>
+    <string name="settings_diagnostics_body">Build %1$s (%2$d)\nCamera: not connected\nStorage: app-owned only</string>
+    <string name="settings_close">CLOSE</string>
+    <string name="settings_footer">POCKET CCD · DC-01</string>
 </resources>
