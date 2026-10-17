@@ -16,6 +16,8 @@
 | 测试计划 | 已建立，见 `TEST_PLAN.md` |
 | Android 工程 | 已创建 Compose 空壳（T1-003） |
 | 导航骨架 | 已实现 5 个占位页面 + 状态机；12 个单元测试通过（T1-005） |
+| 设计令牌 | 已建立 `ui/theme/Tokens.kt` + `docs/design-tokens.md`（T1-004） |
+| 首页 | 静态 UI 已实现（T1-006）；截图/多尺寸待设备 |
 | 构建 | `assembleDebug` 已通过（2026-10-17） |
 | 安装/启动/真机测试 | **未执行**（无 AVD/设备） |
 
@@ -34,6 +36,7 @@
 | [`TEST_PLAN.md`](TEST_PLAN.md) | 测试层级、用例、证据、性能协议 | 写测试/验收时 |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | 当前进度、环境、阻塞、风险、下一步 | 每次阶段切换/接手时 |
 | [`research/android-official-docs-2026-10-17.md`](research/android-official-docs-2026-10-17.md) | 官方文档版本与来源 | 升级依赖/核对事实时 |
+| [`docs/design-tokens.md`](docs/design-tokens.md) | 设计令牌（临时值） | 写页面前；视觉评审时 |
 
 ---
 
@@ -85,13 +88,15 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 产物：`app/build/outputs/apk/debug/app-debug.apk`。  
 当前单测：`AppStateTest` 12/12（状态机转换、非法转换、重复事件）。
 
+**国内网络：** `settings.gradle.kts` 优先使用阿里云 Maven 镜像（gradle-plugin/google/public），官方 Google/Maven Central 作为兜底；Gradle wrapper 使用腾讯云 `gradle-9.6.1-bin.zip`。如果某个依赖仍解析失败，再按错误信息单独调整，不要一次性堆叠过多镜像。
+
 > 当前构建使用临时包名 `com.pocketccd.prototype`，禁止发布。
 
 ## 下一步
 
 1. 阅读 `SPEC_REVIEW.md` 第 7 节，确认应用 ID、minSdk、目标设备、原图保留策略；
-2. T1-002/T1-003/T1-005 已完成；下一步 T1-004 设计令牌，并准备 AVD/真机（T1-015）；
-3. 按 T1-006 → T1-013 完成静态 UI 原型；
+2. T1-002/T1-003/T1-004/T1-005/T1-006 已完成；下一步 T1-007 下拉手势、T1-008 拍摄页；
+3. 准备 AVD/真机（T1-015），完成 UI/截图/多尺寸验收；
 4. 执行 `TEST_PLAN.md` 的 `TC-P1-*` 并记录证据。
 
 ---

@@ -163,6 +163,7 @@
 | TC-P1-018 | `assembleRelease`（未签名可）+ 检查 Debug 入口 | Release 不显示诊断入口；无调试日志 | 构建 + UI | 部分 | `NOT_RUN` |
 | TC-P1-021 | `adb shell am start -W` 冷启动 ×5 | 记录中位数/P95；建立基线，不承诺固定值 | 性能 | 是 | `NOT_RUN` |
 | TC-P1-022 | 页面往返 20 次；Perfetto/JankStats（可选） | 无崩溃/ANR；记录掉帧；不承诺固定帧率 | 性能 | 部分 | `NOT_RUN` |
+| TC-P1-027 | `grep` 检查 `HomeScreen`/`Theme` 的硬编码颜色/尺寸 | 页面只使用令牌；仅 Preview 注解允许硬编码背景色 | 静态 | 是 | `PASS`（2026-10-17；仅 Preview 背景色例外） |
 
 ### 5.5 用例前置条件说明
 
@@ -185,13 +186,15 @@
 | T1-003 首次 APK | `app/build/outputs/apk/debug/app-debug.apk`；29,570,230 bytes；SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C` |
 | T1-005 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 40s`（42 tasks） |
 | T1-005 单测结果 | `AppStateTest`：12 tests / 0 failures / 0 errors |
-| T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B`（随代码变化，不作为固定指纹） |
+| T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B` |
+| T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
+| T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
 | 非阻塞警告 | SDK 目录存在 `android-37.0` 与 `android-37.0-2` 重复，AGP 提示 inconsistent location；`libandroidx.graphics.path.so` 未能 strip，按原样打包。均未阻断构建，记录待环境整理。 |
 
-**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过。T1-003/T1-005 的“安装/启动/Compose UI/旋转”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
+**结论：** T1-003 的“构建、SDK 配置、权限检查”已实际通过；T1-005 的状态机单元测试 12/12 通过；T1-004/T1-006 的代码可编译，静态硬编码检查通过。T1-003/T1-004/T1-005/T1-006 的“安装/启动/Compose UI/旋转/截图”未执行，所以只能标 `DONE`，不能标 `VERIFIED`。
 
 ---
 
@@ -398,6 +401,7 @@ test-evidence/
 | 环境盘点（SDK/Studio/JDK/Gradle/设备） | `PASS` | 2026-10-17 本机命令；仅环境事实，不是 App 测试 |
 | Android 构建 | `PASS` | 2026-10-17 `assembleDebug` 成功；APK/哈希见 5.6 |
 | 状态机单元测试 | `PASS` | `AppStateTest` 12/12；见 5.6 |
+| 设计令牌/首页静态检查 | `PASS` | 页面使用令牌；仅 Preview 背景色例外；见 5.6 |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |
@@ -405,7 +409,7 @@ test-evidence/
 | 性能/内存 | `NOT_RUN` | 无设备 |
 | 视觉评审 | `NOT_RUN` | 无截图 |
 
-**结论：** 截至目前，**构建链路与导航状态机逻辑**已实际验证；**没有任何页面/相机/滤镜/性能被实际验证**。不得在 `PROJECT_STATE.md` 或对外表述中写“App 已通过”“相机/滤镜/性能已通过”。
+**结论：** 截至目前，**构建链路、导航状态机逻辑、设计令牌的结构化使用**已实际验证；**没有任何页面/相机/滤镜/性能被实际验证**。不得在 `PROJECT_STATE.md` 或对外表述中写“App 已通过”“相机/滤镜/性能已通过”。
 
 ---
 

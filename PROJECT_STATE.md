@@ -1,11 +1,11 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 18:20（Asia/Shanghai）  
+**快照时间：** 2026-10-17 18:28（Asia/Shanghai）  
 **当前阶段：** M1 进行中（T1-002/T1-003 已完成；静态 UI 未开始）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
 **Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
-**App 代码：** Compose 空壳 + 导航状态机骨架（`MainActivity` + `AppRoot` + 5 个占位页面）  
+**App 代码：** Compose 空壳 + 导航状态机 + 设计令牌 + 首页静态 UI（`MainActivity` + `AppRoot` + `HomeScreen` + 4 个占位页面）  
 **已执行 App 构建/测试：** `assembleDebug` 已通过；`AppStateTest` 12/12 通过；安装/启动/UI/相机未执行
 
 ---
@@ -62,6 +62,7 @@
 | P-010 | Git 仓库初始化与基线提交 | `main` 分支；初始提交 `482b804` | `DONE` |
 | P-011 | Gradle/Compose 空壳构建 | `assembleDebug` 成功；APK/哈希见第 5 节 | `DONE`（构建通过；安装未执行） |
 | P-012 | 导航状态机与骨架 | `navigation/`、`ui/AppRoot.kt`；`AppStateTest` 12/12 | `DONE`（逻辑测试通过；UI/旋转待设备） |
+| P-013 | 设计令牌 + 首页静态 UI | `ui/theme/Tokens.kt`、`Type.kt`、`Theme.kt`、`ui/home/HomeScreen.kt`、`docs/design-tokens.md`；构建通过 | `DONE`（视觉/截图/多尺寸待设备） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -73,9 +74,9 @@
 |---|---|---|
 | Android 工程初始化 | `DONE` | T1-002/T1-003；可构建空壳 |
 | App 安装/启动 | `BLOCKED` | 无 AVD/真机（T1-015） |
-| Compose 主题/设计令牌 | `IN_PROGRESS` | 仅有临时主题骨架；T1-004 未开始 |
+| Compose 主题/设计令牌 | `DONE` | T1-004；`docs/design-tokens.md`；对比度/字体待设备 |
 | 页面状态机/导航 | `DONE` | T1-005；`AppStateTest` 12/12；UI/旋转待设备 |
-| 五个静态页面 | `NOT_STARTED` | T1-006..T1-011 |
+| 五个静态页面 | `IN_PROGRESS` | T1-006 首页已完成；T1-007..T1-011 待做 |
 | 下拉手势/转场 | `NOT_STARTED` | T1-007 |
 | 自适应/无障碍 | `NOT_STARTED` | T1-013 |
 | 截图基线/视觉评审 | `NOT_STARTED` | T1-014 |
@@ -139,7 +140,9 @@
 | 状态机单测 | `AppStateTest`：12 tests / 0 failures / 0 errors |
 | 实际解析 | Kotlin stdlib 2.3.21；Compose UI 1.12.0；Material3 1.4.0（BOM 2026.08.00） |
 | T1-003 APK | 29,570,230 bytes；SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C` |
-| T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B`（随代码变化，不作为固定指纹） |
+| T1-005 重建 APK | 29,658,967 bytes；SHA-256 `508A109F9890D5C48871EBB73E08405C18241FECEA222AD18E15F0D6E771088B` |
+| T1-004/T1-006 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
+| T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574`（随代码变化，不作为固定指纹） |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -218,10 +221,10 @@
 ### 第 4 步：静态 UI 原型（5–7 天）
 
 按依赖顺序：
-1. T1-004 设计令牌（下一步）；
+1. T1-004 设计令牌（已完成）；
 2. T1-005 状态机（已完成，12 单元测试通过）；
-3. T1-006 首页；
-4. T1-007 下拉手势；
+3. T1-006 首页（已完成静态 UI；UI/截图待设备）；
+4. T1-007 下拉手势（下一步）；
 5. T1-008 拍摄页；
 6. T1-009 图库；
 7. T1-010 成片页；
@@ -276,6 +279,8 @@ D:\Android\pocket ccd\
 ├── SPEC_REVIEW.md                   # 规范审查
 ├── research/
 │   └── android-official-docs-2026-10-17.md
+├── docs/
+│   └── design-tokens.md             # 设计令牌（临时值）
 ├── .research/                       # 官方文档抓取缓存（临时，已 gitignore）
 ├── gradle/
 │   ├── libs.versions.toml           # 版本目录
@@ -284,7 +289,10 @@ D:\Android\pocket ccd\
 │   ├── src/main/java/com/pocketccd/prototype/
 │   │   ├── MainActivity.kt
 │   │   ├── navigation/              # AppDestination/AppEvent/reduce/AppViewModel
-│   │   └── ui/                      # AppRoot + 5 个占位页面
+│   │   └── ui/
+│   │       ├── AppRoot.kt           # 导航 + 4 个占位页面
+│   │       ├── home/HomeScreen.kt   # 首页静态 UI
+│   │       └── theme/               # Tokens/Type/Theme
 │   └── build/outputs/apk/debug/app-debug.apk
 ├── build.gradle.kts
 ├── settings.gradle.kts
@@ -302,12 +310,13 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 修复工作区 ACL 写入问题 | 仅主机权限；不涉及项目文件内容 |
 | 2026-10-17 | 初始化 Git + Compose 空壳 | `assembleDebug` 通过；APK 已生成；安装/启动未执行 |
 | 2026-10-17 | 导航状态机骨架 | 5 个占位页面；`AppStateTest` 12/12；UI/旋转待设备 |
+| 2026-10-17 | 设计令牌 + 首页静态 UI | `docs/design-tokens.md`；`HomeScreen` 可编译；截图/多尺寸待设备 |
 
 ---
 
 ## 12. 诚实声明
 
-- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、构建（`TC-ENV-002`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）。**没有任何页面/相机/图像/性能功能被实际验证。**
+- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、构建（`TC-ENV-002`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）。**没有任何页面/相机/图像/性能功能被实际验证。**
 - 构建通过只证明“空壳能编译打包”；安装、启动、UI 测试仍被无设备阻塞。
 - 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。

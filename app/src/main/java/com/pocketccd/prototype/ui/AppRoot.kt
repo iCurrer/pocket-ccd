@@ -33,6 +33,7 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
+import com.pocketccd.prototype.ui.home.HomeScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 
 @Composable
@@ -61,7 +62,7 @@ fun PocketCcdApp(
             label = "app-destination",
         ) { destination ->
             when (destination) {
-                AppDestination.HOME -> HomePlaceholder(
+                AppDestination.HOME -> HomeScreen(
                     onOpenCamera = { onEvent(AppEvent.OpenCamera) },
                     onOpenGallery = { onEvent(AppEvent.OpenGallery) },
                     onOpenSettings = { onEvent(AppEvent.OpenSettings) },
@@ -88,28 +89,6 @@ fun PocketCcdApp(
                     onBack = { onEvent(AppEvent.NavigateBack) },
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun HomePlaceholder(
-    onOpenCamera: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    PlaceholderScreen(
-        title = stringResource(R.string.app_name),
-        body = stringResource(R.string.home_subtitle),
-    ) {
-        Button(onClick = onOpenCamera) {
-            Text(stringResource(R.string.home_open_camera))
-        }
-        OutlinedButton(onClick = onOpenGallery) {
-            Text(stringResource(R.string.action_gallery))
-        }
-        TextButton(onClick = onOpenSettings) {
-            Text(stringResource(R.string.action_settings))
         }
     }
 }
