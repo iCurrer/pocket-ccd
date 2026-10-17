@@ -15,6 +15,7 @@
 | 技术决策 | 已建立，见 `DECISION_LOG.md` |
 | 测试计划 | 已建立，见 `TEST_PLAN.md` |
 | Android 工程 | 已创建 Compose 空壳（T1-003） |
+| 导航骨架 | 已实现 5 个占位页面 + 状态机；12 个单元测试通过（T1-005） |
 | 构建 | `assembleDebug` 已通过（2026-10-17） |
 | 安装/启动/真机测试 | **未执行**（无 AVD/设备） |
 
@@ -78,17 +79,19 @@
 $env:JAVA_HOME='D:\software\Android\Android Studio\jbr'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
 .\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:testDebugUnitTest
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`。
+产物：`app/build/outputs/apk/debug/app-debug.apk`。  
+当前单测：`AppStateTest` 12/12（状态机转换、非法转换、重复事件）。
 
 > 当前构建使用临时包名 `com.pocketccd.prototype`，禁止发布。
 
 ## 下一步
 
 1. 阅读 `SPEC_REVIEW.md` 第 7 节，确认应用 ID、minSdk、目标设备、原图保留策略；
-2. T1-002/T1-003 已完成；下一步准备 AVD/真机（T1-015）；
-3. 按 T1-004 → T1-013 完成静态 UI 原型；
+2. T1-002/T1-003/T1-005 已完成；下一步 T1-004 设计令牌，并准备 AVD/真机（T1-015）；
+3. 按 T1-006 → T1-013 完成静态 UI 原型；
 4. 执行 `TEST_PLAN.md` 的 `TC-P1-*` 并记录证据。
 
 ---

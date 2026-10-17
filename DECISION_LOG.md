@@ -136,7 +136,7 @@
   - 2026-10-17 `./gradlew :app:assembleDebug` **BUILD SUCCESSFUL**（首次 59s；wrapper 复跑 up-to-date）；
   - 实际解析：Kotlin stdlib 2.3.21、Compose UI 1.12.0；
   - `aapt dump badging`：compileSdk 37 / targetSdk 36 / minSdk 29；
-  - APK：`app/build/outputs/apk/debug/app-debug.apk`，29,570,230 bytes，SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C`；
+  - APK：T1-003 首次 29,570,230 bytes / `B77DB717...`；T1-005 重建 29,658,967 bytes / `508A109F...`（APK 随代码变化，哈希不作为固定指纹，详见 `TEST_PLAN.md` 5.6）；
   - 构建日志与 APK 证据已记录在 `PROJECT_STATE.md` / `TEST_PLAN.md`。
 - **复审触发：** AGP 9.4/9.5 稳定并需要 API 37.1；Gradle 升级；Compose 插件与内建 Kotlin 版本冲突。
 

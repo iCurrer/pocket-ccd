@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Pocket CCD</string>
+    <string name="home_subtitle">迷你数码相机 · 原型</string>
+    <string name="home_open_camera">进入相机</string>
+    <string name="action_gallery">图库</string>
+    <string name="action_settings">设置</string>
+    <string name="action_back">返回</string>
+    <string name="camera_title">拍摄</string>
+    <string name="camera_placeholder">相机占位\n阶段 1 不申请权限</string>
+    <string name="camera_fake_capture">模拟拍摄</string>
+    <string name="gallery_title">图库</string>
+    <string name="gallery_empty">还没有照片</string>
+    <string name="gallery_open_sample">打开示例照片</string>
+    <string name="result_title">成片</string>
+    <string name="result_placeholder">成片占位 · 使用测试图</string>
+    <string name="result_back_to_camera">返回拍摄</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_placeholder">设置占位</string>
 </resources>

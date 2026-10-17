@@ -35,7 +35,7 @@
 | 里程碑 | 内容 | 任务数 | 状态 | 进入条件 |
 |---|---|---:|---|---|
 | M0 | 规范审查与工程文档 | 5 | `DONE`（文档已产出，待负责人评审） | 无 |
-| M1 | 项目初始化 + 静态 UI 原型 | 16 | `IN_PROGRESS`（T1-002 `VERIFIED`；T1-003 构建 `DONE`、安装待设备；T1-001/T1-015 受阻） | 本板确认 |
+| M1 | 项目初始化 + 静态 UI 原型 | 16 | `IN_PROGRESS`（T1-002 `VERIFIED`；T1-003 构建 `DONE`；T1-005 `DONE`；T1-001/T1-015 受阻） | 本板确认 |
 | M2 | 相机基础链路 | 8 | `TODO` | M1 退出 + EXP-01/02 |
 | M3 | 图像处理内核 | 7 | `TODO` | M2 采集样本 + EXP-03/04/06 |
 | M4 | 三个滤镜 | 5 | `TODO` | M3 管线稳定 + EXP-05/08/11 |
@@ -193,14 +193,15 @@ minSdk           29
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P0 |
-| 状态 | `TODO` |
+| 状态 | `DONE`（状态机 + 12 个单元测试通过；Compose UI/旋转测试待设备） |
 | 预估 | 1 天 |
 | 前置条件 | T1-003；D-007 |
-| 涉及模块 | `navigation/`、`ui/App.kt`、`AppViewModel` |
+| 涉及模块 | `navigation/`、`ui/AppRoot.kt`、`AppViewModel` |
 | 交付物 | `AppDestination`（HOME/CAMERA/GALLERY/RESULT/SETTINGS）；`AppEvent`；转换守卫；`BackHandler`；`AnimatedContent` 骨架；状态机单元测试 |
 | 验收标准 | 覆盖规范 §2.3 全部转换；非法转换被忽略；动画期间重复事件不重复导航；旋转后状态保持；返回行为符合预期；无 Navigation-Compose 依赖 |
 | 测试方式 | 纯 Kotlin 单元测试（转换矩阵）；Compose UI 测试（点击/返回）；旋转手测 |
-| 证据/用例 | `TC-P1-002`、`TC-P1-003`、`TC-P1-007`、`TC-P1-008`、`TC-P1-009`、`TC-P1-010`、`TC-P1-011` |
+| 证据/用例 | `TC-P1-026`（已 PASS）；`TC-P1-002..011`（待设备） |
+| 实际结果 | 2026-10-17 实现 `AppDestination`/`AppEvent`/`reduce`/`AppViewModel`/`PocketCcdApp`；`AppStateTest` 12 tests / 0 failures；`assembleDebug` 与 `testDebugUnitTest` 均 `BUILD SUCCESSFUL`；Compose UI/旋转仍待 T1-015 |
 | 风险/备注 | `RESULT → CAMERA` 在真实相机阶段意味着重新绑定用例；阶段 1 只验证导航，不验证相机恢复 |
 
 **状态机草案：**
@@ -445,7 +446,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 - [x] T1-003 构建成功（`assembleDebug`）
 - [ ] T1-003 安装/启动验证（待 T1-015 设备/模拟器）
 - [ ] T1-004 设计令牌完成
-- [ ] T1-005 状态机完成
+- [x] T1-005 状态机完成（12 单元测试通过；UI/旋转待设备）
 - [ ] T1-006..T1-011 五个页面完成
 - [ ] T1-012 状态矩阵完成
 - [ ] T1-013 自适应/无障碍完成
@@ -622,7 +623,7 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | T1-002 | Git/工程规范 | `VERIFIED` | `.gitignore`/`.editorconfig`/README |
 | T1-003 | Gradle/Compose 空工程 | `DONE` | 可构建 APK；安装待设备 |
 | T1-004 | 设计令牌/主题 | `TODO` | `ui/theme` + 令牌文档 |
-| T1-005 | 页面状态机 | `TODO` | 状态机 + 导航骨架 |
+| T1-005 | 页面状态机 | `DONE` | 状态机 + 导航骨架；12 单元测试通过 |
 | T1-006 | 首页 | `TODO` | Home 静态 UI |
 | T1-007 | 下拉手势 | `TODO` | 手势 + 转场 |
 | T1-008 | 拍摄页 | `TODO` | Camera 静态 UI |
