@@ -17,6 +17,7 @@
 | Android 工程 | 已创建 Compose 空壳（T1-003） |
 | 导航骨架 | 已实现 5 个占位页面 + 状态机；12 个单元测试通过（T1-005） |
 | 设计令牌 | 已建立 `ui/theme/Tokens.kt` + `docs/design-tokens.md`（T1-004） |
+| 配色 | 燕麦纸面 + 灰绿机身 + 陶土快门；见 `docs/color-direction.md` |
 | 首页 | 静态 UI 已实现（T1-006）；截图/多尺寸待设备 |
 | 拍摄页 | 机身内 4:3 取景框 + 橙红快门 + 闪光灯/前后摄（T1-008）；未接相机 |
 | 下拉手势 | 88dp 距离阈值 + 跟随 + 展开/收起转场（T1-007，`IN_PROGRESS`） |
@@ -39,6 +40,7 @@
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | 当前进度、环境、阻塞、风险、下一步 | 每次阶段切换/接手时 |
 | [`research/android-official-docs-2026-10-17.md`](research/android-official-docs-2026-10-17.md) | 官方文档版本与来源 | 升级依赖/核对事实时 |
 | [`docs/design-tokens.md`](docs/design-tokens.md) | 设计令牌（临时值） | 写页面前；视觉评审时 |
+| [`docs/color-direction.md`](docs/color-direction.md) | 玩具相机配色研究、对比度与选型 | 调整配色时 |
 
 ---
 

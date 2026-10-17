@@ -2,50 +2,61 @@
 
 **日期：** 2026-10-17  
 **状态：** `PROVISIONAL` — 结构已集中，视觉值待真机视觉评审替换  
-**代码：** `app/src/main/java/com/pocketccd/prototype/ui/theme/Tokens.kt`、`Type.kt`、`Theme.kt`
+**代码：** `app/src/main/java/com/pocketccd/prototype/ui/theme/Tokens.kt`、`Type.kt`、`Theme.kt`  
+**配色研究：** [`color-direction.md`](color-direction.md)
 
-> 方向：哑光黑机身、少量细线、单一橙红强调色。避免大面积发光、泛滥玻璃拟态和多层卡片。
+> 方向：燕麦色纸面、灰绿玩具机身、深松绿取景框、陶土快门。低饱和、暖中性、单一强调色；避免纯黑高对比、发光和泛滥玻璃拟态。
 
 ## 1. 颜色
 
 | 令牌 | 值 | 用途 | 状态 |
 |---|---|---|---|
-| `Background` | `#070708` | 页面底色 | 临时 |
-| `BackgroundElevated` | `#0C0C0E` | 轻微分层 | 临时 |
-| `Surface` | `#121214` | 卡片/控件底 | 临时 |
-| `SurfaceHigh` | `#19191C` | 高一级表面 | 临时 |
-| `SurfaceHighest` | `#202024` | 高亮表面 | 临时 |
-| `Outline` | `#2B2B30` | 边框 | 临时 |
-| `OutlineSoft` | `#1E1E22` | 弱边框 | 临时 |
-| `TextPrimary` | `#E7E2D8` | 主文字 | 临时 |
-| `TextSecondary` | `#8E887D` | 次级文字 | 临时 |
-| `TextTertiary` | `#5C574F` | 提示/机刻字 | 临时 |
-| `Accent` | `#E8562F` | 快门/强调 | 临时 |
-| `AccentPressed` | `#C44524` | 按下态 | 临时 |
-| `AccentSoft` | `#26E8562F` | 强调容器 | 临时 |
-| `OnAccent` | `#1A0804` | 强调色上的文字 | 临时 |
-| `Error` | `#D98B80` | 错误 | 临时 |
-| `LensGlass` | `#060607` | 镜头玻璃 | 临时 |
-| `LensRing` | `#3D3D42` | 镜头环 | 临时 |
-| `LensBlue` | `#1D2A38` | 镜头玻璃高光 | 临时 |
-| `LensBlueDeep` | `#091018` | 镜头玻璃过渡 | 临时 |
-| `LensCore` | `#050A0E` | 镜头中心 | 临时 |
-| `Flash` | `#E8DFC8` | 闪光灯点 | 临时 |
-| `CameraPanelTop` | `#161619` | 机身上缘 | 临时 |
-| `CameraPanelBottom` | `#0B0B0D` | 机身下缘 | 临时 |
-| `CameraPanelHighlight` | `#18FFFFFF` | 机身内高光/内边框 | 临时 |
-| `ViewfinderTop` | `#071012` | 取景框上缘 | 临时 |
-| `ViewfinderBottom` | `#020405` | 取景框下缘 | 临时 |
-| `ShutterOuter` | `#29292E` | 快门金属外环 | 临时 |
-| `ShutterInner` | `#E8562F` | 快门橙红面 | 临时 |
-| `ShutterInnerPressed` | `#C44524` | 快门按压面 | 临时 |
-| `ShutterHighlight` | `#66FFFFFF` | 快门高光 | 临时 |
+| `Background` | `#F4EFE6` | 页面底色（暖燕麦） | 临时 |
+| `BackgroundElevated` | `#EDE6DA` | 轻微分层 | 临时 |
+| `Surface` | `#FBF7EF` | 纸面/按钮帽 | 临时 |
+| `SurfaceHigh` | `#E7DECD` | 高一级表面 | 临时 |
+| `SurfaceHighest` | `#DED3C1` | 高亮表面 | 临时 |
+| `Outline` | `#C9BEAC` | 边框 | 临时 |
+| `OutlineSoft` | `#DED4C4` | 弱边框 | 临时 |
+| `TextPrimary` | `#26241F` | 主文字（暖墨） | 临时 |
+| `TextSecondary` | `#3F3C34` | 次级文字/机身铭牌 | 临时 |
+| `TextTertiary` | `#6B6458` | 非关键提示 | 临时 |
+| `Accent` | `#D46A4C` | 快门/大色块 | 临时 |
+| `AccentPressed` | `#B9543A` | 按下态 | 临时 |
+| `AccentSoft` | `#26D46A4C` | 强调容器 | 临时 |
+| `AccentText` | `#A94A32` | 奶油底上的强调文字（4.94:1） | 临时 |
+| `OnAccent` | `#1A0804` | 陶土色上的深色文字（如未来需要） | 临时 |
+| `Error` | `#B85F4D` | 错误 | 临时 |
+| `OnError` | `#FFF8EF` | 错误色上的文字 | 临时 |
+| `LensGlass` | `#1A2421` | 镜头玻璃 | 临时 |
+| `LensRing` | `#6E7D6B` | 镜头环 | 临时 |
+| `LensBlue` | `#38514D` | 镜头玻璃高光 | 临时 |
+| `LensBlueDeep` | `#16231F` | 镜头玻璃过渡 | 临时 |
+| `LensCore` | `#0B1210` | 镜头中心 | 临时 |
+| `Flash` | `#E8C56A` | 黄油色闪光灯窗 | 临时 |
+| `CameraPanelTop` | `#B3C0AD` | 机身上缘（灰绿） | 临时 |
+| `CameraPanelBottom` | `#96A790` | 机身下缘 | 临时 |
+| `CameraPanelHighlight` | `#66FFFFFF` | 机身内高光/细边 | 临时 |
+| `ViewfinderTop` | `#1B2523` | 取景框上缘（深松绿） | 临时 |
+| `ViewfinderBottom` | `#0C1211` | 取景框下缘 | 临时 |
+| `ViewfinderInk` | `#C6D0C4` | 取景框内文字/标记 | 临时 |
+| `ShutterOuter` | `#E9DFCF` | 象牙金属外环 | 临时 |
+| `ShutterInner` | `#D46A4C` | 快门陶土面 | 临时 |
+| `ShutterInnerPressed` | `#B9543A` | 快门按压面 | 临时 |
+| `ShutterHighlight` | `#AAFFFFFF` | 快门高光 | 临时 |
 
-**对比度检查（待真机/工具复测）：**
-- `TextPrimary` on `Background`：预计 > 12:1；
-- `TextSecondary` on `Background`：预计 > 7:1；
-- `TextTertiary` on `Background`：仅用于机刻字/非关键提示，需复测是否 ≥ 4.5:1；
-- `OnAccent` on `Accent`：需复测 ≥ 4.5:1。
+**对比度实测（2026-10-17，WCAG 公式）：**
+
+| 前景/背景 | 对比度 |
+|---|---:|
+| `#26241F` on `#F4EFE6` | 13.54:1 |
+| `#3F3C34` on `#F4EFE6` | 9.61:1 |
+| `#6B6458` on `#F4EFE6` | 5.11:1 |
+| `#3F3C34` on `#A9B7A5` | 5.25:1 |
+| `#A94A32` on `#F4EFE6` | 4.94:1 |
+| `#C6D0C4` on `#1B2523` | 9.90:1 |
+
+`#D46A4C` 不作为奶油底上的小字颜色；强调文字用 `AccentText`。`#FFF8EF` on `#D46A4C` 仅 3.34:1，若未来在陶土色上放文字，用深色 `#1A0804`。
 
 ## 2. 间距
 
@@ -67,9 +78,9 @@
 | `xs` | 4dp | 小装饰/缩略图 |
 | `sm` | 8dp | 小控件 |
 | `md` | 12dp | 卡片 |
-| `viewfinder` | 6dp | 取景框（相机取景框不应过度圆角） |
+| `viewfinder` | 6dp | 取景框 |
 | `lg` | 20dp | 大面板块 |
-| `xl` | 28dp | 机身（首页紧凑态与拍摄页共用同一圆角） |
+| `xl` | 28dp | 机身（首页紧凑态与拍摄页共用） |
 | `pill` | 100dp | 胶囊按钮 |
 
 ## 4. 尺寸

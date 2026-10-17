@@ -3,10 +3,10 @@ package com.pocketccd.prototype.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val PocketCcdDarkColors = darkColorScheme(
+private val PocketCcdColorsScheme = lightColorScheme(
     primary = PocketCcdColors.Accent,
     onPrimary = PocketCcdColors.OnAccent,
     primaryContainer = PocketCcdColors.AccentSoft,
@@ -24,7 +24,7 @@ private val PocketCcdDarkColors = darkColorScheme(
 )
 
 private val PocketCcdShapes = Shapes(
-    extraSmall = RoundedCornerShape(PocketCcdRadius.sm),
+    extraSmall = RoundedCornerShape(PocketCcdRadius.xs),
     small = RoundedCornerShape(PocketCcdRadius.sm),
     medium = RoundedCornerShape(PocketCcdRadius.md),
     large = RoundedCornerShape(PocketCcdRadius.lg),
@@ -34,7 +34,7 @@ private val PocketCcdShapes = Shapes(
 @Composable
 fun PocketCcdTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = PocketCcdDarkColors,
+        colorScheme = PocketCcdColorsScheme,
         typography = PocketCcdTypography,
         shapes = PocketCcdShapes,
         content = content,

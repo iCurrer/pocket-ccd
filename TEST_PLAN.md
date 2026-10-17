@@ -143,6 +143,7 @@
 | TC-P1-026 | 运行 `AppStateTest` 覆盖 HOME/CAMERA/GALLERY/RESULT/SETTINGS 转换、非法转换、重复事件、返回 | 12 个测试全部通过；非法转换不改变状态 | 单元 | 是 | `PASS`（2026-10-17，12/12，0 failures） |
 | TC-P1-028 | 检查拍摄页是否符合“机身内取景框/非全屏”静态约束 | 12dp 机身外边距、16dp 取景框内留白、4:3；快门 88dp 触摸区；无 CameraX；无预览截图逻辑 | 静态 | 是 | `PASS`（2026-10-17；布局数值来自代码/令牌，未做视觉截图） |
 | TC-P1-029 | 检查首页→拍摄页的共享元素转场代码路径 | `SharedTransitionLayout` 包裹 `AnimatedContent`；首页机身与拍摄页机身使用同一 key `camera-body`；编译通过 | 静态 | 是 | `PASS`（2026-10-17；运行时连续性未验证） |
+| TC-P1-030 | 计算新色板关键前景/背景对比度 | 主文字≥4.5:1；次级/机身铭牌≥4.5:1；强调文字≥4.5:1；取景框文字≥4.5:1 | 静态 | 是 | `PASS`（2026-10-17 脚本：13.54/9.61/5.11/5.25/4.94/9.90） |
 
 ### 5.3 无障碍与视觉
 
@@ -192,7 +193,7 @@
 | T1-004/T1-006 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
 | T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
-| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `3AC2823DC057A136EA17185961A9D536AB9B93B29EF29AD52BAE99DEF887CD6B`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `8AC1D80CBEE4CB35B5C889C75CAB37B7A090B4FCEE66F8763D30BD395DB1D5F2`（随代码变化，不作为固定指纹） |
 | `aapt dump badging` | package `com.pocketccd.prototype`；compileSdk 37；targetSdk 36；minSdk 29；label `Pocket CCD` |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 设备 | `adb devices` 为空；安装/启动/UI 测试 `BLOCKED` |
@@ -408,6 +409,7 @@ test-evidence/
 | 设计令牌/首页静态检查 | `PASS` | 页面使用令牌；仅 Preview 背景色例外；见 5.6 |
 | 拍摄页静态检查 | `PASS` | 无 CameraX/Camera2；无 CAMERA；机身内取景框；见 `TC-P1-028` |
 | 共享转场静态检查 | `PASS` | 同一 `camera-body` key；`SharedTransitionLayout`；见 `TC-P1-029` |
+| 配色对比度检查 | `PASS` | 关键文字组合均≥4.5:1；见 `TC-P1-030` |
 | Compose UI 测试 | `NOT_RUN` | 工程已存在，但无 AVD/设备 |
 | 真机安装/启动 | `BLOCKED` | 无设备 |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现 |

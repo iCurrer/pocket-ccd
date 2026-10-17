@@ -114,7 +114,7 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Filled.Settings,
                         contentDescription = stringResource(R.string.action_settings),
-                        tint = PocketCcdColors.TextTertiary,
+                        tint = PocketCcdColors.TextSecondary,
                         modifier = Modifier.size(PocketCcdSizes.icon),
                     )
                 }
@@ -137,7 +137,7 @@ fun HomeScreen(
                     Text(
                         text = "CCD",
                         style = PocketCcdType.Brand,
-                        color = PocketCcdColors.Accent,
+                        color = PocketCcdColors.AccentText,
                     )
                 }
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.xxl))
@@ -163,14 +163,14 @@ fun HomeScreen(
                 Text(
                     text = "LOCAL ONLY",
                     style = PocketCcdType.MonoMicro,
-                    color = PocketCcdColors.TextTertiary,
+                    color = PocketCcdColors.TextSecondary,
                     textAlign = TextAlign.Center,
                 )
                 TextButton(
                     onClick = onOpenCamera,
                     contentPadding = PaddingValues(0.dp),
                     colors = ButtonDefaults.textButtonColors(
-                        contentColor = PocketCcdColors.Accent,
+                        contentColor = PocketCcdColors.AccentText,
                     ),
                 ) {
                     Text(text = "OPEN CAMERA", style = PocketCcdType.MonoLabel)
@@ -212,12 +212,12 @@ private fun CompactCameraBody(modifier: Modifier = Modifier) {
             Text(
                 text = "POCKET CCD",
                 style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextTertiary,
+                color = PocketCcdColors.TextSecondary,
             )
             Text(
                 text = "01",
                 style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextTertiary,
+                color = PocketCcdColors.TextSecondary,
             )
         }
 
@@ -312,13 +312,13 @@ private fun PullDownHint() {
         Icon(
             imageVector = Icons.Filled.KeyboardArrowDown,
             contentDescription = null,
-            tint = PocketCcdColors.TextTertiary,
+            tint = PocketCcdColors.TextSecondary,
             modifier = Modifier.size(PocketCcdSizes.hintIcon),
         )
         Text(
             text = "PULL DOWN",
             style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextTertiary,
+            color = PocketCcdColors.TextSecondary,
         )
     }
 }

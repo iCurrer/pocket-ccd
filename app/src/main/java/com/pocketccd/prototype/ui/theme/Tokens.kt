@@ -6,49 +6,52 @@ import androidx.compose.ui.unit.dp
 /**
  * Structural design tokens for the prototype.
  *
- * The palette is deliberately matte and low-chroma: a camera body, a few
- * hairlines, and one orange accent. Avoid adding glows/gradients here unless a
- * physical material needs them.
+ * Palette direction: warm toy-camera materials (oat canvas, dusty sage body,
+ * deep pine viewfinder, terracotta shutter) instead of a high-contrast
+ * black/orange "pro camera" UI. Keep saturation and pure black/white low to
+ * reduce eye strain.
  */
 object PocketCcdColors {
-    val Background = Color(0xFF070708)
-    val BackgroundElevated = Color(0xFF0C0C0E)
-    val Surface = Color(0xFF121214)
-    val SurfaceHigh = Color(0xFF19191C)
-    val SurfaceHighest = Color(0xFF202024)
-    val Outline = Color(0xFF2B2B30)
-    val OutlineSoft = Color(0xFF1E1E22)
+    val Background = Color(0xFFF4EFE6)          // warm oat canvas
+    val BackgroundElevated = Color(0xFFEDE6DA)
+    val Surface = Color(0xFFFBF7EF)             // warm paper / button cap
+    val SurfaceHigh = Color(0xFFE7DECD)
+    val SurfaceHighest = Color(0xFFDED3C1)
+    val Outline = Color(0xFFC9BEAC)
+    val OutlineSoft = Color(0xFFDED4C4)
 
-    val TextPrimary = Color(0xFFE7E2D8)
-    val TextSecondary = Color(0xFF8E887D)
-    val TextTertiary = Color(0xFF5C574F)
+    val TextPrimary = Color(0xFF26241F)         // soft ink, not pure black
+    val TextSecondary = Color(0xFF3F3C34)
+    val TextTertiary = Color(0xFF6B6458)
 
-    val Accent = Color(0xFFE8562F)
-    val AccentPressed = Color(0xFFC44524)
-    val AccentSoft = Color(0x26E8562F)
-    val OnAccent = Color(0xFF1A0804)
+    val Accent = Color(0xFFD46A4C)              // terracotta shutter
+    val AccentPressed = Color(0xFFB9543A)
+    val AccentSoft = Color(0x26D46A4C)
+    val AccentText = Color(0xFFA94A32)          // accessible terracotta text on oat
+    val OnAccent = Color(0xFF1A0804)            // dark text if ever placed on terracotta
 
-    val Error = Color(0xFFD98B80)
-    val OnError = Color(0xFF2A0705)
+    val Error = Color(0xFFB85F4D)
+    val OnError = Color(0xFFFFF8EF)
 
-    val LensGlass = Color(0xFF060607)
-    val LensRing = Color(0xFF3D3D42)
-    val LensHighlight = Color(0x55FFFFFF)
-    val LensBlue = Color(0xFF1D2A38)
-    val LensBlueDeep = Color(0xFF091018)
-    val LensCore = Color(0xFF050A0E)
-    val Flash = Color(0xFFE8DFC8)
+    val LensGlass = Color(0xFF1A2421)
+    val LensRing = Color(0xFF6E7D6B)
+    val LensHighlight = Color(0x66FFFFFF)
+    val LensBlue = Color(0xFF38514D)
+    val LensBlueDeep = Color(0xFF16231F)
+    val LensCore = Color(0xFF0B1210)
+    val Flash = Color(0xFFE8C56A)               // butter-yellow flash window
 
     // Camera body / viewfinder surfaces.
-    val CameraPanelTop = Color(0xFF161619)
-    val CameraPanelBottom = Color(0xFF0B0B0D)
-    val CameraPanelHighlight = Color(0x18FFFFFF)
-    val ViewfinderTop = Color(0xFF071012)
-    val ViewfinderBottom = Color(0xFF020405)
-    val ShutterOuter = Color(0xFF29292E)
-    val ShutterInner = Color(0xFFE8562F)
-    val ShutterInnerPressed = Color(0xFFC44524)
-    val ShutterHighlight = Color(0x66FFFFFF)
+    val CameraPanelTop = Color(0xFFB3C0AD)      // dusty sage, light top plate
+    val CameraPanelBottom = Color(0xFF96A790)   // sage shade
+    val CameraPanelHighlight = Color(0x66FFFFFF)
+    val ViewfinderTop = Color(0xFF1B2523)       // deep pine, not pure black
+    val ViewfinderBottom = Color(0xFF0C1211)
+    val ViewfinderInk = Color(0xFFC6D0C4)       // labels over the dark viewfinder
+    val ShutterOuter = Color(0xFFE9DFCF)        // ivory metal ring
+    val ShutterInner = Color(0xFFD46A4C)
+    val ShutterInnerPressed = Color(0xFFB9543A)
+    val ShutterHighlight = Color(0xAAFFFFFF)
 }
 
 object PocketCcdSpacing {

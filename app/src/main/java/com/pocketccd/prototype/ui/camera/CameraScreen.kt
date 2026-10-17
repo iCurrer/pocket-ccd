@@ -157,7 +157,7 @@ private fun CameraTopBar(
         Text(
             text = "DC-01",
             style = PocketCcdType.MonoLabel,
-            color = PocketCcdColors.TextTertiary,
+            color = PocketCcdColors.TextSecondary,
         )
         val galleryDescription = stringResource(R.string.camera_gallery)
         IconButton(
@@ -227,7 +227,7 @@ private fun Viewfinder() {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val inset = 12.dp.toPx()
             val length = 10.dp.toPx()
-            val color = PocketCcdColors.TextTertiary.copy(alpha = 0.5f)
+            val color = PocketCcdColors.ViewfinderInk.copy(alpha = 0.45f)
             val stroke = 1.dp.toPx()
 
             // Four small corner marks, not a full HUD.
@@ -273,13 +273,13 @@ private fun Viewfinder() {
         Text(
             text = "4:3",
             style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextTertiary,
+            color = PocketCcdColors.ViewfinderInk,
             modifier = Modifier.align(Alignment.TopStart),
         )
         Text(
             text = "PREVIEW",
             style = PocketCcdType.MonoMicro,
-            color = PocketCcdColors.TextTertiary,
+            color = PocketCcdColors.ViewfinderInk,
             modifier = Modifier.align(Alignment.BottomStart),
         )
     }
@@ -314,12 +314,12 @@ private fun Nameplate() {
             Text(
                 text = "DC-01",
                 style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextTertiary,
+                color = PocketCcdColors.TextSecondary,
             )
             Text(
                 text = "DAYLIGHT",
                 style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextTertiary,
+                color = PocketCcdColors.TextSecondary,
             )
         }
     }
@@ -377,7 +377,7 @@ private fun SideControl(
             .border(
                 width = PocketCcdSizes.hairline,
                 color = if (highlighted) {
-                    PocketCcdColors.Accent.copy(alpha = 0.55f)
+                    PocketCcdColors.AccentText.copy(alpha = 0.6f)
                 } else {
                     PocketCcdColors.OutlineSoft
                 },
@@ -396,7 +396,7 @@ private fun SideControl(
 
 @Composable
 private fun FlashIcon(on: Boolean) {
-    val color = if (on) PocketCcdColors.Accent else PocketCcdColors.TextSecondary
+    val color = if (on) PocketCcdColors.AccentText else PocketCcdColors.TextSecondary
     Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
         val path = Path().apply {
             moveTo(size.width * 0.56f, 0f)
@@ -413,7 +413,7 @@ private fun FlashIcon(on: Boolean) {
 
 @Composable
 private fun FlipCameraIcon(front: Boolean) {
-    val color = if (front) PocketCcdColors.Accent else PocketCcdColors.TextSecondary
+    val color = if (front) PocketCcdColors.AccentText else PocketCcdColors.TextSecondary
     Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
         val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
         val inset = 2.dp.toPx()

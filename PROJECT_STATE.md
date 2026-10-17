@@ -64,6 +64,7 @@
 | P-012 | 导航状态机与骨架 | `navigation/`、`ui/AppRoot.kt`；`AppStateTest` 12/12 | `DONE`（逻辑测试通过；UI/旋转待设备） |
 | P-013 | 设计令牌 + 首页静态 UI | `ui/theme/Tokens.kt`、`Type.kt`、`Theme.kt`、`ui/home/HomeScreen.kt`、`docs/design-tokens.md`；构建通过 | `DONE`（视觉/截图/多尺寸待设备） |
 | P-014 | 拍摄页静态 UI + 下拉/展开原型 | `ui/camera/CameraScreen.kt`、`ui/components/CameraShutterButton.kt`、`AppRoot` 转场、首页下拉；构建通过 | `DONE`（T1-007 手势仍 `IN_PROGRESS`；UI/截图待设备） |
+| P-015 | 玩具相机配色研究与实现 | `docs/color-direction.md`；燕麦/灰绿/陶土色板；对比度脚本计算 | `DONE`（真机视觉评审待做） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -145,7 +146,7 @@
 | T1-004/T1-006 构建 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 12s`；42 tasks（16 executed） |
 | T1-004/T1-006 当前 APK | 30,844,690 bytes；SHA-256 `F7943F180D64A30F5B9C62E5828A01470DCEB1A3E71D3B0BC29CA8EF62837574` |
 | T1-007/T1-008 构建 + 单测 | `assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 5s`；42 tasks（8 executed） |
-| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `3AC2823DC057A136EA17185961A9D536AB9B93B29EF29AD52BAE99DEF887CD6B`（随代码变化，不作为固定指纹） |
+| T1-007/T1-008 当前 APK | 30,850,492 bytes；SHA-256 `8AC1D80CBEE4CB35B5C889C75CAB37B7A090B4FCEE66F8763D30BD395DB1D5F2`（随代码变化，不作为固定指纹） |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
@@ -266,6 +267,7 @@
 | R-09 | 主观验收导致返工 | 高 | 进度 | 盲评+指标+评审签字 | “感觉不对”无记录 |
 | R-10 | 过早引入 Camera2/GPU 导致复杂度失控 | 中 | 进度/稳定性 | 决策门槛；先 CameraX/CPU | 无基准就重构 |
 | R-11 | SDK `android-37.0` 与 `android-37.0-2` 重复目录导致后续解析/platform 选择异常 | 中 | 构建环境不稳定 | 在 SDK Manager 中整理；暂记录警告 | 构建报 wrong platform / 重复包 |
+| R-12 | 浅色燕麦/灰绿主题在夜间偏亮，或用户仍觉得不高级 | 中 | 视觉返工 | 先真机看一轮；保留深色主题作为后续选项 | 用户反馈刺眼/太家居 |
 
 ---
 
@@ -317,6 +319,7 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 导航状态机骨架 | 5 个占位页面；`AppStateTest` 12/12；UI/旋转待设备 |
 | 2026-10-17 | 设计令牌 + 首页静态 UI | `docs/design-tokens.md`；`HomeScreen` 可编译；截图/多尺寸待设备 |
 | 2026-10-17 | 拍摄页静态 UI + 下拉/展开原型 | `CameraScreen`/`CameraShutterButton`；机身内 4:3 取景框；88dp 下拉阈值；截图/手势测试待设备 |
+| 2026-10-17 | 玩具相机配色调整 | 燕麦/灰绿/陶土；`docs/color-direction.md`；对比度实测；真机视觉待评 |
 
 ---
 
