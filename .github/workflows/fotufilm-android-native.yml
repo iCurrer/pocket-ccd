@@ -3,6 +3,14 @@ name: Fotufilm Android native POC
 # Phase 0：只产出 FSWP pack + Android arm64 CPU AOT kernels + parity 日志。
 # APK 不在 CI 构建；APK 仍用 Windows 的 Android Studio。
 #
+# 为什么是两个 job：
+#   `fotufilm` CLI 的 `--dump-wasm-pack` 实现位于 main.swift 的 `#if canImport(ImageIO)` 块内，
+#   在 Linux 上整段被替换成 fail("Image I/O requires macOS (ImageIO)")。
+#   上游自己的 CI（.github/workflows/ci.yml @ 2d07c48）也是 runs-on: macos-26。
+#   而 pack 内容是纯参数序列化，与平台无关，所以：
+#     packs job（macOS）→ 产出 .fswp
+#     android-native job（Linux）→ Halide + AOT kernels + parity，消费上面的 .fswp
+#
 # 与上游（DhaliwalX/fotufilm-engine @ 2d07c48）逐项核对过的事实：
 #   - CLI 支持 --list-stocks / --dump-wasm-pack / --stock / --pack-size
 #   - verify-android-aot.sh 依赖 tools/resolve-halide-toolchain.sh，后者**认可 HALIDE_ROOT 环境变量**
@@ -10,8 +18,11 @@ name: Fotufilm Android native POC
 #   - generate_halide_android OUTPUT_DIR [--arm32 | --host]，不传 flag = arm64 Android（正是我们要的）
 #   - 子模块只有 third_party/Halide → github.com/halide/Halide，pin 58868f0c
 #   - 该 pin 的 Halide CMakeLists 写 `Halide_LLVM 21...99`，即 LLVM 22 满足最低要求
+#   - 该 pin 的 cmake/FindHalide_LLVM.cmake 对 WebAssembly 组件要求 find_package(LLD EXACT)
 #   - stocks 通过 SwiftPM .copy("Stocks") 打包，gold200 / portra400 / trix400 均存在
 #   - NDK 28.2.13676358 在 dl.google.com 的 repository2-3.xml 中存在
+#   - fotufilm 可执行目标只依赖 FotufilmCore / FotufilmImaging / FotufilmEditModel，
+#     **不依赖 FotufilmHalide** → macOS 上不需要装 Halide 也能 swift build
 
 on:
   workflow_dispatch:
@@ -35,9 +46,98 @@ env:
   LLVM_VERSION: "22"
   NDK_VERSION: "28.2.13676358"
   FOTUFILM_ROOT: third_party/fotufilm
+  # 交付用的 pack 尺寸
+  PACK_SIZE: "1600x1200"
+  # parity 脚本内部固定请求这个 stock / 尺寸
+  PARITY_STOCK: example-negative-400
+  PARITY_SIZE: "96x64"
 
 jobs:
-  build-native:
+  # ---------------------------------------------------------------------------
+  # pack 生产：唯一需要 ImageIO 的环节，因此放 macOS。
+  # 不用 brew 装 Halide —— fotufilm 目标不依赖 FotufilmHalide，Xcode 自带的 Swift 足够。
+  # ---------------------------------------------------------------------------
+  packs:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Pocket CCD
+        uses: actions/checkout@v4
+
+      - name: Checkout Fotufilm at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FOTUFILM_REPOSITORY }}
+          ref: ${{ env.FOTUFILM_COMMIT }}
+          path: third_party/fotufilm
+          submodules: false
+          fetch-depth: 1
+
+      - name: Verify upstream layout
+        run: |
+          set -euxo pipefail
+          test -f "$FOTUFILM_ROOT/Package.swift"
+          test -d "$FOTUFILM_ROOT/Sources/FotufilmCore/Stocks"
+          test -f "$FOTUFILM_ROOT/Sources/FotufilmCore/Stocks/gold200.json"
+
+      - name: Toolchain
+        run: |
+          set -euxo pipefail
+          xcodebuild -version
+          swift --version
+
+      - name: Build fotufilm CLI
+        working-directory: ${{ env.FOTUFILM_ROOT }}
+        run: |
+          set -euxo pipefail
+          swift build -c release --product fotufilm
+          # 不加 | head，避免 pipe 吞掉非零退出码
+          .build/release/fotufilm --list-stocks > stocks.txt
+          wc -l stocks.txt
+          head -5 stocks.txt
+
+      - name: Dump FSWP packs
+        working-directory: ${{ env.FOTUFILM_ROOT }}
+        env:
+          STOCKS: ${{ inputs.stocks }}
+        run: |
+          set -euxo pipefail
+          # 与上游 verify-android-aot.sh 一致：显式指向 Stocks 源目录，避免依赖 SwiftPM 资源包的布局
+          export FOTUFILM_STOCKS="$PWD/Sources/FotufilmCore/Stocks"
+          OUT="$PWD/packs"
+          mkdir -p "$OUT"
+
+          for stock in $STOCKS; do
+            .build/release/fotufilm \
+              --dump-wasm-pack "$OUT/${stock}__${PACK_SIZE}.fswp" \
+              --stock "$stock" --pack-size "$PACK_SIZE"
+          done
+
+          # parity 脚本会请求这一份；Linux 侧的 shim 靠文件名精确匹配
+          .build/release/fotufilm \
+            --dump-wasm-pack "$OUT/${PARITY_STOCK}__${PARITY_SIZE}.fswp" \
+            --stock "$PARITY_STOCK" --pack-size "$PARITY_SIZE"
+
+          ls -lh "$OUT"
+          test -n "$(ls -A "$OUT")"
+
+      - name: Upload packs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotufilm-packs
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            third_party/fotufilm/packs/*.fswp
+            third_party/fotufilm/stocks.txt
+
+  # ---------------------------------------------------------------------------
+  # 原生产物：Halide + Android arm64 CPU AOT kernels + parity，全部在 Linux。
+  # ---------------------------------------------------------------------------
+  android-native:
+    needs: packs
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -68,6 +168,21 @@ jobs:
           done
           echo "upstream layout OK"
 
+      - name: Download packs from the macOS job
+        uses: actions/download-artifact@v4
+        with:
+          name: fotufilm-packs
+          path: prebuilt-packs
+
+      - name: Check packs
+        run: |
+          set -euxo pipefail
+          ls -lh prebuilt-packs
+          test -s "prebuilt-packs/${PARITY_STOCK}__${PARITY_SIZE}.fswp"
+          for f in prebuilt-packs/*.fswp; do
+            head -c 4 "$f" | grep -q FSWP || { echo "not an FSWP pack: $f" >&2; exit 1; }
+          done
+
       # Halide 源码 + 编译产物约 8–10GB，托管 runner 的 / 只有 ~14GB 空闲。
       - name: Free disk space
         run: |
@@ -86,11 +201,6 @@ jobs:
             libffi-dev libelf-dev libxml2-dev zlib1g-dev \
             libjpeg-dev libpng-dev libtiff-dev liblcms2-dev libheif-dev \
             libopenexr-dev libvulkan-dev pkg-config python3
-
-      - name: Install Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.1"
 
       - name: Install LLVM
         run: |
@@ -134,7 +244,7 @@ jobs:
           test -f "$SDK_ROOT/ndk/${NDK_VERSION}/source.properties"
 
       # restore/save 拆开：Halide 编完立刻落缓存，
-      # 这样后续 Swift / parity 步骤失败也不会丢掉这 30–60 分钟。
+      # 这样后续步骤失败也不会丢掉这 30–60 分钟。
       - name: Restore Halide cache
         id: halide-restore
         uses: actions/cache/restore@v4
@@ -159,9 +269,8 @@ jobs:
           path: third_party/fotufilm/build/halide-linux-install
           key: fotufilm-halide-${{ env.FOTUFILM_COMMIT }}-llvm${{ env.LLVM_VERSION }}-v2
 
-      # 原先这一步是 `echo ... >> $GITHUB_ENV` 后立刻 test "$HALIDE_ROOT"，
-      # 但 GITHUB_ENV 只对**后续**步骤生效，当前 shell 里是空值，
-      # 于是 test 变成 `test -f /include/Halide.h` 必定失败 —— 已改为显式路径。
+      # `echo ... >> $GITHUB_ENV` 只对**后续**步骤生效，当前 shell 里是空值，
+      # 所以先用显式路径校验，再写入 GITHUB_ENV。
       - name: Export Halide root
         run: |
           set -euxo pipefail
@@ -181,37 +290,12 @@ jobs:
           echo "HALIDE_ROOT=$HALIDE_INSTALL" >> "$GITHUB_ENV"
           ls -1 "$HALIDE_INSTALL/lib" | head -20
 
-      - name: Build fotufilm CLI
-        working-directory: ${{ env.FOTUFILM_ROOT }}
-        run: |
-          set -euxo pipefail
-          swift build -c release --product fotufilm
-          # 不加 | head，避免 pipe 吞掉非零退出码
-          .build/release/fotufilm --list-stocks > stocks.txt
-          wc -l stocks.txt
-          head -5 stocks.txt
-
-      - name: Generate FSWP packs
-        working-directory: ${{ env.FOTUFILM_ROOT }}
-        env:
-          STOCKS: ${{ inputs.stocks }}
-        run: |
-          set -euxo pipefail
-          mkdir -p artifacts/film
-          for stock in $STOCKS; do
-            .build/release/fotufilm \
-              --dump-wasm-pack "artifacts/film/${stock}.fswp" \
-              --stock "$stock" --pack-size 1600x1200
-          done
-          ls -lh artifacts/film
-          test -n "$(ls -A artifacts/film)"
-
       - name: Build Android CPU AOT kernels
         working-directory: ${{ env.FOTUFILM_ROOT }}
         run: |
           set -euxo pipefail
           mkdir -p build/android-kernels
-          clang++ -std=c++17 -O2 \
+          "${CXX:-clang++}" -std=c++17 -O2 \
             -I"$HALIDE_ROOT/include" \
             -ISources/FotufilmHalide/include \
             tools/generate_halide_android.cpp \
@@ -223,24 +307,28 @@ jobs:
           ls -lh build/android-kernels
           test -n "$(ls -A build/android-kernels)"
 
+      # 上游脚本会调用 CLI 生成 example.fswp，而该子命令在 Linux 上是 fail()。
+      # shim 把请求解析到 macOS job 产出的同名 pack —— pack 是纯参数序列化，跨平台一致。
       - name: Run upstream Android AOT parity
         working-directory: ${{ env.FOTUFILM_ROOT }}
         env:
-          # 复用上一步的二进制，避免 verify 脚本再跑一次 `swift run`
-          FOTUFILM_PARITY_CLI: .build/release/fotufilm
+          FOTUFILM_PARITY_CLI: ${{ github.workspace }}/.github/scripts/fotufilm-pack-shim.sh
+          FOTUFILM_PACK_DIR: ${{ github.workspace }}/prebuilt-packs
         run: |
           set -o pipefail
+          chmod +x "$FOTUFILM_PARITY_CLI"
           bash tools/verify-android-aot.sh 2>&1 | tee build/android-aot-parity.log
 
       - name: Collect artifacts
         if: always()
         run: |
           set -x
-          mkdir -p artifacts/aot
+          mkdir -p artifacts/aot artifacts/film
           cp -R "$FOTUFILM_ROOT"/build/android-kernels/* artifacts/aot/ || true
           cp "$FOTUFILM_ROOT"/build/android-aot-parity.log artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.fswp artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.bin artifacts/ || true
+          cp prebuilt-packs/*.fswp artifacts/film/ || true
           ls -lR artifacts | head -40
 
       # always()：即使 parity 断言失败，也要把已生成的 pack / kernels 带出来，
@@ -253,11 +341,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           path: |
-            third_party/fotufilm/artifacts/film/*.fswp
-            third_party/fotufilm/stocks.txt
+            artifacts/film/*.fswp
             artifacts/aot/**
             artifacts/android-aot-parity.log
-            artifacts/*.fswp
             artifacts/*.bin
 
       - name: Summary
@@ -267,6 +353,7 @@ jobs:
             echo "## Fotufilm Android Phase 0"
             echo ""
             echo "- stocks: \`${{ inputs.stocks }}\`"
+            echo "- packs: \`packs\` job 产出（macOS，ImageIO 只在那里可用）"
             echo "- Halide cache hit: \`${{ steps.halide-restore.outputs.cache-hit }}\`"
             echo "- parity: 见 job 日志中的 \`Run upstream Android AOT parity\`"
             echo ""

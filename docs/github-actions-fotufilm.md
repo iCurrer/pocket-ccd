@@ -189,6 +189,83 @@ apt 的 LLVM 22 在 `LLVM_TARGETS_TO_BUILD` 里带 `WebAssembly`，于是 Halide
 
 ---
 
+## 5.3 2026-10-18 第二次 run（run 39141045564）：LLD 修好了，但 pack 生成是 macOS-only
+
+### 这一轮解决了什么
+
+第 11 步 `Build Halide` **成功**——`liblld-22-dev` 是对的。日志实证：
+
+```
+-- Found Halide_LLVM: /usr/lib/llvm-22/cmake/LLVMConfig.cmake
+   (found suitable version "22.1.8", required range is "21...99")
+   found components: WebAssembly X86 AArch64 ARM Hexagon NVPTX PowerPC RISCV
+[1978/1978] Linking CXX shared module src/autoschedulers/anderson2021/libautoschedule_anderson2021.so
+```
+
+`WebAssembly` 组件已经在 found 列表里，`libHalide.so.22.0.0` 已链出，第 13 步 `Export Halide root` 也过了。
+Halide 编译只用 **3.7 分钟**（4 核、`-DWITH_TESTS=OFF` 等全关），远低于原估的 30–60 分钟；
+`Build fotufilm CLI` 2.1 分钟。整条 Linux 链只剩最后两步没验证过。
+
+### 新的失败：`--dump-wasm-pack` 在 Linux 上是硬 fail
+
+```
++ .build/release/fotufilm --dump-wasm-pack artifacts/film/gold200.fswp --stock gold200 --pack-size 1600x1200
+Image I/O requires macOS (ImageIO). The FotufilmCore library itself is portable.
+Error: Process completed with exit code 1.
+```
+
+**根因（读 `Sources/fotufilm/main.swift` 得出）：**
+
+| 行 | 内容 |
+|---|---|
+| 757 | `#if canImport(ImageIO)` —— 从这里开始，整个 main 流程被门控 |
+| 1158 | `if let packPath = flags["--dump-wasm-pack"] { ... }` —— pack 导出**在这个门控内** |
+| 1485–1486 | `#else` / `fail("Image I/O requires macOS (ImageIO)...")` |
+
+也就是说，Linux 上编译出的 `fotufilm` 二进制里，`--dump-wasm-pack` 的实现根本没被编进去，
+程序一进来就走到那句 `fail`。这也解释了为什么 `--list-stocks` 能正常工作——它在第 757 行之前就 `exit(0)` 了。
+
+**这不是我们配置错了。** 上游自己的 CI（`.github/workflows/ci.yml @ 2d07c48`）是 `runs-on: macos-26`，
+从来没在 Linux 上跑过 CLI。`tools/verify-android-aot.sh` 里也调用了同一个 `--dump-wasm-pack`，
+所以**它同样只能在 macOS 上跑**。
+
+### 方案：按能力拆成两个 job
+
+pack 的内容是纯参数序列化（`FSWP` 头 + 配置 floats + 曝光/纸质 LUT + 尺寸阶梯），与平台无关，
+所以 macOS 产出的 pack 与 Linux 会产出的 pack 是同一串字节。据此：
+
+```
+packs job（macos-14）
+  swift build -c release --product fotufilm   ← 不依赖 FotufilmHalide，不用 brew install halide
+  --dump-wasm-pack  <stock>__1600x1200.fswp   × 3
+  --dump-wasm-pack  example-negative-400__96x64.fswp   ← 给 parity 脚本用
+  → artifact: fotufilm-packs
+
+android-native job（ubuntu-24.04, needs: packs）
+  Halide（缓存命中，跳过编译）
+  generate_halide_android → arm64 CPU kernels
+  verify-android-aot.sh，FOTUFILM_PARITY_CLI 指向 .github/scripts/fotufilm-pack-shim.sh
+```
+
+**关于 shim**（`.github/scripts/fotufilm-pack-shim.sh`）：
+
+`verify-android-aot.sh` 硬编码要调 CLI 生成 `example.fswp`。shim 解析
+`--dump-wasm-pack <out> --stock <id> --pack-size <WxH>`，把 `$FOTUFILM_PACK_DIR/<stock>__<WxH>.fswp`
+复制到 `<out>`，并在日志里打印来源。它**不伪造任何数据**，只是把 macOS 真实 CLI 的输出搬过来。
+parity 真正要验的 AOT vs JIT 对比仍然在 Linux 本地跑。
+
+文件命名必须精确匹配 `<stock>__<WxH>.fswp`，两边常量都在 workflow 的 `env:` 里
+（`PARITY_STOCK` / `PARITY_SIZE`），改一处即可。
+
+### 仍然没有解决的部分
+
+- **`libfotufilm_android.so` 依然不存在**——那是 FOT-004 的 JNI 工作，不在本 workflow 范围；
+- 磁盘：Halide 缓存在本次已保存（key `...-v2`），后续 run 会跳过编译，但缓存约几百 MB；
+- macOS job 时长还没测过（Swift 全量 release 编译 + 4 次 pack 导出）；
+- pack 只按 `1600x1200`（约 1.9MP）导出，**不代表 12MP 输出**。
+
+---
+
 ## 6. 常见失败
 
 | 失败点 | 原因 | 处理 |
@@ -201,6 +278,7 @@ apt 的 LLVM 22 在 `LLVM_TARGETS_TO_BUILD` 里带 `WebAssembly`，于是 Halide
 | cmake 报 LLVM 未启用 RTTI | apt 的 LLVM 构建可能与 Halide 的 RTTI 需求不符 | 换 `apt.llvm.org` 的对应版本，或改用 Locally-built LLVM |
 | `sdkmanager` 找不到 | runner 没有 cmdline-tools | 先安装 Android command-line tools |
 | AOT parity 失败 | NDK/Halide 目标不匹配 | 固定 NDK 版本；检查 `ANDROID_NDK_ROOT` |
+| `Image I/O requires macOS (ImageIO)` | `--dump-wasm-pack` 与 `verify-android-aot.sh` 只在 macOS 可用 | 由 `packs` job 在 macOS 产 pack，Linux 侧用 shim 消费。见 §5.3 |
 | cache 太大/超时 | Halide 构建缓存 | 删除 cache 或缩短 cache 路径 |
 
 ---
