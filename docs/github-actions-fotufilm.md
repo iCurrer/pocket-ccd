@@ -334,6 +334,66 @@ macOS 那段占了 1/3 的墙钟，如果后面要频繁迭代 Linux 侧，
 
 ---
 
+## 5.5 2026-10-19 pack 帧尺寸改为可配置，默认 12MP
+
+FOT-004 的验收是"真机处理 1 张 12MP"，但原来的 `PACK_SIZE` 是写死的 `1600x1200`，
+`workflow_dispatch` 覆盖不了。改成输入项，默认 `4000x3000`（4:3 的 12MP）。
+
+### 为什么不能"用小 pack 外推"
+
+`Sources/fotufilm/main.swift` 的 `packFrameSize()` 上面有一段注释（约 1123 行）：
+
+> Every spatial parameter in a pack is a diffusion length in millimetres multiplied by this
+> frame's pixels-per-mm, so the size is part of the export, not a detail of the caller.
+> A frame of another size needs another pack.
+
+即：扩散半径、mottle 相关长度、金字塔抽稀步长等**空间参数都按该帧的像素/毫米烘焙过了**。
+所以
+
+- 12MP 不能拿 1.9MP 的 pack 缩放得到，必须重新导出；
+- **实际采集分辨率必须与 pack 帧尺寸完全相等**。若设备原生输出 4032×3024，
+  要先缩放到 4000×3000 再送进引擎，而不是拿 4000×3000 的 pack 去处理 4032×3024；
+- 1.9MP 下的耗时和峰值内存不能外推到 12MP——工作集和半径都在放大。
+
+这条契约已写入 `DECISION_LOG.md` D-037。
+
+### 怎么用
+
+```text
+Actions → Fotufilm Android native POC → Run workflow
+  stocks:    gold200 portra400 trix400
+  pack_size: 4000x3000
+```
+
+产物文件名会跟着变：`gold200__4000x3000.fswp`。parity 用的 `example-negative-400__96x64.fswp`
+不受影响（`PARITY_SIZE` 是独立的 env）。
+
+### 防呆
+
+- `PACK_SIZE` 从输入求值，带 `'4000x3000'` 字面量兜底，非 dispatch 触发不会产出 `<stock>__.fswp`；
+- `Dump FSWP packs` 第一步断言 `^[0-9]+x[0-9]+$`，格式不对在 macOS 编译前就失败，
+  不会等 4 分钟才发现文件名是坏的。
+
+### 本轮状态（run 39145196597）
+
+`packs` job 成功，`Dump FSWP packs` 与 `Upload packs` 均 passed。artifact `fotufilm-packs` 3.7 MB。
+
+下载后逐个核对头部（小端 `FSWP` + uint32 version + int32 width/height）：
+
+| 文件 | magic | version | 尺寸 | 像素 | 大小 |
+|---|---|---|---|---|---|
+| `gold200__4000x3000.fswp` | FSWP | 2 | 4000×3000 | 12,000,000 | 1.83 MB |
+| `portra400__4000x3000.fswp` | FSWP | 2 | 4000×3000 | 12,000,000 | 1.84 MB |
+| `trix400__4000x3000.fswp` | FSWP | 2 | 4000×3000 | 12,000,000 | 1.84 MB |
+| `example-negative-400__96x64.fswp` | FSWP | 2 | 96×64 | 6,144 | 1.83 MB |
+
+`[F]` 正好 12 MP。也印证了 pack 体积主要由 LUT 决定，1.9 MP 与 12 MP 的体积几乎相同（1.83 vs 1.84 MB）。
+
+> 注：头部字段是**小端**。用大端读会得到 `version=33554432`、`width=1610612736` 这类 `value << 24` 的怪数字——那是字节序错了，不是文件坏了。
+
+
+---
+
 ## 6. 常见失败
 
 | 失败点 | 原因 | 处理 |
