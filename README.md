@@ -47,7 +47,8 @@
 | [`docs/red-camera-research.md`](docs/red-camera-research.md) | 红色玩具相机调研、降刺激选色、系统栏/转场修正 | 打磨红色主题时 |
 | [`docs/fotufilm-android-port-plan.md`](docs/fotufilm-android-port-plan.md) | Fotufilm 原生 Android 移植方案、阶段、任务、风险 | 胶卷引擎/相机链路 |
 | [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md) | Fotufilm/第三方/CC BY-SA/商标合规清单 | 引入胶片数据前 |
-| [`docs/fotufilm-windows-build.md`](docs/fotufilm-windows-build.md) | Windows-only 的 WSL2/CI 构建步骤 | 开始 FOT-002 前 |
+| [`docs/fotufilm-windows-build.md`](docs/fotufilm-windows-build.md) | Windows-only 的 WSL2 构建步骤 | 本地备选 |
+| [`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md) | GitHub Actions 构建/触发/artifact | 开始 FOT-002 主路径 |
 
 ---
 
@@ -108,7 +109,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 1. 阅读 `SPEC_REVIEW.md` 第 7 节，确认应用 ID、minSdk、目标设备、原图保留策略；
 2. T1-002/T1-003/T1-004/T1-005/T1-006/T1-008/T1-009/T1-010/T1-011 已完成；T1-007 仍需速度阈值与手势测试；
 3. 下一步 T1-012 状态矩阵 / T1-013 自适应；准备 AVD/真机（T1-015）做 UI/截图/多尺寸验收；
-4. 新方向 M8：Fotufilm Android 原生移植，先做 FOT-002..004 Phase 0；Windows 上先装 WSL2 Ubuntu（或走 GitHub Actions Linux），见 `docs/fotufilm-windows-build.md`；
+4. 新方向 M8：Fotufilm Android 原生移植，主路径走 GitHub Actions Linux，见 `docs/github-actions-fotufilm.md`；先做 FOT-002/003 Phase 0；
 5. 执行 `TEST_PLAN.md` 的 `TC-P1-*` 并记录证据。
 
 ---

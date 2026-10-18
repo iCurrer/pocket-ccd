@@ -679,18 +679,19 @@
 
 ---
 
-## D-035 — Windows-only 环境用 WSL2/CI Linux 做 Fotufilm 构建机
+## D-035 — Windows-only 环境优先用 GitHub Actions 做 Fotufilm 构建机
 
 - **日期：** 2026-10-18
-- **状态：** PROPOSED（WSL 未安装）
+- **状态：** ACCEPTED（workflow 已建，未实际跑通）
 - **类型：** 构建环境 / 工程
-- **背景：** 用户只有 Windows；Fotufilm 上游没有 Windows 构建支持，构建链是 Swift + Halide + bash + Android NDK。
+- **背景：** 用户只有 Windows；Fotufilm 上游没有 Windows 构建支持，构建链是 Swift + Halide + bash + Android NDK。WSL2 安装过程中遇到 Ubuntu 首次启动/初始化卡住。
 - **决定：**
   1. 不在原生 Windows 上硬编 Fotufilm；
-  2. 优先安装 WSL2 Ubuntu，在 WSL 内装 Swift/Halide/Linux NDK，产出 `.so` + `.fswp`；
-  3. Android Studio/Gradle/adb 仍留在 Windows；
-  4. 如果 WSL 被策略禁止，用 GitHub Actions `ubuntu-latest` 构建并下载 artifact；
-  5. 详细步骤见 `docs/fotufilm-windows-build.md`。
-- **后果：** 本机需要 WSL2（管理员/重启）或 GitHub Actions；构建机不产出 Android UI，只产出 native 产物。
-- **验证：** FOT-002；`wsl --status` + `swift --version` + `verify-android-aot.sh`。
-- **复审触发：** WSL 不可用；CI 构建时间不可接受；上游提供 Android 预编译包。
+  2. 主路径改为 **GitHub Actions Linux**：`.github/workflows/fotufilm-android-native.yml`；
+  3. CI 产出 `.fswp` packs + Android arm64 CPU AOT kernels + parity 日志；
+  4. APK 和 Android Studio/Gradle 仍留在 Windows；
+  5. WSL2 仅作为本地备选，见 `docs/fotufilm-windows-build.md`；
+  6. CI 详细说明见 `docs/github-actions-fotufilm.md`。
+- **后果：** 不需要本机 Linux；但需要把仓库推到 GitHub 并启用 Actions。首次 Halide 构建可能 45–90 分钟，后续走 cache。
+- **验证：** FOT-002/FOT-003；workflow 首次 run + artifact 下载。
+- **复审触发：** CI 构建时间不可接受；artifact 不完整；上游提供 Android 预编译包。

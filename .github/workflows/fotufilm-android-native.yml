@@ -1,0 +1,152 @@
+name: Fotufilm Android native POC
+
+on:
+  workflow_dispatch:
+    inputs:
+      stocks:
+        description: "Space-separated stock ids"
+        required: true
+        default: "gold200 portra400 trix400"
+
+permissions:
+  contents: read
+
+env:
+  FOTUFILM_REPOSITORY: DhaliwalX/fotufilm-engine
+  FOTUFILM_COMMIT: 2d07c48c14199be24972db760a7631dc95f74012
+  LLVM_VERSION: "22"
+  NDK_VERSION: "28.2.13676358"
+
+jobs:
+  build-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout Pocket CCD
+        uses: actions/checkout@v4
+
+      - name: Checkout Fotufilm at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FOTUFILM_REPOSITORY }}
+          ref: ${{ env.FOTUFILM_COMMIT }}
+          path: third_party/fotufilm
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git curl unzip \
+            libxml2-dev zlib1g-dev libjpeg-dev libpng-dev libtiff-dev \
+            liblcms2-dev libheif-dev libopenexr-dev libvulkan-dev \
+            pkg-config python3
+
+      - name: Install Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Install LLVM 22
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${LLVM_VERSION}
+          sudo apt-get install -y llvm-${LLVM_VERSION}-dev clang-${LLVM_VERSION} lld-${LLVM_VERSION}
+          echo "LLVM_ROOT=/usr/lib/llvm-${LLVM_VERSION}" >> "$GITHUB_ENV"
+          /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config --version
+
+      - name: Install Android NDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          if [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          test -f "$SDK_ROOT/ndk/${NDK_VERSION}/source.properties"
+
+      - name: Cache Halide Linux build
+        id: halide-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/fotufilm/build/halide-linux-install
+          key: fotufilm-halide-linux-${{ env.FOTUFILM_COMMIT }}-llvm-${{ env.LLVM_VERSION }}-v1
+
+      - name: Build Halide (first run, ~30+ min)
+        if: steps.halide-cache.outputs.cache-hit != 'true'
+        working-directory: third_party/fotufilm
+        run: |
+          export LLVM_ROOT="/usr/lib/llvm-${LLVM_VERSION}"
+          export FOTUFILM_BUILD_JOBS="$(nproc)"
+          bash tools/build-halide-linux.sh
+
+      - name: Export Halide root
+        run: |
+          echo "HALIDE_ROOT=$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install" >> "$GITHUB_ENV"
+          test -f "$HALIDE_ROOT/include/Halide.h"
+
+      - name: Build fotufilm CLI
+        working-directory: third_party/fotufilm
+        run: |
+          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
+          swift build -c release --product fotufilm
+          .build/release/fotufilm --list-stocks | head -20
+
+      - name: Generate FSWP packs
+        working-directory: third_party/fotufilm
+        env:
+          STOCKS: ${{ inputs.stocks }}
+        run: |
+          mkdir -p artifacts/film
+          for stock in $STOCKS; do
+            .build/release/fotufilm \
+              --dump-wasm-pack "artifacts/film/${stock}.fswp" \
+              --stock "$stock" --pack-size 1600x1200
+          done
+          ls -lh artifacts/film
+
+      - name: Build Android CPU AOT kernels
+        working-directory: third_party/fotufilm
+        run: |
+          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
+          mkdir -p build/android-kernels
+          clang++ -std=c++17 -O2 \
+            -I"$HALIDE_ROOT/include" \
+            -ISources/FotufilmHalide/include \
+            tools/generate_halide_android.cpp \
+            -L"$HALIDE_ROOT/lib" -lHalide \
+            -Wl,-rpath,"$HALIDE_ROOT/lib" \
+            -o build/generate-android
+          ./build/generate-android build/android-kernels
+          ls -lh build/android-kernels
+
+      - name: Run upstream Android AOT parity
+        working-directory: third_party/fotufilm
+        run: |
+          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
+          export ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}"
+          bash tools/verify-android-aot.sh 2>&1 | tee build/android-aot-parity.log
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/aot
+          cp -R third_party/fotufilm/build/android-kernels/* artifacts/aot/ || true
+          cp third_party/fotufilm/build/android-aot-parity.log artifacts/ || true
+          cp third_party/fotufilm/build/android-parity/*.fswp artifacts/ || true
+
+      - name: Upload packs + AOT kernels + parity log
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotufilm-android-poc
+          if-no-files-found: warn
+          path: |
+            third_party/fotufilm/artifacts/film/*.fswp
+            artifacts/aot/**
+            artifacts/android-aot-parity.log
+            artifacts/*.fswp

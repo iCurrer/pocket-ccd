@@ -573,12 +573,12 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 **路径：** 离线 FSWP pack + C++ AOT + JNI；不在 Android 上跑完整 Swift App。
 **方案文档：** [`docs/fotufilm-android-port-plan.md`](docs/fotufilm-android-port-plan.md)
 **License 清单：** [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md)
-**当前状态：** `BLOCKED` — 缺 macOS/Linux 构建机（Swift + Halide + NDK）和 Android 真机；FOT-001 可先做。
+**当前状态：** `BLOCKED` — GitHub Actions workflow 已建，但仓库还没有 GitHub remote、尚未首次 run；FOT-001 已完成。
 
 | ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
 |---|---|---|---|---|---|---|---|
 | FOT-001 | License/来源清单 | 无 | `docs/fotufilm-license-inventory.md` | 代码/profile/第三方/商标清单 | 每项有 license/义务/处置 | 人工/法务复核 | `DONE` |
-| FOT-002 | WSL2/CI Linux 构建机 + 工具链 | FOT-001 | WSL2 Ubuntu 或 GitHub Actions | Swift + Halide + NDK 环境记录 | `swift build`、AOT 生成可运行 | 命令记录 | `BLOCKED`（当前 Windows 未安装 WSL） |
+| FOT-002 | GitHub Actions Linux 构建 + 工具链 | FOT-001 | `.github/workflows/fotufilm-android-native.yml` | Swift + Halide + NDK + workflow | workflow 首次 run 成功；artifact 可下载 | Actions run + artifact | `BLOCKED`（workflow 已建；仓库无 GitHub remote / 未 run） |
 | FOT-003 | 3 个代表性 FSWP pack | FOT-002 | Gold200/Portra400/TriX400 | `.fswp` ×3 | AOT parity 工具可读取 | `--dump-wasm-pack` | `TODO` |
 | FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so` | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `TODO` |
 | FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `camera/film/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `TODO` |

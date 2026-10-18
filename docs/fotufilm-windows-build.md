@@ -213,6 +213,8 @@ cp ~/fotufilm-packs/*.fswp "/mnt/d/Android/pocket ccd/app/src/main/assets/film/"
 
 ## 7. 没有 WSL 时的替代：GitHub Actions Linux 构建
 
+详见 [`github-actions-fotufilm.md`](github-actions-fotufilm.md)；workflow 已放在 `.github/workflows/fotufilm-android-native.yml`。
+
 如果本机不能装 WSL，用 Linux CI 当构建机：
 
 ```yaml
