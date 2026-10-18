@@ -24,6 +24,11 @@ on:
 permissions:
   contents: read
 
+# 一次 run 要 45–90 分钟，重复触发只会浪费 runner 配额。
+concurrency:
+  group: fotufilm-android-poc-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FOTUFILM_REPOSITORY: DhaliwalX/fotufilm-engine
   FOTUFILM_COMMIT: 2d07c48c14199be24972db760a7631dc95f74012
