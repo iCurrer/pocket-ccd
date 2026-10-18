@@ -266,6 +266,74 @@ parity 真正要验的 AOT vs JIT 对比仍然在 Linux 本地跑。
 
 ---
 
+## 5.4 2026-10-18 第三次 run（run 39143317856）：全绿
+
+```
+status: completed   conclusion: success   墙钟 12.0 min
+packs           3.6 min   （macos-26）
+android-native  8.2 min   （ubuntu-24.04，Halide 命中缓存）
+```
+
+### 产物（artifact `fotufilm-android-poc`，10.5 MB）
+
+```
+film/gold200__1600x1200.fswp                      1.83 MB   FSWP v2 1600x1200
+film/portra400__1600x1200.fswp                    1.84 MB   FSWP v2 1600x1200
+film/trix400__1600x1200.fswp                      1.74 MB   FSWP v2 1600x1200
+film/example-negative-400__96x64.fswp             1.83 MB   FSWP v2 96x64
+
+aot/fotufilm_halide_android_develop.a             2.26 MB   ← arm64 CPU AOT
+aot/fotufilm_halide_android_print.a                86 KB
+aot/fotufilm_halide_android_print_monochrome.a     84 KB
+aot/fotufilm_halide_android_print_reversal.a       59 KB
+aot/fotufilm_halide_android_print_reversal_monochrome.a  57 KB
+aot/*.h                                          5 份头文件
+
+android-aot-parity.log
+aot.bin / jit.bin                                 各 4.5 MB（parity 中间产物）
+```
+
+**parity 日志原文：**
+
+```
+Wrote Android kernels to "build/android-parity/kernels"
+shim: example-negative-400 @ 96x64 <- .../prebuilt-packs/example-negative-400__96x64.fswp (1833260 bytes)
+Android AOT / CPU reference: 64 cases pass, including RGB/donor exposure,
+gate bypass, tile origins, compact output/guards and invalid-field/region rejection.
+```
+
+上游脚本里那 64 组断言（RGB/donor 曝光、gate bypass、tile origin、guard、非法 region 拒绝）
+全部通过，误差阈值 `< 1e-4`。**这是 Phase 0 想证明的东西，现在证明了。**
+
+### 本轮修掉的两个问题
+
+| 问题 | 现象 | 原因 | 修法 |
+|---|---|---|---|
+| macOS 版本太低 | `MTLCompileOptions has no member 'mathMode'` + 一批 type-check 超时 | `macos-14` 自带 Xcode 15.4 / Swift 5.10；`mathMode` 要 macOS 15 SDK | 换 `macos-26`（与上游 ci.yml 一致），并在 Toolchain 步骤解析 Xcode 主版本，`< 16` 时 3 秒内失败 |
+| artifact 多一层目录 | `test -s prebuilt-packs/xxx.fswp` 失败 | `upload-artifact` 对多路径上传按**最小公共父目录**重组，`packs/*.fswp` + `stocks.txt` 导致根变成 `packs/` | 上传改为单目录 `third_party/fotufilm/packs/`；Linux 侧用 `find` 定位并 export `FOTUFILM_PACK_DIR`，与层级解耦 |
+
+### 耗时基准（重要）
+
+| 阶段 | 首次（无缓存） | 有缓存 |
+|---|---|---|
+| Halide 编译 | 3.7 min | 0（`cache-hit`） |
+| macOS `swift build -c release --product fotufilm` | 3.2 min | 3.2 min（未缓存） |
+| Android AOT kernels | 1.3 min | 1.3 min |
+| parity（含 AOT/JIT 各跑 64 例） | 5.1 min | 5.1 min |
+| **合计墙钟** | ~12 min | ~12 min |
+
+macOS 那段占了 1/3 的墙钟，如果后面要频繁迭代 Linux 侧，
+值得给 `packs` job 加一层 `actions/cache`（key 用 commit + stocks 输入）。
+
+### 现在还没有的
+
+- **`libfotufilm_android.so`**：本次完全不涉及。FOT-004 才写 JNI、用 NDK 链接
+  上面这 5 个 `.a`、产出 `.so`，再拷回 Windows 工程给 Android Studio 打包 APK；
+- pack 是 `1600x1200`（约 1.9 MP），**不能当 12 MP 的画质或性能结论**；
+- 没有在真机上跑过产物——AOT `.a` 是否能在 arm64 Android 上正常加载，要等 FOT-004 的 `.so` + 一台设备。
+
+---
+
 ## 6. 常见失败
 
 | 失败点 | 原因 | 处理 |
@@ -279,6 +347,8 @@ parity 真正要验的 AOT vs JIT 对比仍然在 Linux 本地跑。
 | `sdkmanager` 找不到 | runner 没有 cmdline-tools | 先安装 Android command-line tools |
 | AOT parity 失败 | NDK/Halide 目标不匹配 | 固定 NDK 版本；检查 `ANDROID_NDK_ROOT` |
 | `Image I/O requires macOS (ImageIO)` | `--dump-wasm-pack` 与 `verify-android-aot.sh` 只在 macOS 可用 | 由 `packs` job 在 macOS 产 pack，Linux 侧用 shim 消费。见 §5.3 |
+| macOS 报 `MTLCompileOptions has no member 'mathMode'` / 大量 type-check 超时 | runner 的 Xcode 太旧（15.4 = Swift 5.10），`mathMode` 要 macOS 15 SDK | 用 `macos-26`（或 Xcode 16+）。见 §5.4 |
+| `test -s prebuilt-packs/xxx.fswp` 失败 | `upload-artifact` 多路径上传时按最小公共父目录重组，多出一层 `packs/` | 上传单目录；消费端用 `find` 定位，别写死层级 |
 | cache 太大/超时 | Halide 构建缓存 | 删除 cache 或缩短 cache 路径 |
 
 ---
