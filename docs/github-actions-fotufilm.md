@@ -134,12 +134,58 @@ app/src/main/jniLibs/arm64-v8a/...
 - stocks 经 SwiftPM `.copy("Stocks")` 打包，`gold200.json` / `portra400.json` / `trix400.json` 均存在；
 - `NDK 28.2.13676358` 在 `dl.google.com/android/repository/repository2-3.xml` 中存在。
 
-**仍未验证的（必须靠首次 run 才知道）：**
+**仍未验证的（必须靠 run 才知道）：**
 
 - apt.llvm.org 上 LLVM 22 的 Ubuntu 24.04 包是否带 RTTI（Halide 的 `Halide_feature(... DEPENDS LLVM_ENABLE_RTTI)`）；
-- `swift-actions/setup-swift@v2` 的 6.1 在 `ubuntu-24.04` 上是否可用；
 - `swift build` 本仓库（2500+ 文件）在 runner 上的耗时；
 - 4 核 runner 上 Halide 全量编译是否会撞 360 分钟上限。
+
+（`setup-swift` 的 6.1 可用性已在首次 run 中被证实，见 §5.2。）
+
+---
+
+## 5.2 2026-10-18 首次 run 结果（run 39140385613，失败）
+
+前 10 步全绿，卡在第 11 步 `Build Halide` 的 **CMake configure**，耗时约 3 分钟。
+
+```
+-- Could NOT find LLD (missing: LLD_DIR)
+CMake Error at .../FindPackageHandleStandardArgs.cmake:233 (message):
+  Could NOT find Halide_LLVM (missing: WebAssembly) (found suitable version
+  "22.1.8", required range is "21...99")
+
+      Reason given by package: WebAssembly was not found because liblld is missing.
+      Did you `apt install liblld-dev` or `brew install lld`?
+Call Stack:
+  cmake/FindHalide_LLVM.cmake:109 (find_package_handle_standard_args)
+  CMakeLists.txt:194 (find_package)
+```
+
+**根因**（`cmake/FindHalide_LLVM.cmake:60-77`，pin `58868f0c`）：
+
+apt 的 LLVM 22 在 `LLVM_TARGETS_TO_BUILD` 里带 `WebAssembly`，于是 Halide 会对该组件执行
+`find_package(LLD "${Halide_LLVM_VERSION}" EXACT)`；找不到就把 `Halide_LLVM_WebAssembly_FOUND` 置 0，
+最终以 `(missing: WebAssembly)` 整体失败。
+
+**装错的原因是包名**：`lld-22` 只提供可执行文件 `/usr/lib/llvm-22/bin/lld`；
+提供 CMake 配置 `lib/cmake/lld/LLDConfig.cmake` 的是 **`liblld-22-dev`**。
+`llvm.sh` 和 `build-halide-linux.sh` 的报错文案都写作 `liblld-dev` / `lld-devel`，容易误导。
+
+**修正：**
+
+- LLVM 步骤补 `liblld-${LLVM_VERSION}-dev`（已在 `apt.llvm.org/noble` 的 22 源中确认存在）；
+- 新增 3 秒内失败的预检：`LLVMConfig.cmake` / `ClangConfig.cmake` / `LLDConfig.cmake` 三个文件都必须在，
+  避免每次都要等 3 分钟的 configure 才发现缺包；
+- `Export Halide root` 不再硬性要求 `libHalide.so`：Debian 的 LLVM 开了 `LLVM_LINK_LLVM_DYLIB`，
+  Halide 会走 shared 模式产出 `.so`；但静态构建只会产 `.a`，两者都接受并打印实际模式。
+
+**这次 run 顺带证实的事实：**
+
+- `swift-actions/setup-swift@v2` 的 **6.1 在 ubuntu-24.04 上可用**（步骤 7 绿）；
+- `llvm.sh 22` 在 ubuntu-24.04 上可用，装到的是 **LLVM 22.1.8**，且 `-dev` 包带 `LLVMConfig`/`ClangConfig`（步骤 8 绿）；
+- `sdkmanager` 装 **NDK 28.2.13676358** 成功（步骤 9 绿）；
+- Halide configure 已找到 `FFI` / `ZLIB` / `zstd` / `LibXml2` / `Threads`，说明 `libffi-dev` 等补充是正确的；
+- Halide 源码 + 4 个 Vulkan patch 就位（步骤 4 绿）。
 
 ---
 
@@ -151,6 +197,7 @@ app/src/main/jniLibs/arm64-v8a/...
 | `llvm.sh 22` 失败 | apt.llvm.org 不支持当前 runner | 用 Ubuntu 22.04 runner 或调整 LLVM 版本 |
 | `build-halide-linux.sh` 失败 | 缺 Vulkan/LLVM 组件 | 确认 `libvulkan-dev`、`libclang-22-dev`、`lld-22`、`llvm-22-dev`、`libffi-dev` |
 | cmake 报 `find_package(Clang)` 找不到 | 只装了 `llvm-22-dev`，没装 `libclang-22-dev` | 补 `libclang-${LLVM_VERSION}-dev` |
+| cmake 报 `Could NOT find LLD (missing: LLD_DIR)` 并连带 `Halide_LLVM (missing: WebAssembly)` | 只装了 `lld-22`（可执行文件），缺 `liblld-22-dev`（CMake config） | 补 `liblld-${LLVM_VERSION}-dev`。**这是首次 run 的真实失败**，见 §5.2 |
 | cmake 报 LLVM 未启用 RTTI | apt 的 LLVM 构建可能与 Halide 的 RTTI 需求不符 | 换 `apt.llvm.org` 的对应版本，或改用 Locally-built LLVM |
 | `sdkmanager` 找不到 | runner 没有 cmdline-tools | 先安装 Android command-line tools |
 | AOT parity 失败 | NDK/Halide 目标不匹配 | 固定 NDK 版本；检查 `ANDROID_NDK_ROOT` |

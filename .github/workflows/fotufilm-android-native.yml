@@ -98,14 +98,26 @@ jobs:
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh "${LLVM_VERSION}"
-          # Halide 的 CMake 会 find_package(Clang CONFIG)，libclang-*-dev 才提供这份 config
+          # Halide 的 FindHalide_LLVM.cmake 会 find_package(Clang CONFIG) 和 find_package(LLD CONFIG)。
+          # 注意 lld-NN 只是可执行文件；提供 lld/LLDConfig.cmake 的是 liblld-NN-dev，
+          # 少了它会报 "Could NOT find LLD (missing: LLD_DIR)"，进而因 WebAssembly 组件判定失败
+          # 而整体报 "Could NOT find Halide_LLVM (missing: WebAssembly)"。
           sudo apt-get install -y \
             "llvm-${LLVM_VERSION}-dev" "libclang-${LLVM_VERSION}-dev" \
-            "clang-${LLVM_VERSION}" "lld-${LLVM_VERSION}"
+            "clang-${LLVM_VERSION}" "lld-${LLVM_VERSION}" "liblld-${LLVM_VERSION}-dev"
           echo "LLVM_ROOT=/usr/lib/llvm-${LLVM_VERSION}" >> "$GITHUB_ENV"
           "/usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config" --version
           # build-halide-linux.sh 会 grep CMakeCache 里的 NVPTX，缺了直接退出。
           "/usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config" --targets-built
+          # 三份 CMake config 缺任何一份，Halide 的 configure 都在 3 分钟后失败；
+          # 这里提前到 3 秒内失败，且能把原因说清楚。
+          for cfg in \
+            "/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm/LLVMConfig.cmake" \
+            "/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang/ClangConfig.cmake" \
+            "/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/lld/LLDConfig.cmake"; do
+            test -f "$cfg" || { echo "MISSING: $cfg" >&2; exit 1; }
+            echo "ok: $cfg"
+          done
 
       - name: Install Android NDK
         run: |
@@ -155,7 +167,17 @@ jobs:
           set -euxo pipefail
           HALIDE_INSTALL="$GITHUB_WORKSPACE/$FOTUFILM_ROOT/build/halide-linux-install"
           test -f "$HALIDE_INSTALL/include/Halide.h"
-          test -f "$HALIDE_INSTALL/lib/libHalide.so"
+          # Debian 的 LLVM 开了 LLVM_LINK_LLVM_DYLIB，Halide 因此走 shared 模式产出 libHalide.so；
+          # 若某天变成静态构建则只有 .a。两者都接受，但必须有其一。
+          if [ -f "$HALIDE_INSTALL/lib/libHalide.so" ]; then
+            echo "Halide link mode: shared"
+          elif [ -f "$HALIDE_INSTALL/lib/libHalide.a" ]; then
+            echo "Halide link mode: static"
+          else
+            ls -l "$HALIDE_INSTALL/lib" >&2 || true
+            echo "libHalide.{so,a} not found" >&2
+            exit 1
+          fi
           echo "HALIDE_ROOT=$HALIDE_INSTALL" >> "$GITHUB_ENV"
           ls -1 "$HALIDE_INSTALL/lib" | head -20
 
