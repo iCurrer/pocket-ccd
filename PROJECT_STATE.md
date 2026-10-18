@@ -1,6 +1,6 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-17 21:11（Asia/Shanghai）
+**快照时间：** 2026-10-18 22:06（Asia/Shanghai）
 **当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
@@ -12,7 +12,7 @@
 
 ## 1. 一句话状态
 
-规范已读完并完成工程审查；已建立任务板、决策记录、测试计划和官方文档研究记录。**已创建可构建的 Compose 空壳并通过 `assembleDebug`；尚未安装/启动 App，尚未运行任何 UI、相机、图像或设备测试。** 下一步是准备设备/模拟器（T1-015），然后进入 T1-004 设计令牌与 T1-005 状态机。
+规范已读完并完成工程审查；任务板/决策记录/测试计划/状态文档已建立。**Compose 原型已可构建，五个页面和状态机已有代码；尚未安装/启动 App，尚未运行任何 UI、相机、图像或设备测试。** 当前优先补 T1-012/T1-013 与设备验收（T1-015）；同时新增 M8 Fotufilm Android 原生移植计划，Phase 0 需要 macOS/Linux 构建机和 Android 真机，当前阻塞。
 
 ---
 
@@ -38,6 +38,8 @@
 | `TEST_PLAN.md` | 测试层级、用例、证据、性能协议 | 本次新建 |
 | `PROJECT_STATE.md` | 本文件 | 本次新建 |
 | `research/android-official-docs-2026-10-17.md` | 官方文档版本、来源、核查结论 | 本次新建 |
+| `docs/fotufilm-android-port-plan.md` | Fotufilm Android 原生移植评估、架构、阶段、任务 | 2026-10-18 新建 |
+| `docs/fotufilm-license-inventory.md` | Fotufilm/第三方/CC BY-SA/商标合规清单 | 2026-10-18 新建 |
 | `app/`、`gradle/`、`build.gradle.kts`、`settings.gradle.kts` | Compose 空壳工程；可构建 `app-debug.apk` | 本次新建；T1-003 构建通过 |
 | `.gitignore`、`.gitattributes`、`.editorconfig` | 仓库规范 | 本次新建 |
 | `.research/` | 官方文档抓取缓存（Markdown 快照） | 临时研究材料；已在 `.gitignore` 中排除 |
@@ -74,6 +76,7 @@
 | P-022 | 红色主题细节打磨（初版） | 降刺激红 `#D9382E`；删多余线条/说明；系统栏随页面换色/图标；曾用 overlay 裁剪 | `DONE`（已由 P-023 取代） |
 | P-023 | 持久机身 Stage + 跟手动画 | `CameraStageScreen`；HOME/CAMERA 共用机身；拖拽驱动 progress；快门/闪光灯移动，镜头→取景器，按钮重排；移除 sharedBounds | `DONE`（真机动画未验证） |
 | P-024 | 设置页内容 App 化 | 保留红框；内容改为 24sp 标题 + 分组卡片 + 15/12sp 行 + 44dp 滤镜分段控件 + LazyColumn | `DONE`（真机视觉未验证） |
+| P-025 | Fotufilm Android 原生移植评估/计划 | 本地源码分析；FSWP + C++ AOT + JNI 路线；M8/FOT 任务；License 清单 | `DONE`（计划文档；Phase 0 未开始） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -271,11 +274,21 @@
 - 更新 `PROJECT_STATE.md`/`TASK_BOARD.md`/`TEST_PLAN.md`；
 - 打 tag `phase-1-prototype`（Git 初始化后）。
 
-### 第 6 步：阶段 2 之前（不立即执行）
+### 第 6 步：Fotufilm M8 Phase 0（与 M1/M2 并行，当前阻塞）
+
+- 先读 `docs/fotufilm-android-port-plan.md` 与 `docs/fotufilm-license-inventory.md`；
+- FOT-001 已完成 License/来源清单；
+- FOT-002 需要 macOS/Linux 构建机 + Swift + Halide + Android NDK；
+- FOT-003/004：生成 3 个 FSWP pack，编出 arm64 CPU AOT `.so`，真机处理 1 张 12MP；
+- EXP-13 通过前，不进入正式相机链路替换；
+- 不把 47 个 stock 一次性打包，先 3 → 12 → 47。
+
+### 第 7 步：阶段 2 之前（不立即执行）
 
 - 先做 EXP-01/EXP-02（CameraX 高分辨率/构图、Camera2 缺口）；
 - 再决定 T2-003 的采集参数和是否需要 Camera2 interop；
-- 在真机上验证，不用模拟器相机下结论。
+- 在真机上验证，不用模拟器相机下结论；
+- 若 M8 Phase 0 通过，FOT-007 再与 M2 的采集链路合并。
 
 ---
 
@@ -295,6 +308,11 @@
 | R-10 | 过早引入 Camera2/GPU 导致复杂度失控 | 中 | 进度/稳定性 | 决策门槛；先 CameraX/CPU | 无基准就重构 |
 | R-11 | SDK `android-37.0` 与 `android-37.0-2` 重复目录导致后续解析/platform 选择异常 | 中 | 构建环境不稳定 | 在 SDK Manager 中整理；暂记录警告 | 构建报 wrong platform / 重复包 |
 | R-12 | V2 玩具色可能太童趣/太亮，或大面积黄油黄显廉价 | 中 | 视觉返工 | 先真机看一轮；可降低黄油饱和度/缩小面积，但不退回网页布局 | 用户反馈“太童趣/刺眼” |
+| R-13 | Fotufilm 无公开 Android SDK，JNI/AOT 集成失败或成本超预期 | 高 | M8 无法落地 | Phase 0 spike；固定上游 commit；失败则回退 LUT 方案 | AOT 编不过/真机加载失败 |
+| R-14 | pack/`.so` 体积大，47 stock 不可打包 | 高 | 包体/分发受限 | 3→12→47；压缩/按需下载；先精选 | APK 超预算 |
+| R-15 | 12MP 真引擎 CPU 慢/发热 | 高 | 体验差 | 预览低分辨率 + 成片全分辨率；Vulkan GPU；tile/region | 单张 > 数秒 |
+| R-16 | CC BY-SA / 商标合规不通过 | 中 | 发布受阻 | License 清单；App 内声明；法务确认；必要时改用 LUT/自有 profile | 商店/法务拒绝 |
+| R-17 | 与现有“玩具 CCD”UI/品牌冲突 | 中 | 产品返工 | 先做“Film 模式”；保留 CCD 模式；不一次性替换 | 用户觉得不是同一产品 |
 
 ---
 

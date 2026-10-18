@@ -641,3 +641,38 @@
 - **后果：** 设置页更像常规 Android App，同时仍嵌在玩具相机红框里；小屏可滚动。
 - **验证：** `TC-P1-047` 静态检查；`assembleDebug`/`assembleRelease` 通过。
 - **复审触发：** 真机字体/间距仍不协调；或需要持久化设置后重排控件。
+
+---
+
+## D-033 — Fotufilm 采用离线 FSWP pack + C++ AOT + JNI 移植
+
+- **日期：** 2026-10-18
+- **状态：** PROPOSED（Phase 0 spike 未开始）
+- **类型：** 架构 / 图像管线
+- **背景：** 用户决定走原生移植，保留 Fotufilm 的真实胶片模型；公开仓库有 Android AOT kernel 与 FSWP pack 验证脚本，但没有 Android AAR/JNI/工程。
+- **决定：**
+  1. 不在 Android 上编译完整 Swift App；
+  2. 在 macOS/Linux 构建机用 `fotufilm` 生成 FSWP pack，用 `generate_halide_android*` 生成 arm64 AOT kernels；
+  3. Android 侧写 C++ JNI + pack parser，调用 `fotufilm_halide_process_tile/process_region`；
+  4. CameraX 采集、Bitmap/线性 Rec.2020 解码、P3/sRGB 输出、JPEG 保存由 Pocket CCD 负责；
+  5. 首批 3 个 stock（Gold200/Portra400/TriX400），再扩到 12、47。
+- **后果：** 保留真实光谱/曲线/颗粒/halation；但需要 macOS/Linux 构建机、NDK、Halide、JNI、pack 解析和真机性能验证。
+- **验证：** M8/FOT-002..004 + EXP-13；Phase 0 通过前不进入正式替换。
+- **复审触发：** Phase 0 失败；pack/so 过大；12MP 性能不达标；上游 Android 格式变化。
+
+---
+
+## D-034 — Fotufilm 开源来源与 CC BY-SA 合规策略
+
+- **日期：** 2026-10-18
+- **状态：** ACCEPTED（法务复核仍待做）
+- **类型：** License / 发布
+- **背景：** 用户明确可以在 App 内标明开源来源；Fotufilm 引擎 Apache-2.0，47 个 film profiles CC BY-SA 4.0。
+- **决定：**
+  1. App 内增加“开源声明”页，注明 Fotufilm、链接、MUAStudio 版权、Apache-2.0/CC BY-SA 4.0；
+  2. 不修改/不冒充 Fotufilm 品牌；胶片名加商标声明；
+  3. 若分发 profile/LUT/pack，按 CC BY-SA 4.0 提供 attribution、修改说明和可获取的资产；
+  4. 具体 ShareAlike 对 App 代码的边界由法务确认；确认前不发布含 profile 的 Release。
+- **后果：** 增加发布合规工作；不影响渲染照片的归属。
+- **验证：** `docs/fotufilm-license-inventory.md`；FOT-013。
+- **复审触发：** 法务意见；改用 LUT 而非 profile；开源/闭源决策变化。

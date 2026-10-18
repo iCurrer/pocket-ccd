@@ -42,6 +42,7 @@
 | M5 | 图库 / 成片 / 存储 | 7 | `TODO` | M3 输出稳定 + D-014 |
 | M6 | 兼容性与性能 | 5 | `TODO` | M2–M5 功能可用 |
 | M7 | 发布准备 | 4 | `TODO` | M6 通过 |
+| M8 | Fotufilm Android 原生移植 | 14 | `BLOCKED`（需 macOS/Linux 构建机 + Android 真机；方案见 `docs/fotufilm-android-port-plan.md`） | FOT-001 + M2 可并行 |
 
 > 说明：M0 的 `DONE` 仅指文档文件已建立；不包含任何 App 构建或相机测试。文档内容仍需负责人评审后才能作为最终基线。
 
@@ -566,7 +567,41 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 
 ---
 
-# 优先级映射（M0 / M2–M7）
+# M8 — Fotufilm Android 原生移植
+
+**目标：** 用 Fotufilm 真实引擎（不是 LUT 近似）做 Android 胶卷相机。
+**路径：** 离线 FSWP pack + C++ AOT + JNI；不在 Android 上跑完整 Swift App。
+**方案文档：** [`docs/fotufilm-android-port-plan.md`](docs/fotufilm-android-port-plan.md)
+**License 清单：** [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md)
+**当前状态：** `BLOCKED` — 缺 macOS/Linux 构建机（Swift + Halide + NDK）和 Android 真机；FOT-001 可先做。
+
+| ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
+|---|---|---|---|---|---|---|---|
+| FOT-001 | License/来源清单 | 无 | `docs/fotufilm-license-inventory.md` | 代码/profile/第三方/商标清单 | 每项有 license/义务/处置 | 人工/法务复核 | `DONE` |
+| FOT-002 | macOS/Linux 构建机 + 工具链 | FOT-001 | 构建机 | Swift + Halide + NDK 环境记录 | `swift build`、AOT 生成可运行 | 命令记录 | `BLOCKED` |
+| FOT-003 | 3 个代表性 FSWP pack | FOT-002 | Gold200/Portra400/TriX400 | `.fswp` ×3 | AOT parity 工具可读取 | `--dump-wasm-pack` | `TODO` |
+| FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so` | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `TODO` |
+| FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `camera/film/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `TODO` |
+| FOT-006 | 解码/线性 Rec.2020/输出色彩 | FOT-004 | `imaging/` | 输入输出色彩转换 | 与桌面参考误差可接受 | 色块/样片 | `TODO` |
+| FOT-007 | CameraX → 引擎 → 保存 | FOT-005、M2 | `camera/`、`storage/` | 拍照闭环 | 真机照片进入 app 相册 | 真机 | `TODO` |
+| FOT-008 | 胶片选择器 + 12 stock | FOT-005 | `ui/film/` | 选择器/metadata | 切换生效；无假数据 | UI/真机 | `TODO` |
+| FOT-009 | 预览/成片双路径 | FOT-007 | `ui/camera/` | 低分辨率预览 + 全分辨率成片 | 预览不冒充成片 | 真机 | `TODO` |
+| FOT-010 | Vulkan GPU + CPU fallback | FOT-004 | `fotufilm-halide` | GPU pack/后端选择 | GPU 失败自动 CPU | 真机 | `TODO` |
+| FOT-011 | 性能/包体/热/内存 | FOT-007、FOT-010 | 报告 | 基线 + 优化 | 目标设备可接受 | benchmark | `TODO` |
+| FOT-012 | 47 stock 全量 pack | FOT-008、FOT-011 | `assets/film/` | 47 pack + 选择器 | 47 个可加载 | 真机 | `TODO` |
+| FOT-013 | Attribution/License 页 | FOT-001 | `ui/settings/` | 开源声明/许可页 | 满足 Apache/CC BY-SA/第三方 | 人工审计 | `TODO` |
+| FOT-014 | 设备端到端验收 | FOT-012、FOT-013 | 发布候选 | 真机矩阵报告 | 端到端通过 | 真机 | `TODO` |
+
+**M8 退出条件：**
+
+1. Phase 0 spike 通过（12MP、arm64、真机、AOT CPU）；
+2. 至少 3 个 stock 端到端；12 个 stock 通过性能和包体预算；
+3. License/attribution 页可审计；
+4. 未通过前不得把 M8 标成 `DONE`，也不得替换现有相机链路。
+
+---
+
+# 优先级映射（M0 / M2–M8）
 
 M1 的优先级已写在各任务字段中。为避免表格过宽，其余里程碑的优先级集中记录如下；进入对应里程碑时再细化为 P0/P1/P2。
 
@@ -579,6 +614,7 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | M5 | T5-001、T5-002、T5-003、T5-007 | T5-004、T5-005、T5-006 | — |
 | M6 | T6-001、T6-002、T6-004 | T6-003、T6-005 | — |
 | M7 | T7-002、T7-003、T7-004 | T7-001 | — |
+| M8 | FOT-001、FOT-002、FOT-003、FOT-004、FOT-013 | FOT-005、FOT-006、FOT-008、FOT-009、FOT-010 | FOT-011、FOT-012、FOT-014 |
 
 ---
 
@@ -600,6 +636,7 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | EXP-10 | MediaStore + Room 崩溃一致性 | 在写入各阶段注入崩溃/断电模拟；重启对账 | 不出现“成功但不可读”；不重复照片；pending 可清理 | 状态机/对账方案 | D-008；T5-002/T5-003 | `NOT_RUN` |
 | EXP-11 | 滤镜验收用什么指标？ | 盲评 + ΔE2000 + SSIM + 直方图/曲线；测试评审者一致性 | 形成可重复的验收表；不依赖单人主观 | 验收方法 | T4-005 | `NOT_RUN` |
 | EXP-12 | 是否需要 WorkManager/后台处理？ | 处理 12MP 时切后台/锁屏/杀进程；观察恢复 | 若前台可完成且恢复可靠 → 不引入 WorkManager；否则评估 | 后台策略 | T5-006；D-008 | `NOT_RUN` |
+| EXP-13 | Fotufilm Android AOT 能否在真机跑 12MP？ | Phase 0：构建机生成 FSWP + arm64 AOT；JNI 处理单张 12MP | 成功输出；耗时/内存/pack/so 大小在预算内；与桌面参考误差可接受 | `docs/fotufilm-android-spike.md` | M8/FOT-004；D-033 | `BLOCKED`（缺构建机/真机） |
 
 ---
 

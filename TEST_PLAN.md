@@ -298,6 +298,22 @@
 | `TC-PERF-001..008` | 冷启动、预览首帧、采集、处理、峰值内存、连续拍摄、UI 流畅度 |
 | `TC-REL-001..005` | Release 安装、R8、签名、升级、隐私/权限 |
 
+### 6.6 Fotufilm 原生移植（M8）
+
+| ID | 用例 | 预期 | 状态 |
+|---|---|---|---|
+| `TC-FOT-001` | License/来源审计 | 代码 Apache-2.0、profile CC BY-SA、第三方 notices、商标声明齐全 | `DONE`（清单已建） |
+| `TC-FOT-002` | FSWP pack 生成 | 3 个 stock pack 可被 AOT parity 工具读取 | `NOT_RUN` |
+| `TC-FOT-003` | arm64 AOT 加载 | `libfotufilm_android.so` 在真机 `dlopen` 成功 | `NOT_RUN` |
+| `TC-FOT-004` | 12MP 单张处理 | 输出非黑/非 NaN；耗时/内存/pack/so 大小记录 | `NOT_RUN` |
+| `TC-FOT-005` | 3 stock 色彩对比 | 与桌面参考的 ΔE/视觉差异在可接受范围 | `NOT_RUN` |
+| `TC-FOT-006` | CameraX→引擎→相册 | 真机拍照后全分辨率处理并保存 | `NOT_RUN` |
+| `TC-FOT-007` | Vulkan/CPU fallback | GPU 不可用时自动 CPU，输出一致 | `NOT_RUN` |
+| `TC-FOT-008` | 47 stock 加载/包体 | 全部可加载；APK/资产在预算内 | `NOT_RUN` |
+| `TC-FOT-009` | License 页/attribution | App 内可查看 Fotufilm/CC BY-SA/第三方声明 | `NOT_RUN` |
+
+> 这些用例在 Phase 0/spike 前全部是 `NOT_RUN`；不能因为计划存在就标 `PASS`。
+
 ---
 
 ## 7. 性能与内存测试协议
