@@ -133,6 +133,8 @@ jobs:
 
           ls -lh "$OUT"
           test -n "$(ls -A "$OUT")"
+          # stocks.txt 放进 packs/ 一起上传，让 artifact 只有一个根，解压后是平的
+          cp stocks.txt "$OUT/"
 
       - name: Upload packs
         if: always()
@@ -141,9 +143,9 @@ jobs:
           name: fotufilm-packs
           if-no-files-found: warn
           retention-days: 14
-          path: |
-            third_party/fotufilm/packs/*.fswp
-            third_party/fotufilm/stocks.txt
+          # 目录路径（无通配符）→ artifact 根就是 packs/ 的内容，
+          # 下载后是 packs/xxx.fswp 而不是 packs/packs/xxx.fswp。
+          path: third_party/fotufilm/packs/
 
   # ---------------------------------------------------------------------------
   # 原生产物：Halide + Android arm64 CPU AOT kernels + parity，全部在 Linux。
@@ -189,10 +191,18 @@ jobs:
       - name: Check packs
         run: |
           set -euxo pipefail
-          ls -lh prebuilt-packs
-          test -s "prebuilt-packs/${PARITY_STOCK}__${PARITY_SIZE}.fswp"
-          for f in prebuilt-packs/*.fswp; do
+          ls -lR prebuilt-packs
+          # 不写死层级：upload-artifact 会按最小公共父目录重组路径，
+          # 换了 path 写法就可能多一层目录。这里按文件名找，找得到就说明没问题。
+          PARITY_PACK="$(find prebuilt-packs -name "${PARITY_STOCK}__${PARITY_SIZE}.fswp" -print -quit)"
+          test -n "$PARITY_PACK"
+          PACK_DIR="$(cd "$(dirname "$PARITY_PACK")" && pwd)"
+          echo "FOTUFILM_PACK_DIR=$PACK_DIR" >> "$GITHUB_ENV"
+          echo "pack dir: $PACK_DIR"
+          # 逐个校验 FSWP 头，避免把空文件或错文件往后传
+          for f in "$PACK_DIR"/*.fswp; do
             head -c 4 "$f" | grep -q FSWP || { echo "not an FSWP pack: $f" >&2; exit 1; }
+            echo "ok: $(basename "$f") $(wc -c < "$f") bytes"
           done
 
       # Halide 源码 + 编译产物约 8–10GB，托管 runner 的 / 只有 ~14GB 空闲。
@@ -324,8 +334,8 @@ jobs:
       - name: Run upstream Android AOT parity
         working-directory: ${{ env.FOTUFILM_ROOT }}
         env:
+          # FOTUFILM_PACK_DIR 由上一步 Check packs 写入 GITHUB_ENV
           FOTUFILM_PARITY_CLI: ${{ github.workspace }}/.github/scripts/fotufilm-pack-shim.sh
-          FOTUFILM_PACK_DIR: ${{ github.workspace }}/prebuilt-packs
         run: |
           set -o pipefail
           chmod +x "$FOTUFILM_PARITY_CLI"
@@ -340,7 +350,7 @@ jobs:
           cp "$FOTUFILM_ROOT"/build/android-aot-parity.log artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.fswp artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.bin artifacts/ || true
-          cp prebuilt-packs/*.fswp artifacts/film/ || true
+          cp "${FOTUFILM_PACK_DIR:-prebuilt-packs}"/*.fswp artifacts/film/ || true
           ls -lR artifacts | head -40
 
       # always()：即使 parity 断言失败，也要把已生成的 pack / kernels 带出来，
