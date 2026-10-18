@@ -676,3 +676,21 @@
 - **后果：** 增加发布合规工作；不影响渲染照片的归属。
 - **验证：** `docs/fotufilm-license-inventory.md`；FOT-013。
 - **复审触发：** 法务意见；改用 LUT 而非 profile；开源/闭源决策变化。
+
+---
+
+## D-035 — Windows-only 环境用 WSL2/CI Linux 做 Fotufilm 构建机
+
+- **日期：** 2026-10-18
+- **状态：** PROPOSED（WSL 未安装）
+- **类型：** 构建环境 / 工程
+- **背景：** 用户只有 Windows；Fotufilm 上游没有 Windows 构建支持，构建链是 Swift + Halide + bash + Android NDK。
+- **决定：**
+  1. 不在原生 Windows 上硬编 Fotufilm；
+  2. 优先安装 WSL2 Ubuntu，在 WSL 内装 Swift/Halide/Linux NDK，产出 `.so` + `.fswp`；
+  3. Android Studio/Gradle/adb 仍留在 Windows；
+  4. 如果 WSL 被策略禁止，用 GitHub Actions `ubuntu-latest` 构建并下载 artifact；
+  5. 详细步骤见 `docs/fotufilm-windows-build.md`。
+- **后果：** 本机需要 WSL2（管理员/重启）或 GitHub Actions；构建机不产出 Android UI，只产出 native 产物。
+- **验证：** FOT-002；`wsl --status` + `swift --version` + `verify-android-aot.sh`。
+- **复审触发：** WSL 不可用；CI 构建时间不可接受；上游提供 Android 预编译包。

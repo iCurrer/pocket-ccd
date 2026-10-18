@@ -42,7 +42,7 @@
 | M5 | 图库 / 成片 / 存储 | 7 | `TODO` | M3 输出稳定 + D-014 |
 | M6 | 兼容性与性能 | 5 | `TODO` | M2–M5 功能可用 |
 | M7 | 发布准备 | 4 | `TODO` | M6 通过 |
-| M8 | Fotufilm Android 原生移植 | 14 | `BLOCKED`（需 macOS/Linux 构建机 + Android 真机；方案见 `docs/fotufilm-android-port-plan.md`） | FOT-001 + M2 可并行 |
+| M8 | Fotufilm Android 原生移植 | 14 | `BLOCKED`（需 Windows 上安装 WSL2 Ubuntu 或 CI Linux + Android 真机；方案见 `docs/fotufilm-android-port-plan.md`、`docs/fotufilm-windows-build.md`） | FOT-001 + M2 可并行 |
 
 > 说明：M0 的 `DONE` 仅指文档文件已建立；不包含任何 App 构建或相机测试。文档内容仍需负责人评审后才能作为最终基线。
 
@@ -578,7 +578,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 | ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
 |---|---|---|---|---|---|---|---|
 | FOT-001 | License/来源清单 | 无 | `docs/fotufilm-license-inventory.md` | 代码/profile/第三方/商标清单 | 每项有 license/义务/处置 | 人工/法务复核 | `DONE` |
-| FOT-002 | macOS/Linux 构建机 + 工具链 | FOT-001 | 构建机 | Swift + Halide + NDK 环境记录 | `swift build`、AOT 生成可运行 | 命令记录 | `BLOCKED` |
+| FOT-002 | WSL2/CI Linux 构建机 + 工具链 | FOT-001 | WSL2 Ubuntu 或 GitHub Actions | Swift + Halide + NDK 环境记录 | `swift build`、AOT 生成可运行 | 命令记录 | `BLOCKED`（当前 Windows 未安装 WSL） |
 | FOT-003 | 3 个代表性 FSWP pack | FOT-002 | Gold200/Portra400/TriX400 | `.fswp` ×3 | AOT parity 工具可读取 | `--dump-wasm-pack` | `TODO` |
 | FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so` | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `TODO` |
 | FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `camera/film/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `TODO` |

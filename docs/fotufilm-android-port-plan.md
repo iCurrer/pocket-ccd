@@ -106,7 +106,7 @@ Android App
 
 **代价：**
 
-- 需要 macOS/Linux 构建机（Swift + Halide + Android NDK）；
+- 需要 macOS/Linux 构建机（Swift + Halide + Android NDK）；Windows-only 环境用 WSL2 Ubuntu 或 CI，见 [`fotufilm-windows-build.md`](fotufilm-windows-build.md)；
 - 需要自己写 JNI、FSWP 解析、Bitmap/色彩转换、CameraX 链路；
 - pack 大小/性能/包体必须实测；
 - 47 个 stock 全量可能过大，先做精选。
@@ -121,7 +121,7 @@ Android App
 
 任务：
 
-1. 准备构建机：macOS 或 Linux + Swift + Halide + Android NDK；
+1. 准备构建机：macOS 或 Linux + Swift + Halide + Android NDK；Windows-only 用 WSL2 Ubuntu 或 GitHub Actions Linux 构建，见 [`fotufilm-windows-build.md`](fotufilm-windows-build.md)；
 2. `swift build -c release --product fotufilm`；
 3. 生成 1 个 stock 的 FSWP pack；
 4. 用 `tools/generate_halide_android.cpp` 生成 arm64 AOT kernels；

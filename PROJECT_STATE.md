@@ -40,6 +40,7 @@
 | `research/android-official-docs-2026-10-17.md` | 官方文档版本、来源、核查结论 | 本次新建 |
 | `docs/fotufilm-android-port-plan.md` | Fotufilm Android 原生移植评估、架构、阶段、任务 | 2026-10-18 新建 |
 | `docs/fotufilm-license-inventory.md` | Fotufilm/第三方/CC BY-SA/商标合规清单 | 2026-10-18 新建 |
+| `docs/fotufilm-windows-build.md` | Windows-only 的 WSL2/CI 构建指南与命令 | 2026-10-18 新建 |
 | `app/`、`gradle/`、`build.gradle.kts`、`settings.gradle.kts` | Compose 空壳工程；可构建 `app-debug.apk` | 本次新建；T1-003 构建通过 |
 | `.gitignore`、`.gitattributes`、`.editorconfig` | 仓库规范 | 本次新建 |
 | `.research/` | 官方文档抓取缓存（Markdown 快照） | 临时研究材料；已在 `.gitignore` 中排除 |
@@ -278,7 +279,7 @@
 
 - 先读 `docs/fotufilm-android-port-plan.md` 与 `docs/fotufilm-license-inventory.md`；
 - FOT-001 已完成 License/来源清单；
-- FOT-002 需要 macOS/Linux 构建机 + Swift + Halide + Android NDK；
+- FOT-002 需要 Linux 构建机：Windows 上优先装 WSL2 Ubuntu，或使用 GitHub Actions Linux；步骤见 `docs/fotufilm-windows-build.md`；
 - FOT-003/004：生成 3 个 FSWP pack，编出 arm64 CPU AOT `.so`，真机处理 1 张 12MP；
 - EXP-13 通过前，不进入正式相机链路替换；
 - 不把 47 个 stock 一次性打包，先 3 → 12 → 47。
