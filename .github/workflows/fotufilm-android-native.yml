@@ -56,9 +56,14 @@ jobs:
   # ---------------------------------------------------------------------------
   # pack 生产：唯一需要 ImageIO 的环节，因此放 macOS。
   # 不用 brew 装 Halide —— fotufilm 目标不依赖 FotufilmHalide，Xcode 自带的 Swift 足够。
+  #
+  # 为什么是 macos-26 而不是 macos-14：macos-14 自带 Xcode 15.4 / Swift 5.10，
+  # 编译 FotufilmCore 时报 `MTLCompileOptions has no member 'mathMode'`（该 API 要 macOS 15 SDK），
+  # 并伴随一批 "unable to type-check this expression in reasonable time"。
+  # 上游自己的 ci.yml 就是 runs-on: macos-26 —— 与它对齐是这里唯一有证据支撑的选择。
   # ---------------------------------------------------------------------------
   packs:
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:
@@ -86,6 +91,13 @@ jobs:
           set -euxo pipefail
           xcodebuild -version
           swift --version
+          # FotufilmCore 用到 MTLCompileOptions.mathMode（macOS 15 SDK 起才有），
+          # Xcode 15.4 会在编译中途炸并且报一堆 type-check 超时。这里提前拦住。
+          major="$(xcodebuild -version | head -1 | sed 's/Xcode //' | cut -d. -f1)"
+          if [ "$major" -lt 16 ]; then
+            echo "Xcode $major is too old: FotufilmCore needs the macOS 15 SDK (Xcode 16+)" >&2
+            exit 1
+          fi
 
       - name: Build fotufilm CLI
         working-directory: ${{ env.FOTUFILM_ROOT }}
