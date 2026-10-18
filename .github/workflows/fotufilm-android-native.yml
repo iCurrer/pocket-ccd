@@ -1,5 +1,18 @@
 name: Fotufilm Android native POC
 
+# Phase 0：只产出 FSWP pack + Android arm64 CPU AOT kernels + parity 日志。
+# APK 不在 CI 构建；APK 仍用 Windows 的 Android Studio。
+#
+# 与上游（DhaliwalX/fotufilm-engine @ 2d07c48）逐项核对过的事实：
+#   - CLI 支持 --list-stocks / --dump-wasm-pack / --stock / --pack-size
+#   - verify-android-aot.sh 依赖 tools/resolve-halide-toolchain.sh，后者**认可 HALIDE_ROOT 环境变量**
+#   - verify-android-aot.sh 通过 FOTUFILM_PARITY_CLI 可跳过 `swift run` 的重复编译
+#   - generate_halide_android OUTPUT_DIR [--arm32 | --host]，不传 flag = arm64 Android（正是我们要的）
+#   - 子模块只有 third_party/Halide → github.com/halide/Halide，pin 58868f0c
+#   - 该 pin 的 Halide CMakeLists 写 `Halide_LLVM 21...99`，即 LLVM 22 满足最低要求
+#   - stocks 通过 SwiftPM .copy("Stocks") 打包，gold200 / portra400 / trix400 均存在
+#   - NDK 28.2.13676358 在 dl.google.com 的 repository2-3.xml 中存在
+
 on:
   workflow_dispatch:
     inputs:
@@ -16,6 +29,7 @@ env:
   FOTUFILM_COMMIT: 2d07c48c14199be24972db760a7631dc95f74012
   LLVM_VERSION: "22"
   NDK_VERSION: "28.2.13676358"
+  FOTUFILM_ROOT: third_party/fotufilm
 
 jobs:
   build-native:
@@ -35,31 +49,62 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Verify upstream layout
+        run: |
+          set -euxo pipefail
+          test -f "$FOTUFILM_ROOT/Package.swift"
+          test -f "$FOTUFILM_ROOT/tools/build-halide-linux.sh"
+          test -f "$FOTUFILM_ROOT/tools/verify-android-aot.sh"
+          test -f "$FOTUFILM_ROOT/tools/resolve-halide-toolchain.sh"
+          test -f "$FOTUFILM_ROOT/tools/generate_halide_android.cpp"
+          test -f "$FOTUFILM_ROOT/third_party/Halide/CMakeLists.txt"   # 子模块必须真的在
+          for p in strict-float bool-uniforms allocation-padding readback-staging; do
+            test -f "$FOTUFILM_ROOT/tools/halide-vulkan-$p.patch"
+          done
+          echo "upstream layout OK"
+
+      # Halide 源码 + 编译产物约 8–10GB，托管 runner 的 / 只有 ~14GB 空闲。
+      - name: Free disk space
+        run: |
+          set -x
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune --all --force || true
+          df -h /
+
       - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build git curl unzip \
-            libxml2-dev zlib1g-dev libjpeg-dev libpng-dev libtiff-dev \
-            liblcms2-dev libheif-dev libopenexr-dev libvulkan-dev \
-            pkg-config python3
+            build-essential cmake ninja-build git curl unzip wget \
+            libffi-dev libelf-dev libxml2-dev zlib1g-dev \
+            libjpeg-dev libpng-dev libtiff-dev liblcms2-dev libheif-dev \
+            libopenexr-dev libvulkan-dev pkg-config python3
 
       - name: Install Swift
         uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.1"
 
-      - name: Install LLVM 22
+      - name: Install LLVM
         run: |
+          set -euxo pipefail
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
-          sudo ./llvm.sh ${LLVM_VERSION}
-          sudo apt-get install -y llvm-${LLVM_VERSION}-dev clang-${LLVM_VERSION} lld-${LLVM_VERSION}
+          sudo ./llvm.sh "${LLVM_VERSION}"
+          # Halide 的 CMake 会 find_package(Clang CONFIG)，libclang-*-dev 才提供这份 config
+          sudo apt-get install -y \
+            "llvm-${LLVM_VERSION}-dev" "libclang-${LLVM_VERSION}-dev" \
+            "clang-${LLVM_VERSION}" "lld-${LLVM_VERSION}"
           echo "LLVM_ROOT=/usr/lib/llvm-${LLVM_VERSION}" >> "$GITHUB_ENV"
-          /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config --version
+          "/usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config" --version
+          # build-halide-linux.sh 会 grep CMakeCache 里的 NVPTX，缺了直接退出。
+          "/usr/lib/llvm-${LLVM_VERSION}/bin/llvm-config" --targets-built
 
       - name: Install Android NDK
         run: |
+          set -euxo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           if [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
@@ -71,38 +116,60 @@ jobs:
           echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
           test -f "$SDK_ROOT/ndk/${NDK_VERSION}/source.properties"
 
-      - name: Cache Halide Linux build
-        id: halide-cache
-        uses: actions/cache@v4
+      # restore/save 拆开：Halide 编完立刻落缓存，
+      # 这样后续 Swift / parity 步骤失败也不会丢掉这 30–60 分钟。
+      - name: Restore Halide cache
+        id: halide-restore
+        uses: actions/cache/restore@v4
         with:
           path: third_party/fotufilm/build/halide-linux-install
-          key: fotufilm-halide-linux-${{ env.FOTUFILM_COMMIT }}-llvm-${{ env.LLVM_VERSION }}-v1
+          key: fotufilm-halide-${{ env.FOTUFILM_COMMIT }}-llvm${{ env.LLVM_VERSION }}-v2
 
-      - name: Build Halide (first run, ~30+ min)
-        if: steps.halide-cache.outputs.cache-hit != 'true'
-        working-directory: third_party/fotufilm
+      - name: Build Halide (first run, ~30-60 min)
+        if: steps.halide-restore.outputs.cache-hit != 'true'
+        working-directory: ${{ env.FOTUFILM_ROOT }}
+        env:
+          FOTUFILM_BUILD_JOBS: 4
         run: |
-          export LLVM_ROOT="/usr/lib/llvm-${LLVM_VERSION}"
-          export FOTUFILM_BUILD_JOBS="$(nproc)"
+          set -euxo pipefail
           bash tools/build-halide-linux.sh
+          df -h /
 
+      - name: Save Halide cache
+        if: steps.halide-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: third_party/fotufilm/build/halide-linux-install
+          key: fotufilm-halide-${{ env.FOTUFILM_COMMIT }}-llvm${{ env.LLVM_VERSION }}-v2
+
+      # 原先这一步是 `echo ... >> $GITHUB_ENV` 后立刻 test "$HALIDE_ROOT"，
+      # 但 GITHUB_ENV 只对**后续**步骤生效，当前 shell 里是空值，
+      # 于是 test 变成 `test -f /include/Halide.h` 必定失败 —— 已改为显式路径。
       - name: Export Halide root
         run: |
-          echo "HALIDE_ROOT=$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install" >> "$GITHUB_ENV"
-          test -f "$HALIDE_ROOT/include/Halide.h"
+          set -euxo pipefail
+          HALIDE_INSTALL="$GITHUB_WORKSPACE/$FOTUFILM_ROOT/build/halide-linux-install"
+          test -f "$HALIDE_INSTALL/include/Halide.h"
+          test -f "$HALIDE_INSTALL/lib/libHalide.so"
+          echo "HALIDE_ROOT=$HALIDE_INSTALL" >> "$GITHUB_ENV"
+          ls -1 "$HALIDE_INSTALL/lib" | head -20
 
       - name: Build fotufilm CLI
-        working-directory: third_party/fotufilm
+        working-directory: ${{ env.FOTUFILM_ROOT }}
         run: |
-          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
+          set -euxo pipefail
           swift build -c release --product fotufilm
-          .build/release/fotufilm --list-stocks | head -20
+          # 不加 | head，避免 pipe 吞掉非零退出码
+          .build/release/fotufilm --list-stocks > stocks.txt
+          wc -l stocks.txt
+          head -5 stocks.txt
 
       - name: Generate FSWP packs
-        working-directory: third_party/fotufilm
+        working-directory: ${{ env.FOTUFILM_ROOT }}
         env:
           STOCKS: ${{ inputs.stocks }}
         run: |
+          set -euxo pipefail
           mkdir -p artifacts/film
           for stock in $STOCKS; do
             .build/release/fotufilm \
@@ -110,11 +177,12 @@ jobs:
               --stock "$stock" --pack-size 1600x1200
           done
           ls -lh artifacts/film
+          test -n "$(ls -A artifacts/film)"
 
       - name: Build Android CPU AOT kernels
-        working-directory: third_party/fotufilm
+        working-directory: ${{ env.FOTUFILM_ROOT }}
         run: |
-          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
+          set -euxo pipefail
           mkdir -p build/android-kernels
           clang++ -std=c++17 -O2 \
             -I"$HALIDE_ROOT/include" \
@@ -123,30 +191,58 @@ jobs:
             -L"$HALIDE_ROOT/lib" -lHalide \
             -Wl,-rpath,"$HALIDE_ROOT/lib" \
             -o build/generate-android
+          # 不传 --host = 真正的 arm64 Android 目标
           ./build/generate-android build/android-kernels
           ls -lh build/android-kernels
+          test -n "$(ls -A build/android-kernels)"
 
       - name: Run upstream Android AOT parity
-        working-directory: third_party/fotufilm
+        working-directory: ${{ env.FOTUFILM_ROOT }}
+        env:
+          # 复用上一步的二进制，避免 verify 脚本再跑一次 `swift run`
+          FOTUFILM_PARITY_CLI: .build/release/fotufilm
         run: |
-          export HALIDE_ROOT="$GITHUB_WORKSPACE/third_party/fotufilm/build/halide-linux-install"
-          export ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}"
+          set -o pipefail
           bash tools/verify-android-aot.sh 2>&1 | tee build/android-aot-parity.log
 
       - name: Collect artifacts
+        if: always()
         run: |
+          set -x
           mkdir -p artifacts/aot
-          cp -R third_party/fotufilm/build/android-kernels/* artifacts/aot/ || true
-          cp third_party/fotufilm/build/android-aot-parity.log artifacts/ || true
-          cp third_party/fotufilm/build/android-parity/*.fswp artifacts/ || true
+          cp -R "$FOTUFILM_ROOT"/build/android-kernels/* artifacts/aot/ || true
+          cp "$FOTUFILM_ROOT"/build/android-aot-parity.log artifacts/ || true
+          cp "$FOTUFILM_ROOT"/build/android-parity/*.fswp artifacts/ || true
+          cp "$FOTUFILM_ROOT"/build/android-parity/*.bin artifacts/ || true
+          ls -lR artifacts | head -40
 
+      # always()：即使 parity 断言失败，也要把已生成的 pack / kernels 带出来，
+      # 否则一次 60 分钟的 run 只剩一个红叉，什么也拿不到。
       - name: Upload packs + AOT kernels + parity log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fotufilm-android-poc
           if-no-files-found: warn
+          retention-days: 14
           path: |
             third_party/fotufilm/artifacts/film/*.fswp
+            third_party/fotufilm/stocks.txt
             artifacts/aot/**
             artifacts/android-aot-parity.log
             artifacts/*.fswp
+            artifacts/*.bin
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Fotufilm Android Phase 0"
+            echo ""
+            echo "- stocks: \`${{ inputs.stocks }}\`"
+            echo "- Halide cache hit: \`${{ steps.halide-restore.outputs.cache-hit }}\`"
+            echo "- parity: 见 job 日志中的 \`Run upstream Android AOT parity\`"
+            echo ""
+            echo "产物：\`fotufilm-android-poc\` artifact（packs / .a / parity log）"
+            echo "注意：本 workflow **不产出** \`libfotufilm_android.so\`，那是 FOT-004。"
+          } >> "$GITHUB_STEP_SUMMARY"

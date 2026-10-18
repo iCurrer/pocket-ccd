@@ -23,6 +23,9 @@ test-evidence/
 # Temporary official-doc snapshots used for the 2026-10-17 review
 .research/
 
+# Agent workspace (local memory, scratch downloads) — never publish
+.workbuddy/
+
 # OS
 .DS_Store
 Thumbs.db
