@@ -1,18 +1,18 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-18 23:07（Asia/Shanghai）
+**快照时间：** 2026-10-19 12:37（Asia/Shanghai）
 **当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
 **Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
-**App 代码：** Compose 空壳 + 导航状态机 + V2 玩具材质令牌 + 首页 + 拍摄页 + 照片墙 + 成片页 + 设置页（`MainActivity` + `AppRoot` + 五个页面 + `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`）
+**App 代码：** Compose 空壳 + 导航状态机 + 红色玩具材质 + `CameraStageScreen`（首页/拍摄共用机身）+ 照片墙 + 成片页 + 设置页（`MainActivity` + `AppRoot` + `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`）
 **已执行 App 构建/测试：** `assembleDebug` 与 `assembleRelease` 均已通过；`AppStateTest` 12/12 通过；安装/启动/UI/相机未执行
 
 ---
 
 ## 1. 一句话状态
 
-规范已读完并完成工程审查；任务板/决策记录/测试计划/状态文档已建立。**Compose 原型已可构建，五个页面和状态机已有代码；尚未安装/启动 App，尚未运行任何 UI、相机、图像或设备测试。** 当前优先补 T1-012/T1-013 与设备验收（T1-015）；同时新增 M8 Fotufilm Android 原生移植计划，Phase 0 需要 macOS/Linux 构建机和 Android 真机，当前阻塞。
+规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 8 个 JNI 导出）。**唯一缺口是 Android 真机**：12MP 耗时/峰值内存未测，FOT-004 仍是 `IN_PROGRESS`；App 也尚未在设备上安装/启动。
 
 ---
 
@@ -42,7 +42,8 @@
 | `docs/fotufilm-license-inventory.md` | Fotufilm/第三方/CC BY-SA/商标合规清单 | 2026-10-18 新建 |
 | `docs/fotufilm-windows-build.md` | Windows-only 的 WSL2 构建指南与命令 | 2026-10-18 新建 |
 | `docs/github-actions-fotufilm.md` | GitHub Actions 构建/触发/artifact 说明 | 2026-10-18 新建 |
-| `.github/workflows/fotufilm-android-native.yml` | CI：FSWP + Android AOT + parity | 2026-10-18 新建 |
+| `.github/workflows/fotufilm-android-native.yml` | CI：FSWP + Android AOT + `.so` + parity | 2026-10-18 新建 |
+| `native/CMakeLists.txt`、`native/fotufilm_jni.cpp` | Android JNI/CMake 构建入口（FOT-004） | 2026-10-19 新建 |
 | `app/`、`gradle/`、`build.gradle.kts`、`settings.gradle.kts` | Compose 空壳工程；可构建 `app-debug.apk` | 本次新建；T1-003 构建通过 |
 | `.gitignore`、`.gitattributes`、`.editorconfig` | 仓库规范 | 本次新建 |
 | `.research/` | 官方文档抓取缓存（Markdown 快照） | 临时研究材料；已在 `.gitignore` 中排除 |
@@ -79,7 +80,8 @@
 | P-022 | 红色主题细节打磨（初版） | 降刺激红 `#D9382E`；删多余线条/说明；系统栏随页面换色/图标；曾用 overlay 裁剪 | `DONE`（已由 P-023 取代） |
 | P-023 | 持久机身 Stage + 跟手动画 | `CameraStageScreen`；HOME/CAMERA 共用机身；拖拽驱动 progress；快门/闪光灯移动，镜头→取景器，按钮重排；移除 sharedBounds | `DONE`（真机动画未验证） |
 | P-024 | 设置页内容 App 化 | 保留红框；内容改为 24sp 标题 + 分组卡片 + 15/12sp 行 + 44dp 滤镜分段控件 + LazyColumn | `DONE`（真机视觉未验证） |
-| P-025 | Fotufilm Android 原生移植评估/计划 | 本地源码分析；FSWP + C++ AOT + JNI 路线；M8/FOT 任务；License 清单 | `DONE`（计划文档；Phase 0 未开始） |
+| P-025 | Fotufilm Android 原生移植评估/计划 | 本地源码分析；FSWP + C++ AOT + JNI 路线；M8/FOT 任务；License 清单 | `DONE`（计划文档） |
+| P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE`（缺真机） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -101,7 +103,8 @@
 | Gradle 构建验证 | `PASS` | 2026-10-17 `assembleDebug` + `assembleRelease` 成功；APK/哈希见第 5 节 |
 | Release 安装/UI | `NOT_RUN` | 未签名 Release APK 已生成，未安装 |
 | 相机预览/拍摄 | `NOT_STARTED` | 阶段 2；当前明确不做 |
-| 图像处理/滤镜 | `NOT_STARTED` | 阶段 3/4 |
+| M8 原生构建 | `IN_PROGRESS` | CI run `39198895398` 全绿；packs/AOT/`libfotufilm_android.so` 已产出；缺真机 12MP |
+| 图像处理/滤镜 | `NOT_STARTED` | 阶段 3/4；M8 接入中 |
 | MediaStore/Room | `NOT_STARTED` | 阶段 5 |
 | 性能/兼容性 | `NOT_STARTED` | 阶段 6 |
 | 应用 ID/应用名 | `OPEN` | D-020；需产品确认 |
@@ -277,12 +280,13 @@
 - 更新 `PROJECT_STATE.md`/`TASK_BOARD.md`/`TEST_PLAN.md`；
 - 打 tag `phase-1-prototype`（Git 初始化后）。
 
-### 第 6 步：Fotufilm M8 Phase 0（与 M1/M2 并行，当前阻塞）
+### 第 6 步：Fotufilm M8 Phase 0（构建侧已完成，缺真机）
 
 - 先读 `docs/fotufilm-android-port-plan.md` 与 `docs/fotufilm-license-inventory.md`；
-- FOT-001 已完成 License/来源清单；
-- FOT-002 主路径改为 GitHub Actions Linux：workflow `.github/workflows/fotufilm-android-native.yml`；需要先把仓库推到 GitHub；WSL2 仅作为备选，见 `docs/fotufilm-windows-build.md`；
-- FOT-003/004：生成 3 个 FSWP pack，编出 arm64 CPU AOT `.so`，真机处理 1 张 12MP；
+- FOT-001/002/003 已完成：License 清单、GitHub Actions CI、12MP FSWP packs；
+- FOT-004 构建侧已完成：`native/` + `libfotufilm_android.so` 5,874,424 B；CI run `39198895398` 全绿；
+- **唯一阻塞**：没有 Android 真机，12MP 耗时/峰值内存未测；FOT-004 不能标 `VERIFIED`；
+- 下一步：接 FOT-005（FSWP 解析 + Kotlin FilmEngine API）或先解决真机；
 - EXP-13 通过前，不进入正式相机链路替换；
 - 不把 47 个 stock 一次性打包，先 3 → 12 → 47。
 
@@ -344,13 +348,11 @@ D:\Android\pocket ccd\
 │   │   ├── MainActivity.kt
 │   │   ├── navigation/              # AppDestination/AppEvent/reduce/AppViewModel
 │   │   └── ui/
-│   │       ├── AppRoot.kt           # 导航 + 展开/收起转场 + 3 个占位页面
-│   │       ├── home/HomeScreen.kt   # 首页静态 UI + 下拉/上拉手势
-│   │       ├── camera/CameraScreen.kt
+│   │       ├── AppRoot.kt           # 导航 + 首页/拍摄 Stage + 其他页面
+│   │       ├── stage/CameraStageScreen.kt  # 持久红框机身/跟手动画
 │   │       ├── gallery/PhotoWallScreen.kt
 │   │       ├── result/ResultScreen.kt
 │   │       ├── settings/SettingsScreen.kt
-│   │       ├── components/CameraShutterButton.kt
 │   │       ├── components/ToyCameraBody.kt
 │   │       └── theme/               # Tokens/Type/Theme
 │   └── build/outputs/apk/debug/app-debug.apk
