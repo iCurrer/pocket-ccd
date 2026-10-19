@@ -573,15 +573,15 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 **路径：** 离线 FSWP pack + C++ AOT + JNI；不在 Android 上跑完整 Swift App。
 **方案文档：** [`docs/fotufilm-android-port-plan.md`](docs/fotufilm-android-port-plan.md)
 **License 清单：** [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md)
-**当前状态：** `IN_PROGRESS` — CI 已跑绿（run `39143317856`、`39145196597`、`39198895398`），FSWP pack、arm64 AOT 内核、parity（64 case）、`libfotufilm_android.so` 均有实证：最新 run `39198895398` 全绿，configure 期四个头命中 `Sources/FotufilmHalide`，`libfotufilm_android.so` 链接成功（5,874,424 B），`Verify .so` 断言 AArch64 通过，产物 `fotufilm-android-poc`（12.4 MB）含 `.so` 与 `so-*.log`。**缺口已从"无设备"变为"无调用方"**：`PJZ110` 真机已就位（arm64-v8a / API 37 / 12GB RAM / 8 核）并完成 App 安装/启动/截图（P-027），但 `app/src` 下还没有 `fotufilm` 包的 Kotlin 绑定，`libfotufilm_android.so` 的 8 个 JNI 符号没有任何调用方，因此 12MP 耗时/峰值内存仍无数据，FOT-004 不能标 `VERIFIED`。下一个可交付是 FOT-005。
+**当前状态：** `IN_PROGRESS` — **Phase 0 spike 已在真机上跑通**。构建侧：CI run `39198895398` 全绿，FSWP pack、arm64 AOT 内核、parity（64 case）、`libfotufilm_android.so`（5,874,424 B）均有实证。运行时侧：`PJZ110` 真机（arm64-v8a / API 37 / 10.9 GB RAM / 8 核）已完成 Kotlin 绑定 + pack 加载 + 12MP 全链路，3 个 stock 均渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB。**M8 的硬卡点已从"无设备"→"无调用方"→ 全部解除**；余下的是 Phase 1 的真实链路（相机接入 FOT-007、色彩口径 FOT-006）与 47 stock 全量（FOT-012）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)。
 
 | ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
 |---|---|---|---|---|---|---|---|
 | FOT-001 | License/来源清单 | 无 | `docs/fotufilm-license-inventory.md` | 代码/profile/第三方/商标清单 | 每项有 license/义务/处置 | 人工/法务复核 | `DONE` |
 | FOT-002 | GitHub Actions Linux 构建 + 工具链 | FOT-001 | `.github/workflows/fotufilm-android-native.yml` | Swift + Halide + NDK + workflow | workflow 首次 run 成功；artifact 可下载 | Actions run + artifact | `DONE`（run `39143317856` 全绿，12.0 min；Swift 6.1 / LLVM 22.1.8 / NDK r28c 均装通；artifact `fotufilm-android-poc` 已下载核对） |
 | FOT-003 | 3 个代表性 FSWP pack | FOT-002 | Gold200/Portra400/TriX400 | `.fswp` ×3 | AOT parity 工具可读取 | `--dump-wasm-pack` | `DONE`（判据改为 `[F]` 实证：run `39145196597` 的 4 个 pack 已下载，头部解出 `FSWP v2 4000x3000`；parity 用 `example-negative-400__96x64` 跑通 64 case） |
-| FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so`（构建脚本 `native/`） | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `IN_PROGRESS`（**构建侧已通**：`1864f56` 提交 `native/`；`0c6610c` 修 `find_path` 被 NDK sysroot 重根化；`6004220` 修 `fotufilm_jni.cpp:270` most vexing parse。run `39198895398` 全绿，链接出 `libfotufilm_android.so` 5,874,424 B 并通过 AArch64 + 8 个 JNI 导出断言；**真机 12MP 未测**） |
-| FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `camera/film/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `TODO` |
+| FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so`（构建脚本 `native/`） | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `DONE`（`1864f56` 提交 `native/`；`0c6610c` 修 `find_path` 被 NDK sysroot 重根化；`6004220` 修 most vexing parse。run `39198895398` 全绿，`.so` 5,874,424 B 通过 AArch64 + JNI 导出断言。**真机实测（run 见下）**：非 debuggable 的 `benchmark` 构建下，3 个 12MP pack 全 `nonFinite=0`，单帧 **2.0–3.2 s**（内核占 80–85%），峰值 RSS **373–463 MB**。数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)） |
+| FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `app/src/main/java/com/pocketccd/prototype/fotufilm/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `DONE`（`FotufilmNative`（9 个 external，与 C++ 签名逐条对齐）、`FilmPack`（小端 FSWP 解析）、`FilmEngine`（行带分块 + halo）、`LinearColor`、`FilmSelfTest`。真机：`libraryLoaded=true` / `abiVersion=1` / `available=true` / `packCount=4`；Gold200、Portra400、TriX400 三卷均渲染成功；TriX400 输出 R=G=B 精确相等（黑白卷），三彩色卷各有 0.128–0.137 偏色） |
 | FOT-006 | 解码/线性 Rec.2020/输出色彩 | FOT-004 | `imaging/` | 输入输出色彩转换 | 与桌面参考误差可接受 | 色块/样片 | `TODO` |
 | FOT-007 | CameraX → 引擎 → 保存 | FOT-005、M2 | `camera/`、`storage/` | 拍照闭环 | 真机照片进入 app 相册 | 真机 | `TODO` |
 | FOT-008 | 胶片选择器 + 12 stock | FOT-005 | `ui/film/` | 选择器/metadata | 切换生效；无假数据 | UI/真机 | `TODO` |
@@ -591,6 +591,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 | FOT-012 | 47 stock 全量 pack | FOT-008、FOT-011 | `assets/film/` | 47 pack + 选择器 | 47 个可加载 | 真机 | `TODO` |
 | FOT-013 | Attribution/License 页 | FOT-001 | `ui/settings/` | 开源声明/许可页 | 满足 Apache/CC BY-SA/第三方 | 人工审计 | `TODO` |
 | FOT-014 | 设备端到端验收 | FOT-012、FOT-013 | 发布候选 | 真机矩阵报告 | 端到端通过 | 真机 | `TODO` |
+| FOT-015 | 颗粒相位跨带子连续性 | FOT-004 | `FilmEngine` | 结论 + 必要时按行偏移 seed | 实拍样片上无可见带间纹理差 | 实拍样片 + 上游确认 | `TODO`（真机分块验证发现：只有第一条带子与整帧逐位一致，之后每次内核调用都会推进颗粒随机状态，24 条带子的颗粒相位不连续。`maxAbsDiff` 仅 3/255，低于可察觉阈值，暂无可见接缝，但需在真实照片上确认；见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md) §5） |
 
 **M8 退出条件：**
 

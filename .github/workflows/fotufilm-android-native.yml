@@ -384,8 +384,11 @@ jobs:
           "$LLVM_BIN/llvm-readelf" -d "$SO" | grep NEEDED || true
           echo "---- 导出的 JNI 符号 ----"
           "$LLVM_BIN/llvm-nm" -D --defined-only "$SO" | tee build/so-symbols.txt
-          for symbol in nativeAbiVersion nativeOpenPack nativePackInfo nativeMaxHalo \
-                        nativeProcess nativeProcessStrip nativeReleasePack nativeLastError; do
+          # 9 个符号，一个都不能漏：之前这里只列了 8 个，漏掉 nativeAvailable，
+          # 而它恰好是"引擎在本机可不可用"的探针，真机自测第一件事就是调它。
+          for symbol in nativeAbiVersion nativeAvailable nativeOpenPack nativePackInfo \
+                        nativeMaxHalo nativeProcess nativeProcessStrip nativeReleasePack \
+                        nativeLastError; do
             grep -q "$symbol$" build/so-symbols.txt \
               || { echo "缺少 JNI 导出: $symbol" >&2; exit 1; }
           done

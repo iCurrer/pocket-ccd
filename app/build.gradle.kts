@@ -27,6 +27,27 @@ android {
                 "proguard-rules.pro",
             )
         }
+
+        /**
+         * 性能基准用的构建类型。
+         *
+         * 为什么必须有它：`debug` 包是 debuggable 的，ART 对这类进程不做完整优化，
+         * 实测同一段 sRGB 编码循环在 debug 下是 2.5 秒、在非 debuggable 下差一个量级
+         * 以上。拿 debug 的耗时当性能结论会得出完全错误的判断（曾经就这么误判过，
+         * 以为编码是瓶颈，其实有一半是 debuggable 带来的）。`cmd package compile -m speed`
+         * 也救不了 —— debuggable 进程的优化限制不在 AOT 上。
+         *
+         * 用 debug 签名、不混淆，保证能直接安装、且测的就是仓库里这份代码。
+         * 不加 applicationIdSuffix，这样 pack 目录和 [FilmSelfTestActivity] 的
+         * 启动组件名都不变，测完不用重推 pack。
+         */
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isMinifyEnabled = false
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -43,6 +64,15 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    sourceSets.getByName("main") {
+        // Fotufilm 的 .so 由 CI 交叉编译产出，不进仓库（见 .gitignore 的 prebuilt/）。
+        // 目录不存在时 AGP 只是不带入原生库、构建照常成功 —— 这样干净克隆也能编过，
+        // 代价是运行时 nativeAvailable() 为 false，胶片功能自行降级。
+        jniLibs.directories.add(
+            rootProject.layout.projectDirectory.dir("prebuilt/fotufilm/lib").asFile.absolutePath
+        )
     }
 }
 

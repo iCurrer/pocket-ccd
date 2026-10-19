@@ -20,6 +20,13 @@ local.properties
 test-evidence/
 *.hprof
 
+# Fotufilm 原生产物（.so + FSWP pack）由 CI 产出后手动下载，不进仓库：
+# 一是体积（.so 5.6MB + 每个 pack 1.8MB），二是它们是上游 Apache-2.0 代码与
+# CC BY-SA 胶片数据的编译/派生结果，分发口径见 docs/fotufilm-license-inventory.md。
+# 放在 prebuilt/ 而不是 build/ ，是因为 ./gradlew clean 会清掉 build/ 整个目录，
+# 一次 CI 要 10 分钟才能重新产出。
+prebuilt/
+
 # Temporary official-doc snapshots used for the 2026-10-17 review
 .research/
 

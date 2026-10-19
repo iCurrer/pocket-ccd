@@ -16,6 +16,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          FOT-004 真机自测入口。exported 是为了能用 adb am start 直接拉起，
+          Release 构建里会在 onCreate 直接 finish()；没有权限、没有网络、
+          也不读写用户媒体文件，只写自己外部私有目录下的一份 JSON。
+        -->
+        <activity
+            android:name=".fotufilm.FilmSelfTestActivity"
+            android:exported="true"
+            android:label="Fotufilm self test" />
     </application>
 
 </manifest>
