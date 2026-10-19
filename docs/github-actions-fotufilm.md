@@ -391,6 +391,82 @@ Actions → Fotufilm Android native POC → Run workflow
 
 > 注：头部字段是**小端**。用大端读会得到 `version=33554432`、`width=1610612736` 这类 `value << 24` 的怪数字——那是字节序错了，不是文件坏了。
 
+---
+
+## 5.6 2026-10-19 FOT-004 首次 .so 构建（run 39193539878）：编译期失败
+
+commit `1864f56` 加入 `native/fotufilm_jni.cpp` + `native/CMakeLists.txt` 后的第一次运行。
+
+### 走到哪一步
+
+| 步骤 | 结果 | 耗时 |
+|---|---|---|
+| `packs` job 全部 8 步 | success | 2m36s |
+| `Build Android CPU AOT kernels` | success | 60s |
+| `Run upstream Android AOT parity` | success | 3m47s |
+| **`Build libfotufilm_android.so`** | **failure** | **1s** |
+| `Verify .so architecture and JNI exports` | skipped | — |
+
+摘要只有三行：
+
+```text
+2 warnings and 3 errors generated.
+gmake[2]: *** [CMakeFiles/fotufilm_android.dir/build.make:79: CMakeFiles/fotufilm_android.dir/fotufilm_jni.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:87: CMakeFiles/fotufilm_android.dir/all] Error 2
+```
+
+### 从这三个数字读出来的
+
+1. **`gmake` 而不是链接器报错** → 失败在编译，不在链接。`--no-undefined` 那层断言根本没轮到。
+2. **只有 `fotufilm_jni.cpp.o`** → 上游的 `FotufilmHalideAndroid.cpp` 没报错（`Waiting for unfinished jobs` 说明它还在编，被中断）。
+3. **1 秒** → 预处理阶段或极早的语义检查就挂了。`FotufilmConfigLayout.h` 有 18271 个枚举值，正常编译一个 TU 要好几秒；1 秒内结束说明 clang 没走多远。
+
+### 已排除的
+
+对着 pin `2d07c48` 逐项核过：
+
+- `fotufilm_halide_process_strip` 的 21 个参数（6 指针 + 8 尺寸/原点 + 4 表 + 维度 + mask + seed）与 `include/FotufilmHalide.h` 的声明**逐位对齐**；
+- `fotufilm::ResolvedFrameParams` 的构造签名是 `(const float*, int32_t, int32_t, uint32_t, int32_t, int32_t, int32_t)`，`nativeMaxHalo` 传 7 个参数，类型能隐式转换；
+- 用到的成员 `mtf_radius_0..2`、`mtf_luma_radius`、`coupler_radius`、`adjacency_radius`、`adjacency_secondary_radius`、`fringe_radius`、`grain_radius`、`mottle_radius`、`print_mtf_radius`、`halation_radius_0..2` **全部存在**；
+- `FOTUFILM_CONFIG_DIFFUSION_RADIUS = 8740`（占 3 槽），`FOTUFILM_FRAME_CONFIGURATION_COUNT = 18271`，都在 `include/FotufilmConfigLayout.h` 里；
+- 四个头在 pin 里都在：`FotufilmHalide.h` / `FotufilmConfigLayout.h` / `FotufilmAotVariants.h` 在 `Sources/FotufilmHalide/include/`，`FotufilmResolvedFrameParams.h` 在 `Sources/FotufilmHalide/`。
+
+所以**不是调用写错，也不是头缺失**。
+
+### 最可能的根因：同名头遮蔽
+
+`jni.cpp` 里只引用了三个来自上游头的标识符：
+
+```cpp
+FOTUFILM_FRAME_REVERSAL            // nativeMaxHalo
+FOTUFILM_FRAME_CONFIGURATION_COUNT // parsePack
+FOTUFILM_CONFIG_DIFFUSION_RADIUS   // nativeMaxHalo
+```
+
+三个，正好对上 **3 errors**。而原 `CMakeLists.txt` 把 `${FOTUFILM_KERNELS}`（AOT 生成目录）排在
+include 路径**第一位**——只要生成目录里也产出一份同名 `FotufilmHalide.h`，它就会安静地盖掉上游那份，
+三个符号同时"未声明"。
+
+### 这一轮改了什么
+
+`native/CMakeLists.txt`：
+
+- include 顺序改为**上游源码目录在前、生成目录垫底**；
+- configure 期对四个头逐个 `find_path` 并 `message(STATUS)` 打印**实际命中路径**，缺一个就 `FATAL_ERROR`；
+- 若生成目录存在同名头，打 `WARNING` 记录这层遮蔽关系；
+- 编译选项加 `-ferror-limit=0`，不再让后续连带错误把第一条挤掉。
+
+`.github/workflows/fotufilm-android-native.yml`：
+
+- configure 与 build 输出分别 `tee` 到 `build/so-configure.log`、`build/so-build.log`；
+- 两个日志都进 `Collect artifacts`（`if: always()`），网页日志被截断时仍有原始证据。
+
+### 还缺什么
+
+**那 3 条 `error:` 的原文**（含 `文件:行:列`）。上面是推理，不是结论——若加固后的 configure 打印出的
+头路径全部指向 `Sources/FotufilmHalide`，遮蔽假设即被否掉，得回去看真正的未声明标识符是什么。
+
+
 
 ---
 
