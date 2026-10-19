@@ -78,6 +78,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         refreshStocks()
         refreshRoll()
+        // 把历史成片补进系统相册。早先的版本只写私有目录，那些照片在相册里根本
+        // 不存在（`Android/data` 被媒体扫描明确排除），这里补一次；已经写过的跳过。
+        viewModelScope.launch(Dispatchers.IO) { photoStore.syncToGallery() }
     }
 
     // ---- 导航 ----

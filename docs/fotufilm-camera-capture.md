@@ -256,3 +256,59 @@ adb shell ls -l /sdcard/Android/data/com.pocketccd.prototype/files/Pictures/pock
 2. **改用横向取景框**：等于改设计，承认这就是台横构图的机器。留给 FOT-009 重新设计
    取景框比例时再评估。
 
+
+## 10. 成片写两份：私有目录 + 系统相册（FOT-019）
+
+### 为什么必须写相册
+
+早先 `PhotoStore` 只写 `Android/data/<pkg>/files/Pictures/pocket-ccd/`。这个选择
+有两个好处：照片墙天然只显示本应用拍的照片、不申请任何存储权限。但它有一个
+致命后果 —— **`Android/data` 被媒体扫描明确排除，系统相册永远看不到这些文件**。
+相机拍出来的照片在相机之外完全不可见：不能分享、不能在微信里选图、不能备份。
+对一台"拿出门拍"的玩具相机，这等于白拍。
+
+### 现在的两条路径
+
+| 目标 | 路径 | 角色 |
+|---|---|---|
+| 应用私有 | `Android/data/<pkg>/files/Pictures/pocket-ccd/{full,thumb}/` | 权威副本，照片墙唯一数据源 |
+| 系统相册 | `Pictures/Pocket CCD/`（经 MediaStore） | 对外可见，分享 / 查看 / 备份都走这里 |
+
+两张是**同一份 JPEG 字节**：相册副本由已经落盘的文件流复制，不重新编码位图
+（12MP 再压一次要多花约 300ms 和一份 48MB 临时位图，而内容完全一样）。
+
+### 权限：一个都不用申请
+
+API 29+ 的分区存储允许应用向 MediaStore 插入**自己创建的**图片，不需要
+`WRITE_EXTERNAL_STORAGE`。`AndroidManifest.xml` 里仍然只有 `CAMERA`。
+
+### `IS_PENDING` 不能省
+
+先 `IS_PENDING = 1` 写入、完成后再置 0；写入失败时 `delete` 掉这条记录。
+否则相册里会出现半张图，或者留下一条永远 pending 的僵尸条目。
+
+### 历史补齐只做一次
+
+修复前拍的照片只在私有目录里，首次启动时由 `syncToGallery()` 补进相册。
+**必须只做一次**（`SharedPreferences` 标记 `gallery_backfill_done_v1`）：
+否则用户从系统相册删掉某张照片，下次启动又会被补回来，变成删不掉的鬼照片。
+
+### 实测（PJZ110，2026-10-19 15:48）
+
+```
+$ adb shell "ls '/sdcard/Pictures/Pocket CCD/'"
+film_1792391623930_gold200__4096x3072.jpg
+…（共 13 张，与私有目录一一对应）
+
+$ adb shell content query --uri content://media/external/images/media \
+    --projection _id:_display_name:relative_path:_size
+1000051828 film_1792391623930_gold200__4096x3072.jpg Pictures/Pocket CCD/ 3038375
+…（13 条，_size 与文件字节数一致，is_pending=0）
+```
+
+系统相册 App 的日志里能看到它在读这个目录：
+`AbsGalleryImageBitmapRequester … path:…/Pictures/Pocket CCD/film_…jpg`。
+
+> 排查提示：`ls '/sdcard/Pictures/Pocket CCD/'` 在 adb 里必须整串加引号，
+> 否则空格会把路径拆成两个参数，报 `No such file or directory` —— 很容易
+> 误判成"照片没写进相册"。

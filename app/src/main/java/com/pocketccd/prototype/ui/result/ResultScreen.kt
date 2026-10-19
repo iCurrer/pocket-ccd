@@ -142,6 +142,18 @@ fun ResultScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (photo.galleryUri != null) {
+                        Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
+                        Text(
+                            // 明确告诉用户照片去哪儿了：这台机器的照片墙只显示 App 自己
+                            // 拍的照片，而出门要分享时用的是系统相册，两者容易混淆。
+                            text = "已存入相册 · Pictures/Pocket CCD",
+                            style = PocketCcdType.MonoMicro,
+                            color = PocketCcdColors.TextTertiary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
                 Row(

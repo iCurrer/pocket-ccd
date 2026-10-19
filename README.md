@@ -50,12 +50,15 @@ ARGB 像素 → Bitmap.setPixels
 Bitmap 4096×3072                                       48 MB
    │  PhotoStore：Matrix.postRotate(90°)，随后立即 recycle 原图
    ▼
-3072×4096 → JPEG q92（3.1 MB）+ 1440 长边缩略图
+3072×4096 → JPEG q92（约 3 MB）+ 1440 长边缩略图
    ▼
-files/Pictures/pocket-ccd/{full,thumb}/
+files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本）
+   │  publishToGallery：文件流复制，不重新编码位图
+   ▼
+系统相册 Pictures/Pocket CCD/            ← 分享 / 查看 / 备份都走这里
 ```
 
-三件容易被误解的事：
+五件容易被误解的事：
 
 1. **取景器不做实时滤镜**（D-036）。预览就是普通相机画面，胶卷效果只出现在成品上。
    否则一台"玩具相机"会变成一台永远开着滤镜的普通相机。
@@ -68,6 +71,9 @@ files/Pictures/pocket-ccd/{full,thumb}/
    裁切不改像素密度所以依然成立；缩放会改密度，等于换了一套光学系统（D-037）。
    多机型适配全靠这一条 —— 一份 pack 服务多种设备的唯一正确做法，
    详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §2.2。
+5. **成片写两份**。私有目录是权威副本（照片墙只读这里），系统相册是给外面看的。
+   `Android/data/` 被媒体扫描明确排除，只写它等于"拍完只有本 App 看得到"。
+   详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §10。
 
 ### 为什么必须分块（halo 不能省）
 
