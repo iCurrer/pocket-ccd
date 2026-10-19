@@ -2,7 +2,7 @@
 
 **建立日期：** 2026-10-17  
 **适用版本：** 规范 V1.0 / 工程准备阶段  
-**当前测试阶段：** M1（静态 UI 原型），尚未执行 App 构建与设备测试  
+**当前测试阶段：** M1（静态 UI 原型）+ M8 构建侧；已执行 Debug 安装/启动，未执行相机/FOT 真机 12MP
 **配套文件：** `TASK_BOARD.md`、`SPEC_REVIEW.md`、`DECISION_LOG.md`、`PROJECT_STATE.md`
 
 ---
@@ -63,12 +63,12 @@
 | Gradle | 9.6.1、9.5.0、8.10.2 已缓存 | `[F]` |
 | 依赖缓存 | AGP 9.2.0/9.3.2/9.3.3；Kotlin 2.3.21/2.4.10；Compose BOM 2026.06.01/2026.08.00；CameraX 1.6.2；Room 2.8.5 | `[F]` |
 | AVD / system image | 无 | `[F]` |
-| 已连接设备 | 无 | `[F]` |
+| 已连接设备 | `PJZ110`（OnePlus/OP5D0DL1），arm64-v8a，Android API 37 | `[F]` 2026-10-19 |
 | `sdkmanager`/`avdmanager` | 未安装（无 cmdline-tools） | `[F]` |
 | Git | 工作区尚未初始化 | `[F]` |
 | 网络 | 系统代理 127.0.0.1:7897；Java/Node 可访问官方文档；Windows schannel curl 失败 | `[F]` |
 
-**结论：** 当前已能做静态检查、文档检查和 Gradle 构建（`assembleDebug` 已通过）；**不能执行 UI 安装测试、Compose UI 测试、相机测试、性能测试**。`TC-ENV-004`/`TC-P1-*` 中的设备相关用例必须等 T1-015 完成。
+**结论：** 已能做静态检查、文档检查、Gradle 构建，并已在 `PJZ110` 真机上安装/启动 Debug APK、截图、下拉进入拍摄页；**相机/FOT 12MP/Compose UI 测试仍未执行**。
 
 ### 3.2 阶段 1 目标环境
 
@@ -118,7 +118,7 @@
 
 | ID | 用例/步骤 | 预期结果 | 层级 | 自动化 | 状态 |
 |---|---|---|---|---|---|
-| TC-P1-001 | 冷启动 App，停留在首页 10s；检查权限弹窗、日志、相机初始化 | 不请求 CAMERA；不出现权限弹窗；无相机初始化；首页正常显示 | 手工 + 日志 | 否 | `NOT_RUN` |
+| TC-P1-001 | 冷启动 App，停留在首页 10s；检查权限弹窗、日志、相机初始化 | 不请求 CAMERA；不出现权限弹窗；无相机初始化；首页正常显示 | 手工 + 日志 | 否 | `PASS`（2026-10-19，`PJZ110`；截图 `docs/screenshots/2026-10-19-home.png`；未抓完整 logcat） |
 | TC-P1-002 | 首页点击 `PHOTO WALL` | 进入照片墙；返回回到 Home；无崩溃 | UI | 是 | `NOT_RUN` |
 | TC-P1-003 | 首页点击“进入相机”按钮 | 进入 Camera 静态页；无权限请求；返回 Home | UI | 是 | `NOT_RUN` |
 | TC-P1-004 | 首页从顶部向下拖拽超过阈值并释放 | 进入 Camera；动画完成后状态为 CAMERA | UI + 手工 | 部分 | `NOT_RUN` |
@@ -178,7 +178,7 @@
 | TC-ENV-001 | 盘点 SDK/Studio/JDK/Gradle/设备 | 版本与路径记录完整；与文档一致 | 环境 | 是 | `PASS`（2026-10-17，仅环境盘点） |
 | TC-ENV-002 | `./gradlew :app:assembleDebug` | 构建成功；APK 产物存在；无警告级阻塞 | 构建 | 是 | `PASS`（2026-10-17；有非阻塞 SDK 重复目录/strip 警告） |
 | TC-ENV-003 | `git status`、`git check-ignore` | 仓库干净；构建产物/本地配置被忽略；规范文件未修改 | 仓库 | 是 | `PASS`（2026-10-17；提交后复检） |
-| TC-ENV-004 | 创建 AVD 或连接真机；`adb devices` | 设备可见；可安装/启动/截图 | 环境 | 是 | `BLOCKED`（无 AVD/设备） |
+| TC-ENV-004 | 创建 AVD 或连接真机；`adb devices` | 设备可见；可安装/启动/截图 | 环境 | 是 | `PASS`（2026-10-19，`PJZ110` arm64-v8a，API 37；安装/启动/截图通过） |
 | TC-P1-017 | `aapt dump permissions` + Manifest 检查 | 无 CAMERA/INTERNET/存储/麦克风/位置权限 | 静态 | 是 | `PASS`（仅有 AndroidX 自定义签名权限 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`） |
 | TC-P1-018 | `assembleRelease`（未签名可）+ 检查 Debug 入口 | Release 不显示诊断入口；无调试日志 | 构建 + UI | 部分 | `PASS`（构建；Release UI 未跑） |
 | TC-P1-021 | `adb shell am start -W` 冷启动 ×5 | 记录中位数/P95；建立基线，不承诺固定值 | 性能 | 是 | `NOT_RUN` |

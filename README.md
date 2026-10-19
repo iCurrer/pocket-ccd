@@ -26,7 +26,7 @@
 | 下拉/上拉手势 | 下拉 88dp 进入相机、上拉 88dp 进入照片墙；共享机身转场（T1-007，`IN_PROGRESS`） |
 | M8 Fotufilm | CI run `39198895398` 全绿；12MP packs + arm64 AOT + `libfotufilm_android.so` 5,874,424 B；缺真机 12MP 验证 |
 | 构建 | `assembleDebug` 通过（2026-10-19）；Release 旧包未重打；Release 未签名、未安装 |
-| 安装/启动/真机测试 | **未执行**（无 AVD/设备） |
+| 安装/启动/真机测试 | `PJZ110` (arm64-v8a, API37) 已安装/启动/截图；下拉进入拍摄页；相机/FOT 12MP 未测 |
 
 > 构建通过不等于 App 已验证。页面、相机、滤镜、性能均未验证；未执行的测试均标 `NOT_RUN`/`BLOCKED`。
 

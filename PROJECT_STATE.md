@@ -6,7 +6,7 @@
 **工作区：** `D:\Android\pocket ccd`  
 **Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
 **App 代码：** Compose 空壳 + 导航状态机 + 红色玩具材质 + `CameraStageScreen`（首页/拍摄共用机身）+ 照片墙 + 成片页 + 设置页（`MainActivity` + `AppRoot` + `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`）
-**已执行 App 构建/测试：** `assembleDebug` 与 `assembleRelease` 均已通过；`AppStateTest` 12/12 通过；安装/启动/UI/相机未执行
+**已执行 App 构建/测试：** `assembleDebug` 通过；`AppStateTest` 12/12；已在 `PJZ110` 真机安装/启动、截图、下拉进入拍摄页；相机/FOT 12MP/Compose UI 测试未执行
 
 ---
 
@@ -82,6 +82,7 @@
 | P-024 | 设置页内容 App 化 | 保留红框；内容改为 24sp 标题 + 分组卡片 + 15/12sp 行 + 44dp 滤镜分段控件 + LazyColumn | `DONE`（真机视觉未验证） |
 | P-025 | Fotufilm Android 原生移植评估/计划 | 本地源码分析；FSWP + C++ AOT + JNI 路线；M8/FOT 任务；License 清单 | `DONE`（计划文档） |
 | P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE`（缺真机） |
+| P-027 | 真机首次安装/启动 | `PJZ110` arm64-v8a/API37；Debug APK 安装、启动、首页/拍摄页截图、下拉进入相机；截图 `docs/screenshots/2026-10-19-home.png`、`docs/screenshots/2026-10-19-camera.png` | `PASS`（UI 已真机跑通；FOT 12MP 未测） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
