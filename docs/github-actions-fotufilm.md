@@ -466,9 +466,44 @@ include 路径**第一位**——只要生成目录里也产出一份同名 `Fot
 **那 3 条 `error:` 的原文**（含 `文件:行:列`）。上面是推理，不是结论——若加固后的 configure 打印出的
 头路径全部指向 `Sources/FotufilmHalide`，遮蔽假设即被否掉，得回去看真正的未声明标识符是什么。
 
+### 定论（run 39197692827）：遮蔽假设被否，真因是两处独立缺陷
 
+加固后的 configure 打印出四个头的实际命中路径全部落在
+`third_party/fotufilm/Sources/FotufilmHalide/`，**"同名头遮蔽"假设就此否掉**。真正的两个原因是：
 
----
+**1）configure 找不到头：`find_path` 被 NDK sysroot 重根化（已修：0c6610c）**
+
+NDK 的 `android.toolchain.cmake` 会设置 `CMAKE_FIND_ROOT_PATH`（指向 NDK sysroot），并把
+`CMAKE_FIND_ROOT_PATH_MODE_INCLUDE` 定为 `ONLY`。这使 `find_path` 把传入的绝对搜索路径
+**重新根化**为 `<sysroot>/home/runner/...`，于是三个头明明在磁盘上也一律落空；而
+`file(GLOB "${FOTUFILM_KERNELS}/*.a")` 不是 `find_*` 命令、不受影响 —— 这正好解释了
+"`.a` 找得到、头找不到"这个反直觉现象。
+
+> 佐证：AOT 生成步骤用**相对路径** `-ISources/FotufilmHalide/include` 编译
+> `tools/generate_halide_android.cpp`（其第 3 行 `#include "../Sources/FotufilmHalide/Pipeline/Cpu.h"`）
+> 是成功的，说明该目录在检出里确实存在。
+
+修法：两处 `find_path` 补 `NO_CMAKE_FIND_ROOT_PATH`。
+
+**2）编译期 3 条 error：most vexing parse（本轮修复）**
+
+`native/fotufilm_jni.cpp:270` 原写作：
+
+```cpp
+std::vector<uint8_t> raw(size_t(length));
+```
+
+C++ 把它解析成**函数声明** `std::vector<uint8_t> raw(size_t length)`（即"类型 (参数名)"形式），
+`raw` 因此成了函数类型，紧接的 271/279 行 `raw.data()` / `raw.size()` 报
+`member reference base type 'std::vector<uint8_t> (size_t)' ... is not a structure or union`
+—— 这就是那 3 条 error 的真正来源，与上游头无关。
+
+修法：改写为 `static_cast<size_t>(length)`，彻底消除歧义。
+
+### 当前进度
+
+- configure：**通过**（头命中路径已打印）；
+- 以上 3 条 error 已定位并修复，`Build libfotufilm_android.so` 与 `Verify .so` 待下一次 run 验证。
 
 ## 6. 常见失败
 

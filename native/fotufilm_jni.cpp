@@ -267,7 +267,11 @@ Java_com_pocketccd_prototype_fotufilm_FotufilmNative_nativeOpenPack(JNIEnv *env,
         fail(kBadPack, "pack 为空");
         return 0;
     }
-    std::vector<uint8_t> raw(size_t(length));
+    // 注意：这里必须写 static_cast。写成 `raw(size_t(length))` 会被 C++ 按
+    // "类型 (参数名)" 解析成函数声明 `vector<uint8_t> raw(size_t length)`，
+    // 于是 raw 变成函数类型，后面的 raw.data()/raw.size() 全部编译失败
+    // （报 "member reference base type ... is not a structure or union"）。
+    std::vector<uint8_t> raw(static_cast<size_t>(length));
     env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte *>(raw.data()));
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
