@@ -1,0 +1,658 @@
+<!DOCTYPE html><html class="h-full w-full overflow-hidden" lang="zh-CN"><head><script data-mb-code-navigation>(function () {
+    var config = {"dist":false,"names":["films.html","gallery.html","home.html","roll.html"],"initialRoute":"/"};
+    if (config.dist) history.replaceState(history.state, '', location.href.split('#')[0] + '#' + config.initialRoute.replace(/^#/, ''));
+    var last = '';
+    function notify(href) {
+      if (!href || href === last) return;
+      last = href;
+      parent.postMessage({ type: 'wCode:iframe-navigate', href: href }, '*');
+    }
+    function route() { notify(location.hash.slice(1) || '/'); }
+    function matches(href) {
+      var name = href.split('#')[0].split('?')[0].split('/').pop();
+      return name && config.names.indexOf(name) !== -1;
+    }
+    document.addEventListener('click', function (event) {
+      var element = event.target;
+      while (element && element.tagName !== 'A') element = element.parentElement;
+      if (!element) return;
+      var href = element.getAttribute('href') || '';
+      if (config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        location.hash = href;
+        return;
+      }
+      if (!config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        var id = href.slice(1);
+        try { id = decodeURIComponent(id); } catch (_) {}
+        var target = document.getElementById(id) || document.getElementsByName(id)[0];
+        if (target) target.scrollIntoView();
+        return;
+      }
+      if (!config.dist && matches(href)) { event.preventDefault(); notify(href); }
+    }, true);
+    if (!config.dist && window.navigation) window.navigation.addEventListener('navigate', function (event) {
+      if (!event.destination.sameDocument && matches(event.destination.url)) {
+        event.preventDefault(); notify(event.destination.url);
+      }
+    });
+    ['pushState', 'replaceState'].forEach(function (name) {
+      var original = history[name];
+      history[name] = function () {
+        var href = arguments[2];
+        if (!config.dist && href && matches(String(href))) { notify(String(href)); return; }
+        var result = original.apply(this, arguments);
+        if (config.dist) setTimeout(route, 0);
+        return result;
+      };
+    });
+    if (config.dist) {
+      window.addEventListener('hashchange', route);
+      window.addEventListener('popstate', route);
+    }
+  })();</script>
+<style id="mb-code-iframe-style">
+  html, body { margin: 0; width: 100%; min-height: 100%; }
+  html { --uiWidth: 100% !important; --uiHeight: 100% !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>胶卷库 · 光屋胶片相机</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #050506;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    .ctl {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.66);
+      transition: all 0.18s ease;
+    }
+    .ctl:active { transform: scale(0.93); }
+    .film-canister {
+      position: relative;
+      width: 58px;
+      height: 84px;
+      flex: none;
+      border-radius: 9px;
+      background: linear-gradient(90deg, #191c1f, #3b4045 45%, #121416);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 20px rgba(0, 0, 0, 0.35);
+    }
+    .film-canister::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: -5px;
+      height: 7px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #edeff1, #8d9298);
+    }
+    .film-canister::after {
+      content: "";
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: -4px;
+      height: 6px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, #a7acb1, #6a7076);
+    }
+    .can-label {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      top: 22px;
+      bottom: 17px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #EBD9B4, #D3B585);
+      color: #2b2419;
+      padding: 4px;
+    }
+    /* ---------- film scenes ---------- */
+    .shot {
+      position: relative;
+      overflow: hidden;
+      background: var(--sky, #14202b);
+    }
+    .shot .sun {
+      position: absolute;
+      left: var(--sun-x, 20%);
+      top: var(--sun-y, 26%);
+      width: var(--sun-size, 26%);
+      aspect-ratio: 1 / 1;
+      border-radius: 9999px;
+      background: var(--sun, radial-gradient(circle, #fff1cf, rgba(240, 184, 121, 0) 70%));
+      opacity: 0.95;
+      filter: blur(1px);
+    }
+    .shot .ridge {
+      position: absolute;
+      left: -6%;
+      right: -6%;
+      bottom: -2%;
+      height: 56%;
+      background: var(--ridge, #0a0f14);
+      clip-path: polygon(0 64%, 8% 56%, 16% 64%, 26% 46%, 34% 55%, 44% 38%, 52% 49%, 62% 32%, 70% 44%, 79% 28%, 88% 41%, 96% 35%, 100% 46%, 100% 100%, 0 100%);
+    }
+    .grain-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.7px),
+        radial-gradient(rgba(0, 0, 0, 0.45) 0.5px, transparent 0.7px);
+      background-size: 3px 3px, 4px 4px;
+      opacity: 0.16;
+      mix-blend-mode: overlay;
+      z-index: 3;
+    }
+    .sprocket {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background-image: repeating-linear-gradient(90deg, rgba(6, 6, 6, 0.88) 0 4px, transparent 4px 10px);
+      z-index: 4;
+    }
+    .sprocket.top { top: 0; }
+    .sprocket.bottom { bottom: 0; }
+    .f-portra {
+      --sky: linear-gradient(180deg, #1d3547 0%, #6c8b90 45%, #dcc2a0 80%, #a97c55 100%);
+      --ridge: #151d1e;
+      --sun: radial-gradient(circle, #fff1cf 0%, #f4c58b 55%, rgba(244, 197, 139, 0) 72%);
+      --sun-x: 22%;
+      --sun-y: 33%;
+      --sun-size: 30%;
+    }
+    .f-gold {
+      --sky: linear-gradient(180deg, #31536a 0%, #9fb4a6 40%, #f1c97e 74%, #c98d4c 100%);
+      --ridge: #1a1c18;
+      --sun: radial-gradient(circle, #fff6d8, #ffd27a 55%, rgba(255, 210, 122, 0) 72%);
+      --sun-x: 66%;
+      --sun-y: 30%;
+      --sun-size: 26%;
+    }
+    .f-ektar {
+      --sky: linear-gradient(180deg, #1f4258 0%, #6e97a0 38%, #eaa47c 68%, #c25f4c 100%);
+      --ridge: #181312;
+      --sun: radial-gradient(circle, #fff0d4, #ffbb85 52%, rgba(255, 187, 133, 0) 70%);
+      --sun-x: 30%;
+      --sun-y: 26%;
+      --sun-size: 24%;
+    }
+    .f-superia {
+      --sky: linear-gradient(180deg, #1b3742 0%, #5f847e 45%, #c2c8a2 100%);
+      --ridge: #111b18;
+      --sun: radial-gradient(circle, rgba(238, 243, 214, 0.95), rgba(238, 243, 214, 0) 68%);
+      --sun-x: 74%;
+      --sun-y: 22%;
+      --sun-size: 22%;
+    }
+    .f-cinestill {
+      --sky: linear-gradient(180deg, #04121c 0%, #0a2b3c 55%, #124b5b 100%);
+      --ridge: #020a0e;
+      --sun: radial-gradient(circle, rgba(255, 116, 92, 0.95), rgba(255, 90, 70, 0.28) 48%, transparent 70%);
+      --sun-x: 62%;
+      --sun-y: 52%;
+      --sun-size: 22%;
+    }
+    .f-hp5 {
+      --sky: linear-gradient(180deg, #20262b 0%, #5d666b 52%, #b9bec1 100%);
+      --ridge: #0a0c0d;
+      --sun: radial-gradient(circle, rgba(247, 247, 244, 0.9), rgba(247, 247, 244, 0) 68%);
+      --sun-x: 26%;
+      --sun-y: 24%;
+      --sun-size: 22%;
+      filter: grayscale(1) contrast(1.05);
+    }
+    /* ---------- library ---------- */
+    .stock-chip {
+      flex: none;
+      padding: 6px 13px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      transition: all 0.18s ease;
+    }
+    .stock-chip.active {
+      background: #e7b37a;
+      border-color: #e7b37a;
+      color: #191410;
+      font-weight: 500;
+    }
+    .film-card {
+      display: flex;
+      gap: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      background: #131518;
+    }
+    .film-card.is-hidden { display: none; }
+    .load-btn {
+      flex: none;
+      padding: 5px 13px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 10px;
+      color: #edeff2;
+      transition: all 0.18s ease;
+    }
+    .load-btn:active { transform: scale(0.95); }
+    .load-btn.is-loaded {
+      background: rgba(231, 179, 122, 0.14);
+      border-color: rgba(231, 179, 122, 0.4);
+      color: #e7b37a;
+    }
+    .load-btn:disabled { opacity: 1; }
+  </style>
+</head>
+<body class="m-0 flex h-full w-full items-center justify-center overflow-hidden bg-[#050506]">
+<div class="relative flex h-full max-h-[852px] w-full max-w-[393px] select-none flex-col overflow-hidden bg-[#0B0C0E] text-[#EDEFF2]" id="app">
+<!-- 状态栏 -->
+<div class="flex shrink-0 items-center justify-between px-5 pb-1 pt-3 text-[11px] tracking-wide text-white/75">
+<span class="mono">9:41</span>
+<div class="flex items-center gap-1.5 text-white/70">
+<iconify-icon icon="mdi:signal" width="13"></iconify-icon>
+<iconify-icon icon="mdi:wifi" width="13"></iconify-icon>
+<iconify-icon icon="mdi:battery" width="16"></iconify-icon>
+</div>
+</div>
+<!-- 顶部 -->
+<header class="flex h-14 shrink-0 items-center justify-between px-4">
+<a aria-label="返回取景" class="ctl" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/home.html?render_html=true">
+<iconify-icon icon="mdi:arrow-left" width="18"></iconify-icon>
+</a>
+<div class="text-center">
+<h1 class="text-[15px] font-semibold tracking-[0.08em]">胶卷库</h1>
+<p class="mt-0.5 mono text-[8px] tracking-[0.24em] text-white/30">FILM STOCK</p>
+</div>
+<a aria-label="打开胶片相册" class="ctl" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+<iconify-icon icon="mdi:image-multiple-outline" width="17"></iconify-icon>
+</a>
+</header>
+<!-- 内容 -->
+<main class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-8 scroll-smooth [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<!-- 当前胶卷：金属机身卡片 -->
+<section class="relative overflow-hidden rounded-[24px] border border-white/50 bg-gradient-to-br from-[#F2F4F5] via-[#DCE0E3] to-[#B4BAC0] p-4 text-[#17191B] shadow-[0_18px_44px_rgba(0,0,0,0.5)]">
+<div class="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-white/50 blur-2xl"></div>
+<div class="relative flex items-center justify-between">
+<span class="mono text-[8px] tracking-[0.22em] text-black/45">LOADED · 已装卷</span>
+<span class="flex items-center gap-1.5 rounded-full bg-black/85 px-2 py-1 mono text-[8px] tracking-[0.14em] text-[#E7B37A]">
+<span class="h-1 w-1 rounded-full bg-[#E7B37A]"></span>READY
+          </span>
+</div>
+<div class="relative mt-4 flex gap-4">
+<div class="film-canister">
+<div class="can-label">
+<span class="text-[9px] font-bold leading-none tracking-tight" id="canLabel">PORTRA</span>
+<span class="mono text-[6px] leading-none tracking-[0.12em] opacity-70">400 · 36</span>
+</div>
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[17px] font-semibold leading-tight tracking-tight" id="currentName">KODAK PORTRA 400</p>
+<p class="mt-1 text-[10px] text-black/50" id="currentMeta">暖调肤色 · C-41 · 36 张</p>
+<div class="mt-2.5 flex items-center gap-1.5">
+<span class="rounded-full bg-black/85 px-2 py-1 mono text-[8px] tracking-[0.08em] text-white/85" id="currentIso">ISO 400</span>
+<span class="rounded-full border border-black/15 px-2 py-1 mono text-[8px] tracking-[0.08em] text-black/55">3:2 · 135</span>
+</div>
+</div>
+</div>
+<div class="relative mt-4">
+<div class="flex items-baseline justify-between">
+<p class="text-[10px] text-black/55">剩余 <span class="mx-0.5 text-[15px] font-semibold text-black/85" id="currentRemain">24</span> 张</p>
+<p class="mono text-[9px] tracking-[0.1em] text-black/40" id="currentExp">12 / 36</p>
+</div>
+<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-black/15">
+<div class="h-full rounded-full bg-[#B4703A] transition-all duration-500" id="currentBar" style="width: 33%;"></div>
+</div>
+<div class="mt-2 flex gap-[2px]" id="frameDots"></div>
+</div>
+<div class="relative mt-4 flex gap-2">
+<a class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#17191B] py-2.5 text-[11px] font-medium text-white" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/home.html?render_html=true">
+<iconify-icon icon="mdi:camera-outline" width="14"></iconify-icon>继续拍摄
+          </a>
+<a class="flex items-center justify-center gap-1.5 rounded-xl border border-black/15 bg-white/30 px-4 py-2.5 text-[11px] text-black/65" href="#library">
+            换卷
+          </a>
+</div>
+</section>
+<!-- 胶卷库标题与筛选 -->
+<div class="mt-5 scroll-mt-2" id="library">
+<div class="flex items-center justify-between px-1">
+<h2 class="text-[13px] font-semibold tracking-wide">
+            胶卷库
+            <span class="ml-1 mono text-[9px] font-normal text-white/30" id="stockCount">6 款</span>
+</h2>
+<a class="flex items-center gap-1 text-[9px] text-[#E7B37A]" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/roll.html?render_html=true">
+            冲扫中 1 卷
+            <iconify-icon icon="mdi:chevron-right" width="12"></iconify-icon>
+</a>
+</div>
+<div class="mt-2.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<button class="stock-chip active" data-filter="all" onclick="setStockFilter(this)">全部</button>
+<button class="stock-chip" data-filter="negative" onclick="setStockFilter(this)">彩色负片</button>
+<button class="stock-chip" data-filter="bw" onclick="setStockFilter(this)">黑白</button>
+<button class="stock-chip" data-filter="cine" onclick="setStockFilter(this)">电影卷</button>
+</div>
+</div>
+<!-- 胶卷列表 -->
+<div class="mt-3 space-y-3" id="stockList">
+<article class="film-card" data-cat="negative">
+<div class="shot f-portra relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">C-41</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">KODAK PORTRA 400</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">PROFESSIONAL · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥78</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">柔和肤色与细腻颗粒，逆光也不会失去层次。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 400</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2027.08 到期</span>
+<button class="load-btn is-loaded" data-frames="36" data-iso="400" data-meta="暖调肤色 · C-41 · 36 张" data-name="KODAK PORTRA 400" disabled="">已装卷</button>
+</div>
+</div>
+</article>
+<article class="film-card" data-cat="negative">
+<div class="shot f-gold relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">C-41</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">KODAK GOLD 200</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">EVERYDAY · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥52</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">金黄阳光感，适合日常街拍、夏日晚风与朋友合照。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 200</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2027.06 到期</span>
+<button class="load-btn" data-frames="36" data-iso="200" data-meta="金黄阳光 · C-41 · 36 张" data-name="KODAK GOLD 200" onclick="loadRoll(this)">装卷</button>
+</div>
+</div>
+</article>
+<article class="film-card" data-cat="cine">
+<div class="shot f-cinestill relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">ECN-2</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">CINEStill 800T</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">TUNGSTEN · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥96</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">夜色里的青色阴影与红色光晕，拍霓虹和末班车。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 800</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2026.12 到期</span>
+<button class="load-btn" data-frames="36" data-iso="800" data-meta="钨丝灯蓝调 · ECN-2 · 36 张" data-name="CINEStill 800T" onclick="loadRoll(this)">装卷</button>
+</div>
+</div>
+</article>
+<article class="film-card" data-cat="bw">
+<div class="shot f-hp5 relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">B&amp;W</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">ILFORD HP5 PLUS</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">MONOCHROME · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥48</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">高宽容度黑白卷，粗粝颗粒，适合纪实与雨天。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 400</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2027.03 到期</span>
+<button class="load-btn" data-frames="36" data-iso="400" data-meta="粗粝黑白 · 黑白显影 · 36 张" data-name="ILFORD HP5 PLUS" onclick="loadRoll(this)">装卷</button>
+</div>
+</div>
+</article>
+<article class="film-card" data-cat="negative">
+<div class="shot f-superia relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">C-41</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">FUJIFILM SUPERIA 400</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">JAPAN · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥45</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">青绿冷调与日系街景，阴天也能拍出干净空气感。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 400</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2027.09 到期</span>
+<button class="load-btn" data-frames="36" data-iso="400" data-meta="青绿冷调 · C-41 · 36 张" data-name="FUJIFILM SUPERIA 400" onclick="loadRoll(this)">装卷</button>
+</div>
+</div>
+</article>
+<article class="film-card" data-cat="negative">
+<div class="shot f-ektar relative h-[108px] w-[84px] shrink-0 overflow-hidden rounded-xl">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+<div class="sprocket top"></div>
+<div class="sprocket bottom"></div>
+<span class="absolute bottom-2 left-2 z-[4] mono text-[7px] tracking-[0.14em] text-white/80">C-41</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex items-start justify-between gap-2">
+<div>
+<h3 class="text-[12.5px] font-semibold leading-tight">KODAK EKTAR 100</h3>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.12em] text-white/25">VIVID · 135</p>
+</div>
+<span class="mono text-[9px] text-white/30">¥68</span>
+</div>
+<p class="mt-1.5 text-[10px] leading-relaxed text-white/40">世界上颗粒最细的彩色负片之一，红色与天空尤其漂亮。</p>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">ISO 100</span>
+<span class="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 mono text-[8px] text-white/55">36 张</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-2">
+<span class="mono text-[7px] tracking-[0.12em] text-white/22">2027.11 到期</span>
+<button class="load-btn" data-frames="36" data-iso="100" data-meta="高饱和细腻 · C-41 · 36 张" data-name="KODAK EKTAR 100" onclick="loadRoll(this)">装卷</button>
+</div>
+</div>
+</article>
+</div>
+<!-- 冲扫中 -->
+<a class="mt-4 flex items-center gap-3 rounded-2xl border border-[#E7B37A]/20 bg-[#E7B37A]/[0.06] p-3.5" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/roll.html?render_html=true">
+<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E7B37A]/12 text-[#E7B37A]">
+<iconify-icon icon="mdi:flask-outline" width="19"></iconify-icon>
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[11px] font-medium">KODAK GOLD 200 · 冲扫中</p>
+<p class="mt-0.5 text-[9px] text-white/35">光屋冲扫 LAB · 预计 10.20 交付 · 72%</p>
+</div>
+<iconify-icon class="text-white/30" icon="mdi:chevron-right" width="15"></iconify-icon>
+</a>
+<p class="mt-4 text-center text-[9px] leading-relaxed text-white/22">
+        胶卷由光屋冲扫 LAB 处理 · C-41 / ECN-2 / 黑白工艺<br>
+        冲扫完成后扫描件自动同步至胶片相册
+      </p>
+</main>
+<div class="flex shrink-0 justify-center pb-2 pt-1">
+<div class="h-1 w-24 rounded-full bg-white/15"></div>
+</div>
+<div class="pointer-events-none absolute bottom-[74px] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/85 px-4 py-2 text-[10px] tracking-wide text-white/85 opacity-0 backdrop-blur transition-opacity duration-300" id="toast"></div>
+</div>
+<script>
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+
+    function toast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.remove('opacity-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.add('opacity-0');
+      }, 2200);
+    }
+
+    function renderDots(frames, exposed) {
+      const wrap = document.getElementById('frameDots');
+      wrap.innerHTML = '';
+      for (let i = 0; i < frames; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'h-[6px] flex-1 rounded-[1px] ' + (i < exposed ? 'bg-[#B4703A]' : 'bg-black/15');
+        wrap.appendChild(dot);
+      }
+    }
+
+    function loadRoll(btn) {
+      const name = btn.dataset.name;
+      const iso = btn.dataset.iso;
+      const meta = btn.dataset.meta;
+      const frames = Number(btn.dataset.frames);
+      const stockKey = name.toLowerCase().replace(/ /g, '-');
+
+      document.querySelectorAll('.load-btn').forEach(function (item) {
+        item.disabled = false;
+        item.textContent = '装卷';
+        item.classList.remove('is-loaded');
+      });
+      btn.disabled = true;
+      btn.textContent = '已装卷';
+      btn.classList.add('is-loaded');
+
+      document.getElementById('currentName').textContent = name;
+      document.getElementById('currentMeta').textContent = meta;
+      document.getElementById('currentIso').textContent = 'ISO ' + iso;
+      document.getElementById('currentRemain').textContent = frames;
+      document.getElementById('currentExp').textContent = '0 / ' + frames;
+      document.getElementById('currentBar').style.width = '0%';
+      document.getElementById('canLabel').textContent = name.split(' ').slice(-1)[0];
+      renderDots(frames, 0);
+
+      try {
+        localStorage.setItem('film-active', JSON.stringify({ name: name, iso: iso, meta: meta, remaining: frames, exposed: 0, key: stockKey }));
+      } catch (err) {
+        /* 本地存储不可用时仅保留当前页面状态 */
+      }
+      toast('已装入 ' + name + ' · 共 ' + frames + ' 张');
+    }
+
+    function setStockFilter(el) {
+      document.querySelectorAll('.stock-chip').forEach(function (chip) {
+        chip.classList.remove('active');
+      });
+      el.classList.add('active');
+      const filter = el.dataset.filter;
+      let count = 0;
+      document.querySelectorAll('.film-card').forEach(function (card) {
+        const show = filter === 'all' || card.dataset.cat === filter;
+        card.classList.toggle('is-hidden', !show);
+        if (show) count += 1;
+      });
+      document.getElementById('stockCount').textContent = count + ' 款';
+    }
+
+    function syncActiveFromHome() {
+      let active = null;
+      try {
+        active = JSON.parse(localStorage.getItem('film-active') || 'null');
+      } catch (err) {
+        active = null;
+      }
+      if (!active || !active.name) return;
+
+      document.getElementById('currentName').textContent = active.name;
+      document.getElementById('currentMeta').textContent = active.meta;
+      document.getElementById('currentIso').textContent = 'ISO ' + active.iso;
+      document.getElementById('currentRemain').textContent = active.remaining;
+      document.getElementById('currentExp').textContent = active.exposed + ' / 36';
+      document.getElementById('currentBar').style.width = Math.round((active.exposed / 36) * 100) + '%';
+      document.getElementById('canLabel').textContent = active.name.split(' ').slice(-1)[0];
+      renderDots(36, active.exposed);
+
+      document.querySelectorAll('.load-btn').forEach(function (item) {
+        if (item.dataset.name === active.name) {
+          item.disabled = true;
+          item.textContent = '已装卷';
+          item.classList.add('is-loaded');
+        }
+      });
+    }
+
+    renderDots(36, 12);
+    syncActiveFromHome();
+  </script>
+
+
+</body></html>

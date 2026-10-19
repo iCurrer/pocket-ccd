@@ -1,0 +1,625 @@
+<!DOCTYPE html><html class="h-full w-full overflow-hidden" lang="zh-CN"><head><script data-mb-code-navigation>(function () {
+    var config = {"dist":false,"names":["films.html","gallery.html","home.html","roll.html"],"initialRoute":"/"};
+    if (config.dist) history.replaceState(history.state, '', location.href.split('#')[0] + '#' + config.initialRoute.replace(/^#/, ''));
+    var last = '';
+    function notify(href) {
+      if (!href || href === last) return;
+      last = href;
+      parent.postMessage({ type: 'wCode:iframe-navigate', href: href }, '*');
+    }
+    function route() { notify(location.hash.slice(1) || '/'); }
+    function matches(href) {
+      var name = href.split('#')[0].split('?')[0].split('/').pop();
+      return name && config.names.indexOf(name) !== -1;
+    }
+    document.addEventListener('click', function (event) {
+      var element = event.target;
+      while (element && element.tagName !== 'A') element = element.parentElement;
+      if (!element) return;
+      var href = element.getAttribute('href') || '';
+      if (config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        location.hash = href;
+        return;
+      }
+      if (!config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        var id = href.slice(1);
+        try { id = decodeURIComponent(id); } catch (_) {}
+        var target = document.getElementById(id) || document.getElementsByName(id)[0];
+        if (target) target.scrollIntoView();
+        return;
+      }
+      if (!config.dist && matches(href)) { event.preventDefault(); notify(href); }
+    }, true);
+    if (!config.dist && window.navigation) window.navigation.addEventListener('navigate', function (event) {
+      if (!event.destination.sameDocument && matches(event.destination.url)) {
+        event.preventDefault(); notify(event.destination.url);
+      }
+    });
+    ['pushState', 'replaceState'].forEach(function (name) {
+      var original = history[name];
+      history[name] = function () {
+        var href = arguments[2];
+        if (!config.dist && href && matches(String(href))) { notify(String(href)); return; }
+        var result = original.apply(this, arguments);
+        if (config.dist) setTimeout(route, 0);
+        return result;
+      };
+    });
+    if (config.dist) {
+      window.addEventListener('hashchange', route);
+      window.addEventListener('popstate', route);
+    }
+  })();</script>
+<style id="mb-code-iframe-style">
+  html, body { margin: 0; width: 100%; min-height: 100%; }
+  html { --uiWidth: 100% !important; --uiHeight: 100% !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>胶片相册 · 光屋</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #050506;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    .ctl {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.66);
+      transition: all 0.18s ease;
+    }
+    .ctl:active { transform: scale(0.93); }
+    .tab-chip {
+      flex: none;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.48);
+      transition: all 0.18s ease;
+    }
+    .tab-chip.active {
+      background: #edeff2;
+      border-color: #edeff2;
+      color: #16181b;
+      font-weight: 500;
+    }
+    .roll-section.is-hidden { display: none; }
+    /* ---------- film scenes ---------- */
+    .shot {
+      position: relative;
+      overflow: hidden;
+      background: var(--sky, #14202b);
+    }
+    .shot .sun {
+      position: absolute;
+      left: var(--sun-x, 20%);
+      top: var(--sun-y, 26%);
+      width: var(--sun-size, 26%);
+      aspect-ratio: 1 / 1;
+      border-radius: 9999px;
+      background: var(--sun, radial-gradient(circle, #fff1cf, rgba(240, 184, 121, 0) 70%));
+      opacity: 0.95;
+      filter: blur(1px);
+    }
+    .shot .ridge {
+      position: absolute;
+      left: -6%;
+      right: -6%;
+      bottom: -2%;
+      height: 56%;
+      background: var(--ridge, #0a0f14);
+      clip-path: polygon(0 64%, 8% 56%, 16% 64%, 26% 46%, 34% 55%, 44% 38%, 52% 49%, 62% 32%, 70% 44%, 79% 28%, 88% 41%, 96% 35%, 100% 46%, 100% 100%, 0 100%);
+    }
+    .grain-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.7px),
+        radial-gradient(rgba(0, 0, 0, 0.45) 0.5px, transparent 0.7px);
+      background-size: 3px 3px, 4px 4px;
+      opacity: 0.16;
+      mix-blend-mode: overlay;
+      z-index: 3;
+    }
+    .f-portra {
+      --sky: linear-gradient(180deg, #1d3547 0%, #6c8b90 45%, #dcc2a0 80%, #a97c55 100%);
+      --ridge: #151d1e;
+      --sun: radial-gradient(circle, #fff1cf 0%, #f4c58b 55%, rgba(244, 197, 139, 0) 72%);
+      --sun-x: 22%;
+      --sun-y: 33%;
+      --sun-size: 30%;
+    }
+    .f-gold {
+      --sky: linear-gradient(180deg, #31536a 0%, #9fb4a6 40%, #f1c97e 74%, #c98d4c 100%);
+      --ridge: #1a1c18;
+      --sun: radial-gradient(circle, #fff6d8, #ffd27a 55%, rgba(255, 210, 122, 0) 72%);
+      --sun-x: 66%;
+      --sun-y: 30%;
+      --sun-size: 26%;
+    }
+    .f-ektar {
+      --sky: linear-gradient(180deg, #1f4258 0%, #6e97a0 38%, #eaa47c 68%, #c25f4c 100%);
+      --ridge: #181312;
+      --sun: radial-gradient(circle, #fff0d4, #ffbb85 52%, rgba(255, 187, 133, 0) 70%);
+      --sun-x: 30%;
+      --sun-y: 26%;
+      --sun-size: 24%;
+    }
+    .f-superia {
+      --sky: linear-gradient(180deg, #1b3742 0%, #5f847e 45%, #c2c8a2 100%);
+      --ridge: #111b18;
+      --sun: radial-gradient(circle, rgba(238, 243, 214, 0.95), rgba(238, 243, 214, 0) 68%);
+      --sun-x: 74%;
+      --sun-y: 22%;
+      --sun-size: 22%;
+    }
+    .f-night {
+      --sky: linear-gradient(180deg, #030c18 0%, #082437 55%, #0d3b4d 100%);
+      --ridge: #010609;
+      --sun: radial-gradient(circle, rgba(214, 235, 255, 0.95), rgba(150, 190, 220, 0.2) 45%, transparent 68%);
+      --sun-x: 70%;
+      --sun-y: 20%;
+      --sun-size: 18%;
+    }
+    .f-cinestill {
+      --sky: linear-gradient(180deg, #04121c 0%, #0a2b3c 55%, #124b5b 100%);
+      --ridge: #020a0e;
+      --sun: radial-gradient(circle, rgba(255, 116, 92, 0.95), rgba(255, 90, 70, 0.28) 48%, transparent 70%);
+      --sun-x: 62%;
+      --sun-y: 52%;
+      --sun-size: 22%;
+    }
+    .f-hp5 {
+      --sky: linear-gradient(180deg, #20262b 0%, #5d666b 52%, #b9bec1 100%);
+      --ridge: #0a0c0d;
+      --sun: radial-gradient(circle, rgba(247, 247, 244, 0.9), rgba(247, 247, 244, 0) 68%);
+      --sun-x: 26%;
+      --sun-y: 24%;
+      --sun-size: 22%;
+      filter: grayscale(1) contrast(1.05);
+    }
+    #vFav.is-fav {
+      color: #e7b37a;
+      border-color: rgba(231, 179, 122, 0.4);
+      background: rgba(231, 179, 122, 0.1);
+    }
+  </style>
+</head>
+<body class="m-0 flex h-full w-full items-center justify-center overflow-hidden bg-[#050506]">
+<div class="relative flex h-full max-h-[852px] w-full max-w-[393px] select-none flex-col overflow-hidden bg-[#0B0C0E] text-[#EDEFF2]" id="app">
+<!-- 状态栏 -->
+<div class="flex shrink-0 items-center justify-between px-5 pb-1 pt-3 text-[11px] tracking-wide text-white/75">
+<span class="mono">9:41</span>
+<div class="flex items-center gap-1.5 text-white/70">
+<iconify-icon icon="mdi:signal" width="13"></iconify-icon>
+<iconify-icon icon="mdi:wifi" width="13"></iconify-icon>
+<iconify-icon icon="mdi:battery" width="16"></iconify-icon>
+</div>
+</div>
+<!-- 顶部 -->
+<header class="flex h-14 shrink-0 items-center justify-between px-4">
+<a aria-label="返回取景" class="ctl" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/home.html?render_html=true">
+<iconify-icon icon="mdi:arrow-left" width="18"></iconify-icon>
+</a>
+<div class="text-center">
+<h1 class="text-[15px] font-semibold tracking-[0.08em]">胶片相册</h1>
+<p class="mt-0.5 mono text-[8px] tracking-[0.24em] text-white/30">ARCHIVE · 2026</p>
+</div>
+<a aria-label="查看冲扫进度" class="ctl" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/roll.html?render_html=true">
+<iconify-icon icon="mdi:flask-outline" width="17"></iconify-icon>
+</a>
+</header>
+<!-- 内容 -->
+<main class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-7 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden" id="galleryScroll">
+<!-- 筛选 -->
+<div class="mt-1 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<button class="tab-chip active" data-filter="all" onclick="setFilter(this)">全部 <span class="opacity-40">16</span></button>
+<button class="tab-chip" data-filter="portra" onclick="setFilter(this)">PORTRA 400</button>
+<button class="tab-chip" data-filter="cinestill" onclick="setFilter(this)">CINEStill</button>
+<button class="tab-chip" data-filter="hp5" onclick="setFilter(this)">ILFORD HP5</button>
+<button class="tab-chip" data-filter="fav" onclick="setFilter(this)">收藏 <span class="opacity-40" id="favCount">2</span></button>
+</div>
+<!-- 冲扫进度 -->
+<a class="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-gradient-to-r from-[#1B1712] to-[#131518] p-3" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/roll.html?render_html=true">
+<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E7B37A]/25 bg-[#E7B37A]/10 text-[#E7B37A]">
+<iconify-icon icon="mdi:flask-outline" width="17"></iconify-icon>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-center justify-between">
+<p class="text-[10.5px] font-medium">KODAK GOLD 200 · 冲扫中</p>
+<span class="mono text-[8px] text-[#E7B37A]">72%</span>
+</div>
+<div class="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
+<div class="h-full w-[72%] rounded-full bg-gradient-to-r from-[#C8955E] to-[#F0C892]"></div>
+</div>
+<p class="mt-1.5 text-[8.5px] text-white/30">已扫描 18 / 36 · 预计 10.20 交付</p>
+</div>
+<iconify-icon class="text-white/25" icon="mdi:chevron-right" width="15"></iconify-icon>
+</a>
+<!-- PORTRA 400 -->
+<section class="roll-section mt-5" data-roll="portra">
+<div class="flex items-end justify-between px-1">
+<div class="flex items-center gap-2.5">
+<span class="h-6 w-[3px] rounded-full bg-[#C99A6A]"></span>
+<div>
+<h2 class="text-[12px] font-semibold tracking-wide">KODAK PORTRA 400</h2>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.14em] text-white/28">2026.10.12 · 24 张 · C-41</p>
+</div>
+</div>
+<span class="mono text-[8px] text-[#E7B37A]/80">已冲扫</span>
+</div>
+<div class="mt-2 grid grid-cols-3 gap-1.5">
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 06:42" data-fav="1" data-film="PORTRA 400" data-meta="1/125 · f/2.8 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-portra" data-title="雾中山脊" onclick="openViewer(this)" type="button">
+<span class="shot f-portra absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">06:42</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 08:15" data-film="PORTRA 400" data-meta="1/250 · f/4 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-superia" data-title="松林尽头" onclick="openViewer(this)" type="button">
+<span class="shot f-superia absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">08:15</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 13:20" data-film="PORTRA 400" data-meta="1/60 · f/2 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-gold" data-title="午后窗台" onclick="openViewer(this)" type="button">
+<span class="shot f-gold absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">13:20</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 16:58" data-film="PORTRA 400" data-meta="1/500 · f/5.6 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-ektar" data-title="海风公路" onclick="openViewer(this)" type="button">
+<span class="shot f-ektar absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">16:58</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 18:24" data-film="PORTRA 400" data-meta="1/125 · f/2.8 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-portra" data-title="收工的人" onclick="openViewer(this)" type="button">
+<span class="shot f-portra absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">18:24</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.12 18:51" data-film="PORTRA 400" data-meta="1/90 · f/4 · ISO 400" data-roll="PORTRA 400 · C-41" data-scene="f-gold" data-title="黄昏屋顶" onclick="openViewer(this)" type="button">
+<span class="shot f-gold absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">18:51</span>
+</button>
+</div>
+</section>
+<!-- CINEStill 800T -->
+<section class="roll-section mt-5" data-roll="cinestill">
+<div class="flex items-end justify-between px-1">
+<div class="flex items-center gap-2.5">
+<span class="h-6 w-[3px] rounded-full bg-[#4C8C97]"></span>
+<div>
+<h2 class="text-[12px] font-semibold tracking-wide">CINESTILL 800T</h2>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.14em] text-white/28">2026.10.03 · 36 张 · ECN-2</p>
+</div>
+</div>
+<span class="mono text-[8px] text-[#E7B37A]/80">已冲扫</span>
+</div>
+<div class="mt-2 grid grid-cols-3 gap-1.5">
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.03 21:07" data-film="CINE 800T" data-meta="1/30 · f/1.8 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-night" data-title="夜航" onclick="openViewer(this)" type="button">
+<span class="shot f-night absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">21:07</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.03 22:40" data-film="CINE 800T" data-meta="1/60 · f/2 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-cinestill" data-title="便利店灯" onclick="openViewer(this)" type="button">
+<span class="shot f-cinestill absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">22:40</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.03 23:12" data-fav="1" data-film="CINE 800T" data-meta="1/15 · f/1.8 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-night" data-title="雨后霓虹" onclick="openViewer(this)" type="button">
+<span class="shot f-night absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">23:12</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.03 23:48" data-film="CINE 800T" data-meta="1/45 · f/2 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-cinestill" data-title="末班车" onclick="openViewer(this)" type="button">
+<span class="shot f-cinestill absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">23:48</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.04 00:26" data-film="CINE 800T" data-meta="1/8 · f/2.8 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-night" data-title="桥下" onclick="openViewer(this)" type="button">
+<span class="shot f-night absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">00:26</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.10.04 01:03" data-film="CINE 800T" data-meta="1/60 · f/1.8 · ISO 800" data-roll="CINEStill 800T · ECN-2" data-scene="f-cinestill" data-title="午夜加油站" onclick="openViewer(this)" type="button">
+<span class="shot f-cinestill absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">01:03</span>
+</button>
+</div>
+</section>
+<!-- ILFORD HP5 -->
+<section class="roll-section mt-5" data-roll="hp5">
+<div class="flex items-end justify-between px-1">
+<div class="flex items-center gap-2.5">
+<span class="h-6 w-[3px] rounded-full bg-[#9AA0A4]"></span>
+<div>
+<h2 class="text-[12px] font-semibold tracking-wide">ILFORD HP5 PLUS</h2>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.14em] text-white/28">2026.09.21 · 36 张 · 黑白</p>
+</div>
+</div>
+<span class="mono text-[8px] text-[#E7B37A]/80">已冲扫</span>
+</div>
+<div class="mt-2 grid grid-cols-3 gap-1.5">
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.09.21 07:10" data-film="HP5 PLUS" data-meta="1/125 · f/5.6 · ISO 400" data-roll="ILFORD HP5 · 黑白" data-scene="f-hp5" data-title="石阶" onclick="openViewer(this)" type="button">
+<span class="shot f-hp5 absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">07:10</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.09.21 10:34" data-film="HP5 PLUS" data-meta="1/250 · f/8 · ISO 400" data-roll="ILFORD HP5 · 黑白" data-scene="f-hp5" data-title="老墙" onclick="openViewer(this)" type="button">
+<span class="shot f-hp5 absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">10:34</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.09.21 15:02" data-film="HP5 PLUS" data-meta="1/500 · f/2.8 · ISO 400" data-roll="ILFORD HP5 · 黑白" data-scene="f-hp5" data-title="逆光肖像" onclick="openViewer(this)" type="button">
+<span class="shot f-hp5 absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">15:02</span>
+</button>
+<button class="photo-btn relative aspect-square w-full overflow-hidden rounded-[9px] border border-white/5" data-date="2026.09.21 17:44" data-film="HP5 PLUS" data-meta="1/60 · f/4 · ISO 400" data-roll="ILFORD HP5 · 黑白" data-scene="f-hp5" data-title="山雨欲来" onclick="openViewer(this)" type="button">
+<span class="shot f-hp5 absolute inset-0">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+</span>
+<iconify-icon class="fav-mark hidden absolute right-1.5 top-1.5 z-10 text-[#E7B37A]" icon="mdi:heart" width="12"></iconify-icon>
+<span class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 mono text-[7px] tracking-[0.1em] text-white/75">17:44</span>
+</button>
+</div>
+</section>
+<!-- 空状态 -->
+<div class="mt-10 hidden flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 py-10 text-center" id="emptyFav">
+<div class="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/30">
+<iconify-icon icon="mdi:heart-outline" width="22"></iconify-icon>
+</div>
+<p class="mt-3 text-[11px] text-white/55">还没有收藏的底片</p>
+<p class="mt-1 text-[9px] leading-relaxed text-white/25">打开任意一张照片，点击右上角的心形<br>就能把它放进收藏夹</p>
+</div>
+<p class="mt-5 text-center mono text-[7.5px] tracking-[0.2em] text-white/18">16 FRAMES · SCANNED BY 光屋 LAB</p>
+</main>
+<div class="flex shrink-0 justify-center pb-2 pt-1">
+<div class="h-1 w-24 rounded-full bg-white/15"></div>
+</div>
+<!-- 照片查看器 -->
+<div class="absolute inset-0 z-50 hidden bg-[#08090B]" id="viewer">
+<div class="flex h-full flex-col">
+<div class="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
+<button aria-label="关闭照片" class="ctl" onclick="closeViewer()" type="button">
+<iconify-icon icon="mdi:close" width="18"></iconify-icon>
+</button>
+<div class="min-w-0 text-center">
+<p class="truncate text-[12px] font-medium" id="vTitle">雾中山脊</p>
+<p class="mt-0.5 mono text-[7.5px] tracking-[0.16em] text-white/30" id="vRoll">PORTRA 400 · C-41</p>
+</div>
+<button aria-label="收藏照片" class="ctl" id="vFav" onclick="toggleFav()" type="button">
+<iconify-icon icon="mdi:heart-outline" id="vHeart" width="18"></iconify-icon>
+</button>
+</div>
+<div class="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-3 pb-2 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<div class="relative aspect-[3/2] w-full overflow-hidden rounded-[10px] border border-white/10">
+<div class="shot f-portra absolute inset-0" id="vScene">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+</div>
+<span class="absolute bottom-2 left-2 z-10 mono text-[7.5px] tracking-[0.2em] text-white/65" id="vSceneLabel">PORTRA 400</span>
+<span class="absolute right-2 top-2 z-10 rounded-sm border border-white/20 bg-black/30 px-1.5 py-0.5 mono text-[7px] tracking-[0.14em] text-white/65">3:2 · 6000×4000</span>
+</div>
+<div class="mt-2 flex items-center justify-between px-1 mono text-[7.5px] tracking-[0.16em] text-white/25">
+<span>FRAME <span id="vFrame">01</span> / 24</span>
+<span>KODAK 135 · DNG + JPG</span>
+</div>
+<div class="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+<div>
+<p class="mono text-[7px] tracking-[0.16em] text-white/25">DATE</p>
+<p class="mt-1.5 mono text-[8.5px] leading-tight text-white/70" id="vDate">2026.10.12<br>06:42</p>
+</div>
+<div>
+<p class="mono text-[7px] tracking-[0.16em] text-white/25">EXPOSURE</p>
+<p class="mt-1.5 mono text-[8.5px] leading-tight text-white/70" id="vMeta">1/125 · f/2.8<br>ISO 400</p>
+</div>
+<div>
+<p class="mono text-[7px] tracking-[0.16em] text-white/25">FILM</p>
+<p class="mt-1.5 mono text-[8.5px] leading-tight text-white/70" id="vFilm">PORTRA<br>400</p>
+</div>
+</div>
+<div class="mt-4 flex items-center justify-between px-1">
+<button aria-label="上一张" class="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60" onclick="prevPhoto()" type="button">
+<iconify-icon icon="mdi:chevron-left" width="18"></iconify-icon>
+</button>
+<span class="mono text-[8px] tracking-[0.2em] text-white/30" id="vIndex">1 / 16</span>
+<button aria-label="下一张" class="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60" onclick="nextPhoto()" type="button">
+<iconify-icon icon="mdi:chevron-right" width="18"></iconify-icon>
+</button>
+</div>
+</div>
+<div class="shrink-0 px-4 pb-5 pt-2">
+<a class="flex w-full items-center justify-center gap-2 rounded-xl bg-[#EDEFF2] py-3 text-[11px] font-medium text-[#15171A]" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/home.html?render_html=true">
+<iconify-icon icon="mdi:camera-outline" width="15"></iconify-icon>
+            返回相机继续拍摄
+          </a>
+</div>
+</div>
+</div>
+<div class="pointer-events-none absolute bottom-[74px] left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/85 px-4 py-2 text-[10px] tracking-wide text-white/85 opacity-0 backdrop-blur transition-opacity duration-300" id="toast"></div>
+</div>
+<script>
+    const photos = Array.from(document.querySelectorAll('.photo-btn'));
+    const sections = Array.from(document.querySelectorAll('.roll-section'));
+    const viewer = document.getElementById('viewer');
+    const toastEl = document.getElementById('toast');
+    const favSet = new Set();
+    let viewerIndex = -1;
+    let currentFilter = 'all';
+    let toastTimer = null;
+
+    photos.forEach(function (p, i) {
+      if (p.dataset.fav === '1') favSet.add(i);
+    });
+
+    function toast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.remove('opacity-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.add('opacity-0');
+      }, 2000);
+    }
+
+    function applyFilter() {
+      sections.forEach(function (section) {
+        const sectionMatch = currentFilter === 'all' || currentFilter === 'fav' || section.dataset.roll === currentFilter;
+        let visible = 0;
+        section.querySelectorAll('.photo-btn').forEach(function (p) {
+          const idx = photos.indexOf(p);
+          const show = sectionMatch && (currentFilter !== 'fav' || favSet.has(idx));
+          p.classList.toggle('hidden', !show);
+          if (show) visible += 1;
+        });
+        section.classList.toggle('is-hidden', visible === 0);
+      });
+
+      const hasVisible = photos.some(function (p) {
+        return !p.classList.contains('hidden');
+      });
+      const empty = document.getElementById('emptyFav');
+      const showEmpty = currentFilter === 'fav' && !hasVisible;
+      empty.classList.toggle('hidden', !showEmpty);
+      empty.classList.toggle('flex', showEmpty);
+    }
+
+    function setFilter(el) {
+      document.querySelectorAll('.tab-chip').forEach(function (chip) {
+        chip.classList.remove('active');
+      });
+      el.classList.add('active');
+      currentFilter = el.dataset.filter;
+      applyFilter();
+    }
+
+    function updateFavUI() {
+      photos.forEach(function (p, i) {
+        const mark = p.querySelector('.fav-mark');
+        if (mark) mark.classList.toggle('hidden', !favSet.has(i));
+      });
+      document.getElementById('favCount').textContent = favSet.size;
+
+      if (viewerIndex >= 0) {
+        const fav = favSet.has(viewerIndex);
+        document.getElementById('vHeart').setAttribute('icon', fav ? 'mdi:heart' : 'mdi:heart-outline');
+        document.getElementById('vFav').classList.toggle('is-fav', fav);
+      }
+    }
+
+    function renderViewer() {
+      const data = photos[viewerIndex];
+      const scene = document.getElementById('vScene');
+      Array.from(scene.classList).forEach(function (name) {
+        if (name.indexOf('f-') === 0) scene.classList.remove(name);
+      });
+      scene.classList.add(data.dataset.scene);
+
+      document.getElementById('vTitle').textContent = data.dataset.title;
+      document.getElementById('vRoll').textContent = data.dataset.roll;
+      document.getElementById('vDate').innerHTML = data.dataset.date.replace(' ', '<br />');
+      document.getElementById('vMeta').innerHTML = data.dataset.meta.replace(' · ISO', '<br />ISO');
+      document.getElementById('vFilm').innerHTML = data.dataset.film.replace(' ', '<br />');
+      document.getElementById('vSceneLabel').textContent = data.dataset.film;
+      document.getElementById('vFrame').textContent = String(viewerIndex + 1).padStart(2, '0');
+      document.getElementById('vIndex').textContent = (viewerIndex + 1) + ' / ' + photos.length;
+      updateFavUI();
+    }
+
+    function openViewer(btn) {
+      viewerIndex = photos.indexOf(btn);
+      renderViewer();
+      viewer.classList.remove('hidden');
+    }
+
+    function closeViewer() {
+      viewer.classList.add('hidden');
+      applyFilter();
+    }
+
+    function prevPhoto() {
+      if (viewerIndex < 0) return;
+      viewerIndex = (viewerIndex - 1 + photos.length) % photos.length;
+      renderViewer();
+    }
+
+    function nextPhoto() {
+      if (viewerIndex < 0) return;
+      viewerIndex = (viewerIndex + 1) % photos.length;
+      renderViewer();
+    }
+
+    function toggleFav() {
+      if (viewerIndex < 0) return;
+      if (favSet.has(viewerIndex)) {
+        favSet.delete(viewerIndex);
+        toast('已取消收藏');
+      } else {
+        favSet.add(viewerIndex);
+        toast('已收藏到胶片夹');
+      }
+      updateFavUI();
+      applyFilter();
+    }
+
+    document.addEventListener('keydown', function (event) {
+      if (viewer.classList.contains('hidden')) return;
+      if (event.key === 'Escape') closeViewer();
+      if (event.key === 'ArrowLeft') prevPhoto();
+      if (event.key === 'ArrowRight') nextPhoto();
+    });
+
+    updateFavUI();
+  </script>
+
+
+</body></html>

@@ -1,0 +1,902 @@
+<!DOCTYPE html><html class="h-full w-full overflow-hidden" lang="zh-CN"><head><script data-mb-code-navigation>(function () {
+    var config = {"dist":false,"names":["films.html","gallery.html","home.html","roll.html"],"initialRoute":"/"};
+    if (config.dist) history.replaceState(history.state, '', location.href.split('#')[0] + '#' + config.initialRoute.replace(/^#/, ''));
+    var last = '';
+    function notify(href) {
+      if (!href || href === last) return;
+      last = href;
+      parent.postMessage({ type: 'wCode:iframe-navigate', href: href }, '*');
+    }
+    function route() { notify(location.hash.slice(1) || '/'); }
+    function matches(href) {
+      var name = href.split('#')[0].split('?')[0].split('/').pop();
+      return name && config.names.indexOf(name) !== -1;
+    }
+    document.addEventListener('click', function (event) {
+      var element = event.target;
+      while (element && element.tagName !== 'A') element = element.parentElement;
+      if (!element) return;
+      var href = element.getAttribute('href') || '';
+      if (config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        location.hash = href;
+        return;
+      }
+      if (!config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        var id = href.slice(1);
+        try { id = decodeURIComponent(id); } catch (_) {}
+        var target = document.getElementById(id) || document.getElementsByName(id)[0];
+        if (target) target.scrollIntoView();
+        return;
+      }
+      if (!config.dist && matches(href)) { event.preventDefault(); notify(href); }
+    }, true);
+    if (!config.dist && window.navigation) window.navigation.addEventListener('navigate', function (event) {
+      if (!event.destination.sameDocument && matches(event.destination.url)) {
+        event.preventDefault(); notify(event.destination.url);
+      }
+    });
+    ['pushState', 'replaceState'].forEach(function (name) {
+      var original = history[name];
+      history[name] = function () {
+        var href = arguments[2];
+        if (!config.dist && href && matches(String(href))) { notify(String(href)); return; }
+        var result = original.apply(this, arguments);
+        if (config.dist) setTimeout(route, 0);
+        return result;
+      };
+    });
+    if (config.dist) {
+      window.addEventListener('hashchange', route);
+      window.addEventListener('popstate', route);
+    }
+  })();</script>
+<style id="mb-code-iframe-style">
+  html, body { margin: 0; width: 100%; min-height: 100%; }
+  html { --uiWidth: 100% !important; --uiHeight: 100% !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>光屋胶片相机 · 取景</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #050506;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    .ctl {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.66);
+      transition: all 0.18s ease;
+    }
+    .ctl:active { transform: scale(0.93); }
+    .ctl.on {
+      background: #e7b37a;
+      border-color: #e7b37a;
+      color: #141414;
+    }
+    /* ---------- viewfinder scene ---------- */
+    .vf-shell {
+      padding: 3px;
+      border-radius: 23px;
+      background: linear-gradient(160deg, #4b4f55, #1b1d20 36%, #2d3136 66%, #141619);
+      box-shadow: 0 20px 46px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    }
+    .vf {
+      position: relative;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 20px;
+      background: #061021;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.65);
+    }
+    .vf-sky {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(120% 80% at 74% 6%, rgba(120, 178, 216, 0.28), transparent 55%),
+        linear-gradient(180deg, #04101f 0%, #082238 42%, #0d3349 68%, #0a1d29 100%);
+    }
+    .vf-stars {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.9) 0.6px, transparent 0.9px),
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.6px, transparent 0.9px);
+      background-size: 53px 47px, 31px 37px;
+      background-position: 0 0, 9px 14px;
+      opacity: 0.55;
+      -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 78%);
+      mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 78%);
+    }
+    .vf-glow {
+      position: absolute;
+      left: 14%;
+      bottom: 22%;
+      width: 52%;
+      height: 34%;
+      background: radial-gradient(circle, rgba(232, 178, 120, 0.2), transparent 68%);
+      filter: blur(12px);
+    }
+    .vf-mountain {
+      position: absolute;
+      left: -8%;
+      right: -8%;
+      bottom: 0;
+      height: 47%;
+      background: linear-gradient(180deg, #0a151d 0%, #04080c 80%);
+      clip-path: polygon(0 62%, 7% 55%, 15% 61%, 24% 44%, 31% 52%, 39% 36%, 47% 49%, 55% 31%, 63% 44%, 72% 26%, 80% 40%, 88% 33%, 95% 45%, 100% 38%, 100% 100%, 0 100%);
+    }
+    .vf-mountain.second {
+      height: 37%;
+      opacity: 0.5;
+      background: linear-gradient(180deg, #0c1a22, #050a0e);
+      clip-path: polygon(0 70%, 10% 58%, 20% 66%, 32% 48%, 42% 60%, 54% 42%, 66% 56%, 78% 38%, 88% 52%, 100% 44%, 100% 100%, 0 100%);
+    }
+    .vf-lights {
+      position: absolute;
+      left: 24%;
+      right: 14%;
+      bottom: 11%;
+      height: 12px;
+      background-image: radial-gradient(circle, rgba(255, 214, 160, 0.85) 1px, transparent 1.4px);
+      background-size: 19px 11px;
+      opacity: 0.35;
+      filter: blur(0.2px);
+    }
+    .vf-vignette {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 18%, transparent 72%, rgba(0, 0, 0, 0.55)),
+        radial-gradient(120% 90% at 50% 50%, transparent 48%, rgba(0, 0, 0, 0.5) 100%);
+      pointer-events: none;
+    }
+    .vf-grain {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.45px, transparent 0.65px),
+        radial-gradient(rgba(0, 0, 0, 0.6) 0.5px, transparent 0.7px);
+      background-size: 3px 3px, 4px 5px;
+      opacity: 0.14;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+    .reticle {
+      position: absolute;
+      left: 50%;
+      top: 46%;
+      width: 58px;
+      height: 58px;
+      transform: translate(-50%, -50%);
+      opacity: 0.85;
+      z-index: 20;
+    }
+    .reticle .rl {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.75);
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
+    }
+    .reticle .t { left: 50%; top: 0; width: 1px; height: 17px; transform: translateX(-0.5px); }
+    .reticle .b { left: 50%; bottom: 0; width: 1px; height: 17px; transform: translateX(-0.5px); }
+    .reticle .l { top: 50%; left: 0; height: 1px; width: 17px; transform: translateY(-0.5px); }
+    .reticle .r { top: 50%; right: 0; height: 1px; width: 17px; transform: translateY(-0.5px); }
+    .reticle .dot {
+      left: 50%;
+      top: 50%;
+      width: 3px;
+      height: 3px;
+      border-radius: 9999px;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 6px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      background: rgba(0, 0, 0, 0.32);
+      color: rgba(255, 255, 255, 0.74);
+      backdrop-filter: blur(6px);
+      line-height: 1;
+    }
+    .chip-btn {
+      transition: all 0.18s ease;
+      cursor: pointer;
+    }
+    .chip-btn:active { transform: scale(0.95); }
+    .chip-btn.active {
+      background: rgba(231, 179, 122, 0.9);
+      border-color: rgba(231, 179, 122, 0.9);
+      color: #191919;
+    }
+    .zoom-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(0, 0, 0, 0.3);
+      color: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(6px);
+      transition: all 0.18s ease;
+    }
+    .zoom-btn.active {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: rgba(255, 255, 255, 0.9);
+      color: #151515;
+    }
+    .focus-ring {
+      position: absolute;
+      width: 66px;
+      height: 66px;
+      margin: -33px 0 0 -33px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 25;
+    }
+    .focus-ring.show {
+      opacity: 1;
+      animation: focusPulse 0.5s ease-out;
+    }
+    .focus-ring .fc {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-color: #f0c892;
+      border-style: solid;
+      border-width: 0;
+    }
+    .focus-ring .fc1 { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+    .focus-ring .fc2 { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+    .focus-ring .fc3 { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+    .focus-ring .fc4 { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+    .focus-ring .label {
+      position: absolute;
+      left: 50%;
+      bottom: -15px;
+      transform: translateX(-50%);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 7px;
+      letter-spacing: 0.16em;
+      color: #f0c892;
+      white-space: nowrap;
+    }
+    @keyframes focusPulse {
+      0% { transform: scale(1.28); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    /* ---------- shutter & film ---------- */
+    .shutter {
+      width: 78px;
+      height: 78px;
+      border-radius: 9999px;
+      padding: 4px;
+      background: conic-gradient(from 210deg, #f4f6f8, #8d939a 18%, #e9edf0 42%, #767d84 68%, #e2e6e9 100%);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 10px 26px rgba(0, 0, 0, 0.65);
+      transition: transform 0.12s ease;
+    }
+    .shutter:active { transform: scale(0.94); }
+    .shutter-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 34% 28%, #ffffff, #d9dde1 58%, #b7bcc2);
+      border: 1px solid rgba(0, 0, 0, 0.16);
+      box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.14);
+    }
+    .shutter-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 35% 30%, #e8705f, #b5382c 70%);
+      box-shadow: 0 0 0 4px rgba(180, 60, 48, 0.12);
+    }
+    .shot {
+      position: relative;
+      overflow: hidden;
+      background: var(--sky, #14202b);
+    }
+    .shot .sun {
+      position: absolute;
+      left: var(--sun-x, 20%);
+      top: var(--sun-y, 26%);
+      width: var(--sun-size, 26%);
+      aspect-ratio: 1 / 1;
+      border-radius: 9999px;
+      background: var(--sun, radial-gradient(circle, #fff1cf, rgba(240, 184, 121, 0) 70%));
+      opacity: 0.95;
+      filter: blur(1px);
+    }
+    .shot .ridge {
+      position: absolute;
+      left: -6%;
+      right: -6%;
+      bottom: -2%;
+      height: 56%;
+      background: var(--ridge, #0a0f14);
+      clip-path: polygon(0 64%, 8% 56%, 16% 64%, 26% 46%, 34% 55%, 44% 38%, 52% 49%, 62% 32%, 70% 44%, 79% 28%, 88% 41%, 96% 35%, 100% 46%, 100% 100%, 0 100%);
+    }
+    .grain-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.7px),
+        radial-gradient(rgba(0, 0, 0, 0.45) 0.5px, transparent 0.7px);
+      background-size: 3px 3px, 4px 4px;
+      opacity: 0.16;
+      mix-blend-mode: overlay;
+      z-index: 3;
+    }
+    .f-portra {
+      --sky: linear-gradient(180deg, #1d3547 0%, #6c8b90 45%, #dcc2a0 80%, #a97c55 100%);
+      --ridge: #151d1e;
+      --sun: radial-gradient(circle, #fff1cf 0%, #f4c58b 55%, rgba(244, 197, 139, 0) 72%);
+      --sun-x: 22%;
+      --sun-y: 33%;
+      --sun-size: 30%;
+    }
+    .f-gold {
+      --sky: linear-gradient(180deg, #31536a 0%, #9fb4a6 40%, #f1c97e 74%, #c98d4c 100%);
+      --ridge: #1a1c18;
+      --sun: radial-gradient(circle, #fff6d8, #ffd27a 55%, rgba(255, 210, 122, 0) 72%);
+      --sun-x: 66%;
+      --sun-y: 30%;
+      --sun-size: 26%;
+    }
+    .f-cinestill {
+      --sky: linear-gradient(180deg, #04121c 0%, #0a2b3c 55%, #124b5b 100%);
+      --ridge: #020a0e;
+      --sun: radial-gradient(circle, rgba(255, 116, 92, 0.95), rgba(255, 90, 70, 0.28) 48%, transparent 70%);
+      --sun-x: 62%;
+      --sun-y: 52%;
+      --sun-size: 22%;
+    }
+    .f-night {
+      --sky: linear-gradient(180deg, #030c18 0%, #082437 55%, #0d3b4d 100%);
+      --ridge: #010609;
+      --sun: radial-gradient(circle, rgba(214, 235, 255, 0.95), rgba(150, 190, 220, 0.2) 45%, transparent 68%);
+      --sun-x: 70%;
+      --sun-y: 20%;
+      --sun-size: 18%;
+    }
+    /* ---------- tone filters ---------- */
+    #sceneLayer { transition: transform 0.5s ease, filter 0.3s ease; }
+    .tone-std { filter: none; }
+    .tone-portra { filter: sepia(0.12) saturate(1.02) contrast(0.98) brightness(1.04); }
+    .tone-ektar { filter: saturate(1.28) contrast(1.06); }
+    .tone-hp5 { filter: grayscale(1) contrast(1.12); }
+    .tone-cine { filter: hue-rotate(-8deg) saturate(1.12) contrast(1.04); }
+    /* ---------- sheets ---------- */
+    @keyframes sheetUp {
+      from { transform: translateY(26px); opacity: 0.5; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .sheet-panel { animation: sheetUp 0.26s ease-out; }
+    .style-opt {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.18s ease;
+    }
+    .style-opt.is-on {
+      border-color: rgba(231, 179, 122, 0.55);
+      background: rgba(231, 179, 122, 0.08);
+    }
+    .opt-swatch {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      border-radius: 9px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+    .opt-check { opacity: 0; transition: opacity 0.18s ease; }
+    .style-opt.is-on .opt-check { opacity: 1; }
+    .sw-std { background: linear-gradient(140deg, #0d2a3c, #7a9098 60%, #d8b48a); }
+    .sw-portra { background: linear-gradient(140deg, #5c7d80, #e2c6a1 60%, #b47e5d); }
+    .sw-ektar { background: linear-gradient(140deg, #2f5a6b, #e8a474 55%, #bb5644); }
+    .sw-hp5 { background: linear-gradient(140deg, #22282c, #8f979b 60%, #d7dadb); }
+    .sw-cine { background: linear-gradient(140deg, #061e2c, #0e4b5c 55%, #e06c55); }
+    .set-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 11px 2px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .set-row:last-of-type { border-bottom: 0; }
+    .switch {
+      position: relative;
+      width: 38px;
+      height: 22px;
+      flex: none;
+      border-radius: 9999px;
+      background: #2b2f34;
+      transition: background 0.2s ease;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      background: #9aa0a6;
+      transition: all 0.2s ease;
+    }
+    .switch.on { background: rgba(231, 179, 122, 0.9); }
+    .switch.on::after { left: 19px; background: #1a1a1a; }
+    #flashLayer { transition: opacity 0.09s linear; }
+  </style>
+</head>
+<body class="m-0 flex h-full w-full items-center justify-center overflow-hidden bg-[#050506]">
+<div class="relative flex h-full max-h-[852px] w-full max-w-[393px] select-none flex-col overflow-hidden bg-[#0B0C0E] text-[#EDEFF2]" id="app">
+<!-- 状态栏 -->
+<div class="z-30 flex shrink-0 items-center justify-between px-5 pb-1 pt-3 text-[11px] tracking-wide text-white/75">
+<span class="mono">9:41</span>
+<div class="flex items-center gap-1.5 text-white/70">
+<iconify-icon icon="mdi:signal" width="13"></iconify-icon>
+<iconify-icon icon="mdi:wifi" width="13"></iconify-icon>
+<iconify-icon icon="mdi:battery" width="16"></iconify-icon>
+</div>
+</div>
+<!-- 顶部控制 -->
+<header class="z-30 flex h-12 shrink-0 items-center justify-between px-4">
+<div class="flex items-center gap-2">
+<button aria-label="闪光灯" aria-pressed="false" class="ctl" id="flashBtn" onclick="toggleFlash()">
+<iconify-icon icon="mdi:flash-off" id="flashOffIcon" width="17"></iconify-icon>
+<iconify-icon class="hidden" icon="mdi:flash" id="flashOnIcon" width="17"></iconify-icon>
+</button>
+<button aria-label="参考网格" aria-pressed="false" class="ctl" id="gridBtn" onclick="toggleGrid()">
+<iconify-icon icon="mdi:grid" width="16"></iconify-icon>
+</button>
+</div>
+<a aria-label="当前胶卷，前往胶卷库" class="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/films.html?render_html=true">
+<span class="h-1.5 w-1.5 rounded-full bg-[#E7B37A]"></span>
+<span class="mono text-[10px] tracking-[0.16em] text-white/80">PORTRA 400</span>
+<iconify-icon class="text-white/35" icon="mdi:chevron-right" width="12"></iconify-icon>
+</a>
+<button aria-label="相机设置" class="ctl" id="settingsBtn" onclick="openSheet('settingsSheet')">
+<iconify-icon icon="mdi:tune-variant" width="17"></iconify-icon>
+</button>
+</header>
+<!-- 取景器 -->
+<main class="min-h-0 flex-1 px-3 pb-1">
+<div class="vf-shell h-full w-full">
+<div class="vf" id="viewfinder">
+<div class="absolute inset-0 origin-center tone-std" id="sceneLayer">
+<div class="vf-sky"></div>
+<div class="vf-stars"></div>
+<div class="vf-glow"></div>
+<div class="vf-mountain second"></div>
+<div class="vf-mountain"></div>
+<div class="vf-lights"></div>
+<div class="vf-grain"></div>
+</div>
+<div class="absolute inset-0 z-10" id="vfTap"></div>
+<!-- 构图角标 -->
+<div class="pointer-events-none absolute inset-x-5 bottom-14 top-14 z-20">
+<span class="absolute left-0 top-0 h-5 w-5 border-l border-t border-white/45"></span>
+<span class="absolute right-0 top-0 h-5 w-5 border-r border-t border-white/45"></span>
+<span class="absolute bottom-0 left-0 h-5 w-5 border-b border-l border-white/45"></span>
+<span class="absolute bottom-0 right-0 h-5 w-5 border-b border-r border-white/45"></span>
+</div>
+<!-- 参考网格 -->
+<div class="pointer-events-none absolute inset-0 z-20 hidden" id="vfGrid">
+<div class="absolute bottom-0 left-1/3 top-0 w-px bg-white/15"></div>
+<div class="absolute bottom-0 right-1/3 top-0 w-px bg-white/15"></div>
+<div class="absolute left-0 right-0 top-1/3 h-px bg-white/15"></div>
+<div class="absolute bottom-1/3 left-0 right-0 h-px bg-white/15"></div>
+</div>
+<!-- 中央准星 -->
+<div class="reticle">
+<span class="rl t"></span>
+<span class="rl b"></span>
+<span class="rl l"></span>
+<span class="rl r"></span>
+<span class="rl dot"></span>
+</div>
+<!-- 顶部参数 -->
+<div class="absolute left-3 right-3 top-3 z-30 flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="chip mono text-[9px] tracking-[0.12em]">12</span>
+<span class="chip mono text-[9px] tracking-[0.12em]">DNG</span>
+<span class="chip mono text-[9px] tracking-[0.12em]">3:2</span>
+<span class="chip mono text-[9px] tracking-[0.12em]">AF-S</span>
+</div>
+<span class="chip mono text-[9px] tracking-[0.12em]">AWB</span>
+</div>
+<!-- 变焦 -->
+<div class="absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-2">
+<button aria-label="1 倍镜头" class="zoom-btn mono text-[9px] active" onclick="setZoom(this, 1)">1x</button>
+<button aria-label="2 倍镜头" class="zoom-btn mono text-[9px]" onclick="setZoom(this, 1.28)">2x</button>
+</div>
+<!-- 底部参数 -->
+<div class="absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="chip mono text-[9px] tracking-[0.08em]">1/125</span>
+<span class="chip mono text-[9px] tracking-[0.08em]">f/2.8</span>
+<span class="chip mono text-[9px] tracking-[0.08em]">+0.3</span>
+<span class="chip mono text-[9px] tracking-[0.08em]">ISO 400</span>
+</div>
+<button aria-label="选择色彩风格" class="chip chip-btn mono text-[9px] tracking-[0.12em]" id="styleLabel" onclick="openSheet('styleSheet')">STD</button>
+</div>
+<div class="focus-ring" id="focusRing">
+<span class="fc fc1"></span>
+<span class="fc fc2"></span>
+<span class="fc fc3"></span>
+<span class="fc fc4"></span>
+<span class="label">AF LOCK</span>
+</div>
+</div>
+</div>
+</main>
+<!-- 胶卷计数器 -->
+<div class="flex shrink-0 items-center justify-between px-5 pb-1 pt-3">
+<div class="flex items-center gap-2 mono text-[9px] tracking-[0.18em] text-white/40">
+<span class="h-1 w-1 rounded-full bg-[#E7B37A]"></span>
+<span id="rollStamp">KODAK PORTRA 400 · C-41</span>
+</div>
+<div class="mono text-[9px] tracking-[0.16em] text-white/40">
+<span class="text-[#E7B37A]" id="remainCount">24</span> / 36 EXP
+      </div>
+</div>
+<!-- 拍摄控制 -->
+<div class="shrink-0 px-6 pb-3 pt-1">
+<div class="flex items-end justify-between">
+<a aria-label="打开胶片相册" class="flex flex-col items-center gap-1.5" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+<div class="relative h-[50px] w-[50px] rounded-xl border border-white/15 p-[2px]">
+<div class="shot f-portra h-full w-full rounded-[9px]" id="lastShot">
+<div class="sun"></div>
+<div class="ridge"></div>
+<div class="grain-overlay"></div>
+</div>
+<span class="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-black/50 bg-[#E7B37A] px-1 mono text-[8px] font-semibold text-[#1a140d]" id="shotBadge">12</span>
+</div>
+<span class="text-[9px] tracking-[0.12em] text-white/35">相册</span>
+</a>
+<button aria-label="按下快门" class="shutter -mt-1" id="shutterBtn" onclick="shoot()">
+<span class="shutter-inner">
+<span class="shutter-dot"></span>
+</span>
+</button>
+<a aria-label="更换胶卷" class="flex flex-col items-center gap-1.5" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/films.html?render_html=true">
+<div class="flex h-[50px] w-[50px] items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] text-white/65">
+<iconify-icon icon="mdi:filmstrip" width="22"></iconify-icon>
+</div>
+<span class="text-[9px] tracking-[0.12em] text-white/35">胶卷</span>
+</a>
+</div>
+<div class="mt-3 flex items-center justify-between px-1 mono text-[8px] tracking-[0.14em] text-white/25">
+<span>AUTO · AF-S</span>
+<span id="shotStatus">已拍 12 张</span>
+<span>3:2 · DNG</span>
+</div>
+<div class="mt-2 h-[2px] w-full overflow-hidden rounded-full bg-white/10">
+<div class="h-full rounded-full bg-[#E7B37A] transition-all duration-300" id="frameBar" style="width: 33%;"></div>
+</div>
+</div>
+<div class="flex shrink-0 justify-center pb-2 pt-1">
+<div class="h-1 w-24 rounded-full bg-white/15"></div>
+</div>
+<!-- 色彩风格面板 -->
+<div class="absolute inset-0 z-40 hidden" id="styleSheet">
+<div class="absolute inset-0 bg-black/65 backdrop-blur-[2px]" onclick="closeSheet('styleSheet')"></div>
+<div class="sheet-panel absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[26px] border-t border-white/10 bg-[#14161A] px-5 pb-7 pt-3 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<div class="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15"></div>
+<div class="flex items-center justify-between">
+<div>
+<h3 class="text-[15px] font-semibold tracking-wide">色彩风格</h3>
+<p class="mt-0.5 text-[10px] text-white/40">选择后实时应用到取景画面</p>
+</div>
+<button aria-label="关闭" class="ctl" onclick="closeSheet('styleSheet')">
+<iconify-icon icon="mdi:close" width="16"></iconify-icon>
+</button>
+</div>
+<div class="mt-4 space-y-2">
+<button class="style-opt is-on w-full" data-label="STD" data-name="标准胶片" data-tone="std" onclick="applyStyle(this)">
+<span class="opt-swatch sw-std"></span>
+<span class="min-w-0 flex-1 text-left">
+<span class="block text-[12px] font-medium">标准 · STD</span>
+<span class="mt-0.5 block text-[9px] text-white/35">中性还原，保留原始夜色</span>
+</span>
+<iconify-icon class="opt-check text-[#E7B37A]" icon="mdi:check-circle" width="17"></iconify-icon>
+</button>
+<button class="style-opt w-full" data-label="P400" data-name="Portra 柔和" data-tone="portra" onclick="applyStyle(this)">
+<span class="opt-swatch sw-portra"></span>
+<span class="min-w-0 flex-1 text-left">
+<span class="block text-[12px] font-medium">柔和 · P400</span>
+<span class="mt-0.5 block text-[9px] text-white/35">肤色柔和，暖调低反差</span>
+</span>
+<iconify-icon class="opt-check text-[#E7B37A]" icon="mdi:check-circle" width="17"></iconify-icon>
+</button>
+<button class="style-opt w-full" data-label="E100" data-name="Ektar 浓郁" data-tone="ektar" onclick="applyStyle(this)">
+<span class="opt-swatch sw-ektar"></span>
+<span class="min-w-0 flex-1 text-left">
+<span class="block text-[12px] font-medium">浓郁 · E100</span>
+<span class="mt-0.5 block text-[9px] text-white/35">高饱和，色彩更明确</span>
+</span>
+<iconify-icon class="opt-check text-[#E7B37A]" icon="mdi:check-circle" width="17"></iconify-icon>
+</button>
+<button class="style-opt w-full" data-label="HP5" data-name="黑白 HP5" data-tone="hp5" onclick="applyStyle(this)">
+<span class="opt-swatch sw-hp5"></span>
+<span class="min-w-0 flex-1 text-left">
+<span class="block text-[12px] font-medium">黑白 · HP5</span>
+<span class="mt-0.5 block text-[9px] text-white/35">粗粝颗粒，高反差灰阶</span>
+</span>
+<iconify-icon class="opt-check text-[#E7B37A]" icon="mdi:check-circle" width="17"></iconify-icon>
+</button>
+<button class="style-opt w-full" data-label="CINE" data-name="电影蓝调" data-tone="cine" onclick="applyStyle(this)">
+<span class="opt-swatch sw-cine"></span>
+<span class="min-w-0 flex-1 text-left">
+<span class="block text-[12px] font-medium">蓝调 · CINE</span>
+<span class="mt-0.5 block text-[9px] text-white/35">钨丝灯夜色，青色阴影</span>
+</span>
+<iconify-icon class="opt-check text-[#E7B37A]" icon="mdi:check-circle" width="17"></iconify-icon>
+</button>
+</div>
+</div>
+</div>
+<!-- 相机设置面板 -->
+<div class="absolute inset-0 z-40 hidden" id="settingsSheet">
+<div class="absolute inset-0 bg-black/65 backdrop-blur-[2px]" onclick="closeSheet('settingsSheet')"></div>
+<div class="sheet-panel absolute inset-x-0 bottom-0 rounded-t-[26px] border-t border-white/10 bg-[#14161A] px-5 pb-7 pt-3">
+<div class="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15"></div>
+<div class="flex items-center justify-between">
+<div>
+<h3 class="text-[15px] font-semibold tracking-wide">相机设置</h3>
+<p class="mt-0.5 mono text-[8px] tracking-[0.18em] text-white/30">FILM OS · 1.4</p>
+</div>
+<button aria-label="关闭" class="ctl" onclick="closeSheet('settingsSheet')">
+<iconify-icon icon="mdi:close" width="16"></iconify-icon>
+</button>
+</div>
+<div class="mt-3">
+<button class="set-row" onclick="toggleSwitch(this.querySelector('.switch'))">
+<span class="flex items-center gap-2.5 text-[12px]">
+<iconify-icon class="text-white/45" icon="mdi:volume-high" width="16"></iconify-icon>
+              机械快门声
+            </span>
+<span class="switch on"></span>
+</button>
+<button class="set-row" onclick="toggleSwitch(this.querySelector('.switch')); setGridFromSwitch(this.querySelector('.switch'))">
+<span class="flex items-center gap-2.5 text-[12px]">
+<iconify-icon class="text-white/45" icon="mdi:grid" width="15"></iconify-icon>
+              九宫格参考线
+            </span>
+<span class="switch" id="gridSwitch"></span>
+</button>
+<button class="set-row" onclick="toggleSwitch(this.querySelector('.switch'))">
+<span class="flex items-center gap-2.5 text-[12px]">
+<iconify-icon class="text-white/45" icon="mdi:file-image-outline" width="16"></iconify-icon>
+              保留 DNG 原片
+            </span>
+<span class="switch on"></span>
+</button>
+<button class="set-row" onclick="toggleSwitch(this.querySelector('.switch'))">
+<span class="flex items-center gap-2.5 text-[12px]">
+<iconify-icon class="text-white/45" icon="mdi:filmstrip-box-multiple" width="16"></iconify-icon>
+              胶片边框水印
+            </span>
+<span class="switch on"></span>
+</button>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-2">
+<a class="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-[11px] text-white/75" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/films.html?render_html=true">
+<iconify-icon icon="mdi:filmstrip" width="15"></iconify-icon>胶卷库
+          </a>
+<a class="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-[11px] text-white/75" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+<iconify-icon icon="mdi:image-multiple-outline" width="15"></iconify-icon>胶片相册
+          </a>
+</div>
+</div>
+</div>
+<!-- 快门闪光 -->
+<div class="pointer-events-none absolute inset-0 z-30 bg-white opacity-0" id="flashLayer"></div>
+<!-- 轻提示 -->
+<div class="pointer-events-none absolute bottom-[124px] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/80 px-4 py-2 text-[10px] tracking-wide text-white/85 opacity-0 backdrop-blur transition-opacity duration-300" id="toast"></div>
+</div>
+<script>
+    const state = { remaining: 24, exposed: 12, flashOn: false, gridOn: false, name: 'KODAK PORTRA 400', iso: '400', meta: '暖调肤色 · C-41 · 36 张' };
+    const thumbScenes = ['f-portra', 'f-gold', 'f-cinestill', 'f-night'];
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    let busy = false;
+
+    function syncFooter() {
+      document.getElementById('remainCount').textContent = state.remaining;
+      document.getElementById('shotBadge').textContent = state.exposed;
+      document.getElementById('shotStatus').textContent = '已拍 ' + state.exposed + ' 张';
+      document.getElementById('frameBar').style.width = Math.round((state.exposed / 36) * 100) + '%';
+    }
+
+    function loadActiveRoll() {
+      let active = null;
+      try {
+        active = JSON.parse(localStorage.getItem('film-active') || 'null');
+      } catch (err) {
+        active = null;
+      }
+      if (!active || !active.name) {
+        syncFooter();
+        return;
+      }
+      state.name = active.name;
+      state.iso = active.iso;
+      state.meta = active.meta;
+      state.remaining = active.remaining;
+      state.exposed = active.exposed;
+
+      const rollName = document.querySelector('header a[href="films.html"] .mono');
+      if (rollName) rollName.textContent = active.name;
+
+      const footerRoll = document.getElementById('rollStamp');
+      if (footerRoll) footerRoll.textContent = active.name + ' · ' + active.meta.split('·')[1].trim();
+      document.querySelectorAll('.chip.mono').forEach(function (chip) {
+        if (/^ISO \d+$/.test(chip.textContent)) {
+          chip.textContent = 'ISO ' + active.iso;
+        }
+      });
+      syncFooter();
+    }
+
+    function persistActive() {
+      try {
+        localStorage.setItem('film-active', JSON.stringify({
+          name: state.name,
+          iso: state.iso,
+          meta: state.meta,
+          remaining: state.remaining,
+          exposed: state.exposed,
+          key: state.name.toLowerCase().replace(/ /g, '-')
+        }));
+      } catch (err) {
+        /* 本地存储不可用时忽略 */
+      }
+    }
+
+    function toast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.remove('opacity-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.add('opacity-0');
+      }, 2200);
+    }
+
+    function openSheet(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeSheet(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function shoot() {
+      if (busy) return;
+      if (state.remaining <= 0) {
+        toast('本卷已拍完 · 前往胶卷库换卷');
+        return;
+      }
+      busy = true;
+      state.remaining -= 1;
+      state.exposed += 1;
+      syncFooter();
+      persistActive();
+
+      const thumb = document.getElementById('lastShot');
+      thumbScenes.forEach(function (name) { thumb.classList.remove(name); });
+      thumb.classList.add(thumbScenes[state.exposed % thumbScenes.length]);
+
+      const flash = document.getElementById('flashLayer');
+      flash.style.opacity = '0.85';
+      setTimeout(function () { flash.style.opacity = '0'; }, 90);
+
+      toast('已记录 · ' + state.name + ' · 第 ' + state.exposed + ' 张');
+      setTimeout(function () { busy = false; }, 420);
+    }
+
+    function toggleFlash() {
+      state.flashOn = !state.flashOn;
+      const btn = document.getElementById('flashBtn');
+      btn.classList.toggle('on', state.flashOn);
+      btn.setAttribute('aria-pressed', state.flashOn ? 'true' : 'false');
+      document.getElementById('flashOffIcon').classList.toggle('hidden', state.flashOn);
+      document.getElementById('flashOnIcon').classList.toggle('hidden', !state.flashOn);
+      toast(state.flashOn ? '闪光灯已开启 · 自动输出' : '闪光灯已关闭');
+    }
+
+    function setGrid(on) {
+      state.gridOn = on;
+      document.getElementById('vfGrid').classList.toggle('hidden', !on);
+      const btn = document.getElementById('gridBtn');
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const sw = document.getElementById('gridSwitch');
+      if (sw) sw.classList.toggle('on', on);
+    }
+
+    function toggleGrid() {
+      setGrid(!state.gridOn);
+      toast(state.gridOn ? '九宫格参考线已开启' : '九宫格参考线已关闭');
+    }
+
+    function setGridFromSwitch(sw) {
+      setGrid(sw.classList.contains('on'));
+    }
+
+    function setZoom(el, scale) {
+      document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+        btn.classList.remove('active');
+      });
+      el.classList.add('active');
+      document.getElementById('sceneLayer').style.transform = 'scale(' + scale + ')';
+      toast(scale === 1 ? '镜头 1x · 等效 24mm' : '镜头 2x · 等效 48mm');
+    }
+
+    function applyStyle(el) {
+      document.querySelectorAll('.style-opt').forEach(function (btn) {
+        btn.classList.remove('is-on');
+      });
+      el.classList.add('is-on');
+      const layer = document.getElementById('sceneLayer');
+      ['tone-std', 'tone-portra', 'tone-ektar', 'tone-hp5', 'tone-cine'].forEach(function (name) {
+        layer.classList.remove(name);
+      });
+      layer.classList.add('tone-' + el.dataset.tone);
+      document.getElementById('styleLabel').textContent = el.dataset.label;
+      closeSheet('styleSheet');
+      toast('色彩风格 · ' + el.dataset.name);
+    }
+
+    function toggleSwitch(el) {
+      el.classList.toggle('on');
+    }
+
+    const vfTap = document.getElementById('vfTap');
+    vfTap.addEventListener('click', function (event) {
+      const rect = vfTap.getBoundingClientRect();
+      const ring = document.getElementById('focusRing');
+      ring.style.left = (event.clientX - rect.left) + 'px';
+      ring.style.top = (event.clientY - rect.top) + 'px';
+      ring.classList.remove('show');
+      void ring.offsetWidth;
+      ring.classList.add('show');
+    });
+
+    loadActiveRoll();
+  </script>
+
+
+</body></html>

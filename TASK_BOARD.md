@@ -43,6 +43,7 @@
 | M6 | 兼容性与性能 | 5 | `TODO` | M2–M5 功能可用 |
 | M7 | 发布准备 | 4 | `TODO` | M6 通过 |
 | M8 | Fotufilm Android 原生移植 | 14 | `IN_PROGRESS`（CI 路线已取代 WSL2：GitHub Actions 已跑绿，最新 run `39198895398` 全绿；FOT-001/002/003 `DONE`；FOT-004 **构建侧 `DONE`**——`libfotufilm_android.so` 已编出（5,874,424 B）并通过 AArch64 + JNI 符号断言；真机 `PJZ110` 已就位，但无 Kotlin 调用方，12MP 未实测。方案见 `docs/github-actions-fotufilm.md`、`docs/fotufilm-android-port-plan.md`） | FOT-001 + M2 可并行 |
+| M9 | UI 重设计：暗色胶片相机 | 17 | `IN_PROGRESS`（新取景页已是默认入口并接入真实相机；真机验证：取景 → 按快门 → 冲洗 → 落盘 → 相册全链路通过，卷计数真实可归零；原型完整 4 页已解出并归档，交互对照见 `docs/interaction-spec.md`；**交互层已于 2026-10-19 22:29–22:50 在 PJZ110 逐项验证**：点按对焦（`tap to focus -> true`）、真变焦（`zoom -> 2.00x`）、网格+Toast、90ms 闪白（整帧均值 243），T9-006/007/009 转 `DONE`；**其余三页（成片/相册/设置）已于 2026-10-19 23:25 全部暗色化并接入真实 EXIF/镜头倍率**，`assembleDebug` + 12/12 单测绿，待真机截图（T9-018/019/020/021）） | T9-018 → T9-019 → T9-020 → T9-021 → T9-012 |
 
 > 说明：M0 的 `DONE` 仅指文档文件已建立；不包含任何 App 构建或相机测试。文档内容仍需负责人评审后才能作为最终基线。
 
@@ -605,6 +606,74 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 
 ---
 
+# M9 — UI 重设计：暗色胶片相机
+
+**目标：** 按 `docs/reference/film-dark-home-2026-10-19.html` 的设计基线，用 Compose 重做一套"近黑底 + 香槟金 + 金属取景器"的拍摄界面，取代现行红色玩具机身。
+**规格文档：** [`docs/film-dark-ui-spec.md`](docs/film-dark-ui-spec.md)
+**范围：** 主题抽象、取景器叠加层、拍摄控制、底部面板、图标、其余页面视觉统一。
+**不包含：** 相机链路行为变更（沿用 FOT-007/FOT-019 已验收的实现）、Fotufilm 引擎改动、实时滤镜引擎。
+
+**关键约束：**
+
+- **并行开发，不原地改。** 新 UI 落 `ui/film/`，`AppRoot` 用构建开关切换；旧 `ui/stage/` + `ui/components/ToyCameraBody.kt` 在新 UI 验收通过前保持可回退。
+- **不做假数据。** 设计稿里的曝光三要素（`1/125`/`f/2.8`/`ISO 400`）、`DNG`、`3:2`、`AF-S`/`AWB` 一律删除或替换为真实值，见 D-040。
+- **触摸目标 ≥48dp。** 设计稿的 36dp 圆钮、28dp 变焦钮、17dp chip 视觉尺寸可保留，热区必须补齐，见规格 §2.4。
+- **语义令牌优先。** 不得新增 `RetroRed` 式材质名令牌，见 T9-001。
+
+| ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
+|---|---|---|---|---|---|---|---|
+| T9-001 | 语义令牌 + `ThemeSpec` 抽象 | D-038 | `ui/theme/ThemeSpec.kt`、`FilmDarkTokens.kt`、`Theme.kt` | 语义色板（`AppBg`/`Accent`/`Ink*`/`Hairline*`）、尺寸令牌、`CompositionLocal` 下发、`FilmDarkTheme` | 页面不读材质名常量；令牌改动一处即全局生效；旧 UI 外观零变化 | `assembleDebug`；旧 UI 真机截图与 P-027 对比无差异 | `IN_PROGRESS`（令牌层已实现；旧 UI 未迁移，语义令牌目前只服务新 UI） |
+| T9-002 | 页面结构定稿 + 导航调整 | D-039 确认、T9-001 | `navigation/AppState.kt`、`ui/AppRoot.kt` | 按 D-039 选定的结构更新 `AppDestination`/`reduce`；构建开关 | 转换矩阵覆盖全部路径；非法转换被忽略；单测通过 | `AppStateTest` 扩充；`testDebugUnitTest` | `DONE`（D-039 = 废除首页，`HOME` 已从枚举删除，`ApiStateTest` 12/12 通过） |
+| T9-003 | 取景器外壳 + 叠加层 | T9-001 | `ui/film/ViewfinderFrame.kt` | 四段金属渐变框 + 顶部 1px 高光 + 手绘投影；四角构图角标；九宫格；中央准星 | 边框层次可见（非单色平涂）；圆角 20dp 无锯齿；角标/准星在真实亮画面上可读 | 真机截图；亮/暗两种预览下各一张 | `DONE`（真机亮/暗两种画面均已验证：v3 暗场景、v6 亮桌面；角标靠双描边在任何亮度下都可读） |
+| T9-004 | 参数 chip + 真实数据接入 | T9-003、D-040 确认 | `ui/film/InfoChip.kt` | chip 组件；真实值数据源（尺寸/张数/版本） | 无硬编码假值；chip 内容随状态变化 | `grep` 无 `ISO`/`f/`/`1/125`/`DNG`/`AF-S`；真机截图 | `DONE`（LIVE / 12.6MP / 4:3 全为真实值；chip 写死 17dp 高度导致文字被压成「…」，已修） |
+| T9-005 | 金属快门 + 拍摄控制行 | T9-003 | `ui/film/FilmShutter.kt`、`CaptureControls.kt` | `sweepGradient` 快门环 + 径向面 + 红点；相册缩略图 + 张数角标；换卷键 | 按压 0.94 反馈可感；金属层次与设计稿接近；热区 ≥48dp；`onShutter` 接真实链路 | 真机连按 10 次无重复触发；Accessibility Scanner | `DONE`（真机按下快门 → 冲洗 → 落盘 → 相册全链路通过；红点光晕已去掉） |
+| T9-006 | 焦点环 + 点按对焦 | T9-003 | `ui/film/FocusRing.kt`、`camera/CameraPreview.kt` | 点按坐标记录、四角 L 形动画、`AF LOCK` 标签、与 CameraX 对焦联动 | 点按出现 500ms 脉冲并消失；对焦生效；不遮挡构图 | 真机点按 20 次；弱光下验证 | | `DONE`（`ui/film/FilmInteractions.kt` 的 `FocusRing`；`CameraHandle.focusAt` 走 `PreviewView.meteringPointFactory` + `startFocusAndMetering`；真机 `tap to focus (760.0,1226.0) -> true`，标签三态 AF / AF LOCK / AF FAIL，2.2s 淡出。偏离原型：原型环永久留置且永远写 AF LOCK） |
+| T9-007 | 顶部工具行 + 变焦 | T9-003 | `ui/film/TopBar.kt`、`ZoomSelector.kt` | 闪光/网格/胶卷胶囊/设置；1x-2x 变焦 | 网格显隐正确；变焦生效且切换镜头不崩溃；胶囊显示真实卷名 | 真机逐项点按；CameraX zoom 状态核对 | | `DONE`（顶部三钮 + 卷名胶囊 + 1x/2x 真变焦。真机 `zoom -> 2.00x (max=20.00)`。只有两档，非设计的 1x-2x 连续档） |
+| T9-008 | 底部面板（风格 / 设置） | T9-001、D-041 确认 | `ui/film/BottomSheet.kt`、`StylePanel.kt`、`SettingsPanel.kt` | `ModalBottomSheet`；5 个风格选项（色块/名称/描述/勾选）；4 个设置开关 | 手势下拉可关闭；返回键关闭；TalkBack 可读；开关状态不回弹 | 真机手势/无障碍测试 | `BLOCKED`（待 D-041） |
+| T9-009 | 快门反馈 + Toast | T9-005 | `ui/film/ShutterFeedback.kt` | 90ms 闪白；2.2s Toast | 闪白不残留；Toast 不叠加；连拍不卡 | 真机连拍 10 次录屏 | | `DONE`（90ms 闪白 + 2.2s Toast。**闪白必须挂在 `PocketCcdApp` 最外层**：放取景页内部会被成片页盖住，实测整帧均值只从 195→206；移到最外层后 243。连拍 10 次录屏未做） |
+| T9-010 | 图标资源（手画） | T9-001 | `ui/film/icons/` | 9 个 `ImageVector`：flash / flash-off / grid / tune / filmstrip / image-multiple / close / check-circle / chevron-right | 不引入 `material-icons-extended`；尺寸颜色可控 | 依赖检查；真机截图 | `DONE`（9 个图标已实现，未引 `material-icons-extended`；视觉待真机） |
+| T9-011 | 其余页面视觉统一（父任务） | T9-002 | `ui/result`、`ui/gallery`、`ui/settings` | 成片页/照片墙/设置页暗色化，拆分为 T9-018/019/020 逐页验收（D-045） | 三个子项全 `DONE` | 真机逐页截图对照 | `IN_PROGRESS`（三页代码已全部落地，`assembleDebug` 绿；**待真机截图**） |
+| T9-012 | 真机视觉验收 + 切换 + 清旧 | T9-003..T9-011 | 开关、`test-evidence/`、文档 | 截图组、偏差表、默认入口切换到新 UI、删除旧包 | 规格 §7 验收清单全绿；偏差逐条记录；快门→冲洗→落盘链路未回归 | 真机全流程；`assembleRelease` | `IN_PROGRESS`（默认入口已切到新 UI；旧包未删，验收清单与偏差表待补） |
+| T9-013 | 首启权限引导 / 拒绝空态 | D-039 选 1 时必需 | `ui/film/PermissionGate.kt` | 权限说明页、拒绝空态、去设置入口 | 拒绝后不黑屏不崩溃；有明确动作 | 真机权限矩阵 | `IN_PROGRESS`（空态文案已实现；缺"去设置"按钮） |
+| T9-014 | 卷计数器（每卷 36 张） | D-040 选 3 时必需 | `camera/RollCounter.kt`、`AppViewModel` | 卷内计数、拍满限制、换卷重置 | 计数与 `roll` 一致；拍满有明确提示；换卷语义清晰 | 单测 + 真机 | `DONE`（`PhotoStore.rollStartedAt`/`startNewRoll` 落盘；真机 1/36 →「换卷」归零 → 再拍回 1/36） |
+| T9-015 | 胶片相册：筛选 + 查看器 + 收藏 | T9-011 | `ui/film/gallery/` | 5 个筛选 tab（全部/收藏/3 个卷）；按卷分组、空组隐藏；全屏查看器（首尾循环、片号、索引）；收藏集合 | 筛选与分组联动正确；查看器左右可循环；收藏持久化（原型只存内存，需补） | 真机逐项点按；空态截图 | `TODO` |
+| T9-016 | 换卷页（原「胶卷库」） | T9-011、D-043 | `ui/film/films/`、`navigation/AppState.kt` | 已装卷大卡（卷名/帧尺寸/已拍-容量/进度）+ 全部卷列表 + 装卷动作；新增 `AppDestination.FILMS` | 卷数量按实际 pack 渲染，**不写死 6**；装卷后返回取景页卷名同步；无价格/到期日/品牌故事 | 真机 `adb push` 两卷/四卷各截一次图 | `TODO`（D-043：只换壳不换数据。原型 `films.html` 的 `¥78`/`2027.08 到期`/品牌文案全部删除） |
+| T9-017 | ~~冲扫进度页~~ | — | — | 原型 `roll.html`（订单/LAB/加急/下载） | — | — | `REJECTED`（D-042：虚构线下服务，不复刻） |
+| T9-018 | 成片页暗色化 | T9-011、D-043、D-045 | `ui/result/ResultScreen.kt`、`camera/PhotoExif.kt` | 按 `gallery.html` 单张详情重写：大图 + 三列参数网格 + 真实片号；三态（冲洗中/成功/失败） | 与取景页同一套令牌；无奶油红残留；参数只含真读到的 EXIF，读不到显示 `—` | 真机拍一张看冲洗中→成功；尺寸不符看失败态 | `IN_PROGRESS`（代码已落地：新增 `readPhotoExif`，删掉 `ToyCameraBody`/`PocketCcdColors` 依赖；待真机截图） |
+| T9-019 | 照片墙暗色化 + 按卷分组 | T9-011、D-043、D-045 | `ui/gallery/PhotoWallScreen.kt` | 按 `gallery.html` 列表重写：居中标题栏 + 按卷分组 + 三列缩略图 + 时间戳 | 无「冲扫中 72%」、无 LAB 水印；空态有明确引导 | 真机跨两卷各拍几张后截图 | `IN_PROGRESS`（代码已落地。**分组口径改为按胶卷名**，不是 `rollStartedAt`：历史照片没有持久化的卷边界，按时间间隔猜新卷属于编造，见文件头注释；待真机截图） |
+| T9-020 | 设置页暗色化 | T9-011、D-045 | `ui/settings/SettingsScreen.kt` | 按 `FilmTheme` 令牌重排现有设置项 | 无奶油红残留；所有行可用；热区 ≥48dp | 真机逐项点按 + 截图 | `IN_PROGRESS`（代码已落地。**顺手删掉「默认滤镜」日间/闪光/夜间分段控件**——它没接线，选了不落盘也不影响成像，是假开关；待真机截图） |
+| T9-021 | 真实镜头倍率 + 等效焦距 | T9-007、D-044 | `camera/LensInfo.kt`、`camera/CameraPreview.kt`、`ui/film/FilmInteractions.kt` | 读 `physicalCameraInfos` + `intrinsicZoomRatio`；算 35mm 等效焦距；档位随设备弹性渲染 | 倍率与官方规格一致（PJZ110 应为 0.65/1.0/3.17）；探不到时退回 1x/2x 数码档且不显示 mm | 真机 `adb logcat -s PocketCcdCamera` 打印镜头表；拍 1×/3.2× 比对 EXIF `FocalLength` | `IN_PROGRESS`（代码已落地：`readLensStops` + `LensStop`，变焦钮改为动态档位；**待真机确认一加 13 是否暴露 physical infos**） |
+
+**依赖关系：**
+
+```text
+D-038（UI 基线确认）
+  └→ T9-001（语义令牌/ThemeSpec）
+       ├→ T9-002（结构定稿，需 D-039）─┬→ T9-011（其余页面）
+       │                              └→ T9-012（验收切换）
+       ├→ T9-003（取景器外壳+叠加层）
+       │    ├→ T9-004（chip，需 D-040）
+       │    ├→ T9-005（快门/控制行）→ T9-009（反馈）
+       │    ├→ T9-006（焦点环）
+       │    └→ T9-007（顶栏/变焦）
+       ├→ T9-008（面板，需 D-041）
+       └→ T9-010（图标）
+T9-003..T9-011 → T9-012
+D-039 选 1 → T9-013；D-040 选 3 → T9-014
+```
+
+**M9 退出条件：**
+
+1. `assembleDebug` / `assembleRelease` 通过；`AppStateTest` 全绿；
+2. 真机（`PJZ110`）截图与设计稿逐层对照，偏差表完整；
+3. 全部可点控件 ≥48dp（Accessibility Scanner 复验）；
+4. 无伪造参数（`grep` 证明）；
+5. 拍摄→冲洗→落盘→照片墙→系统相册 链路未回归；
+6. 旧红色 UI 代码已删除，`DECISION_LOG.md` 的 D-027..D-032 已标 `SUPERSEDED`，规范 §2.1/§2.2 已修订；
+7. 未通过前不得把 M9 标成 `DONE`，也不得删除旧包。
+
+---
+
 # 优先级映射（M0 / M2–M8）
 
 M1 的优先级已写在各任务字段中。为避免表格过宽，其余里程碑的优先级集中记录如下；进入对应里程碑时再细化为 P0/P1/P2。
@@ -619,6 +688,7 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | M6 | T6-001、T6-002、T6-004 | T6-003、T6-005 | — |
 | M7 | T7-002、T7-003、T7-004 | T7-001 | — |
 | M8 | FOT-001、FOT-002、FOT-003、FOT-004、FOT-013 | FOT-005、FOT-006、FOT-008、FOT-009、FOT-010 | FOT-011、FOT-012、FOT-014 |
+| M9 | T9-001、T9-002、T9-003、T9-005、T9-006、T9-007、T9-009、T9-012 | T9-004、T9-008、T9-011、T9-015、T9-016 | T9-010、T9-013、T9-014、T9-017 |
 
 ---
 

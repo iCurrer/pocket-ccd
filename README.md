@@ -1,7 +1,9 @@
 # Pocket CCD
 
-一台**手机上的玩具数码相机**：机身做成红色塑料小相机，取景器是普通相机预览，
-按下快门后照片才被"冲洗"成某个胶卷的样子。
+一台**手机上的玩具数码相机**：打开就是全屏取景器，按下快门之后，这一帧才被"冲洗"成某个胶卷的样子。
+
+界面是一套暗色胶片相机——近黑机身、香槟金等宽参数、金属取景器边框、按卷计数与换卷动作。
+取景器里永远是**原色画面**：胶卷效果只出现在成片上，不预览、不加滤镜。
 
 胶卷效果不是滤镜，而是一套**物理成像模型**——上游 [Fotufilm](https://github.com/DhaliwalX/fotufilm-engine)
 把显影（develop）与印相（print）两段过程连同胶片/相纸的实测数据一起编译成 Halide 内核，
@@ -9,19 +11,40 @@
 
 ---
 
-## 当前状态（2026-10-19）
+## 界面预览
+
+<p align="center">
+  <img src="docs/screenshots/readme/viewfinder.jpg" width="31%" alt="取景页：暗色胶片相机">
+  <img src="docs/screenshots/readme/zoom-toast.jpg" width="31%" alt="点按变焦后的反馈">
+</p>
+
+左：取景页（`PJZ110` 真机，`GOLD 200 · 4096×3072`，本卷 `1 / 36 EXP`）。
+右：点按变焦档位后的 Toast 反馈，倍率取实际生效值，不是按钮上写的值。
+
+> 两张拍于 2026-10-19 22:39 / 22:50。此后变焦档位由固定 `1x / 2x` 改为**该机真实光学档位 + 等效焦距**
+> （一加 13 应为 `0.6× 15mm / 1× 23mm / 3.2× 73mm`，见 D-044），成片页 / 照片墙 / 设置页也已重写为暗色。
+> 这三页与新版变焦 UI 的真机截图待补（T9-018..021）——**没有真机截图的一律不算验证过**。
+
+---
+
+## 当前状态（2026-10-19 23:30）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
-| 导航骨架 / 五页 UI | 完成 | `AppStateTest` 12/12，真机截图 |
-| 相机接入（CameraX） | 完成 | 真机 `attached=4096x3072`，预览为真实画面 |
-| 拍照 → 冲洗 → 落盘 → 照片墙 | 完成 | `film_1792392057689_portra400__4096x3072.jpg`，3072×4096 / 3.16 MB |
+| 取景页（暗色胶片相机） | 完成 | 真机截图；CameraX `attached=4096x3072`，预览是真实画面 |
+| 拍照 → 冲洗 → 落盘 → 系统相册 | 完成 | 真机端到端；`3072×4096 / 3.16 MB`，私有目录 + `Pictures/Pocket CCD/` 各一份 |
+| 取景页交互（点按对焦 / 变焦 / 九宫格 / 闪白） | 完成 | 真机逐项验证，见 [`docs/interaction-spec.md`](docs/interaction-spec.md) |
 | 成片方向 | 完成 | `capture rotation: sensor=90 display=0 -> 90°` |
-| 12MP 性能 | 已实测 | benchmark 包单帧 2.0–3.2 s，峰值 RSS 373–463 MB，`nonFinite=0` |
+| 成片页 / 照片墙 / 设置页暗色化 | **代码完成，待真机** | T9-018..020；`assembleDebug` + `AppStateTest` 12/12；无真机截图 |
+| 真实镜头倍率 + 等效焦距 | **代码完成，待真机** | T9-021；D-044；镜头表尚未在 `PJZ110` 上打印过 |
+| 12MP 引擎性能 | 已实测 | benchmark 包单帧 2.0–3.2 s，峰值 RSS 373–463 MB，`nonFinite=0` |
+| 端到端冲洗耗时 | **超预算** | 成片实测 8.4–9.1 s，预算 2.0–3.2 s，原因未定位（B-11） |
+| 换卷页（`FILMS`） | 未开始 | T9-016；需先动 `AppState` |
 | Rec.2020 色彩口径 | 未开始 | 当前为线性光 + sRGB 基色（FOT-006） |
 | 冲洗进度条 / 取景框比例 | 未开始 | FOT-009 |
 
 > 构建通过不等于已验证。未在真机执行过的项一律标 `NOT_RUN` / `BLOCKED`。
+> 上面两行"待真机"就是字面意思：代码编译过、单测过，但**没人在手机上看过**。
 
 ---
 
@@ -86,6 +109,53 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 
 实测：用 8 行与 10 行两种带高对比整帧，`maxAbsDiff=3/255`，`hotRowsOnSeam=0`。
 真实差异来自**每次内核调用会推进颗粒随机状态**，登记为 FOT-015 待实拍确认。
+
+---
+
+## 界面与交互
+
+### 打开即取景（D-039）
+
+没有首页。`AppDestination` 里 `CAMERA` 就是根，启动直接进全屏取景器，返回键交给系统 `finish`。
+代价是首次启动即申请相机权限——被拒绝时取景器显示空态，而不是把用户挡在一个假首页后面。
+
+目前的四个目的地：
+
+| 目的地 | 页面 | 状态 |
+|---|---|---|
+| `CAMERA` | 全屏取景器（根） | 已接管默认入口 |
+| `RESULT` | 成片页：大图 + 真实 EXIF 参数网格 + `FRAME n / 36` | 暗色版代码完成，待真机 |
+| `PHOTO_WALL` | 照片墙：按胶卷分组的 3 列缩略图 | 暗色版代码完成，待真机 |
+| `SETTINGS` | 设置页（原型没有此页，按同一套令牌自绘） | 暗色版代码完成，待真机 |
+
+### 取景页里哪些是真的
+
+- **参数 chip 只写能读到的值**：`LIVE`、`12.6MP`、`4:3`。设计稿上的曝光三要素
+  （`1/125 · f/2.8 · ISO 400`）在 CameraX 里拿不到，所以不存在。
+- **变焦档位来自设备本身**（D-044）：`getPhysicalCameraInfos()` + `getIntrinsicZoomRatio()`
+  读出该机真实光学档，等效焦距按 `f × 43.2666 ÷ 传感器对角线` 现算。一加 13 通常给出
+  `0.6× 15mm / 1× 23mm / 3.2× 73mm`。探不到物理镜头（单摄或厂商裁掉）就退回纯数码档，
+  **不显示任何 mm**。
+- **`3.2×` 的含义是"73mm 那颗镜头的倍率"，不是"当前帧一定来自它"**。没有公开 API 能查询
+  当前成像的物理镜头，系统 HAL 自己决定。要自证只能读成片 EXIF 的 `FocalLength`
+  （主摄约 6mm、长焦约 16mm），成片页把它当真实参数展示。
+- **卷计数是真的**（D-040）：`PhotoStore.rollStartedAt()` 记录本卷起点，`capturedAt` 晚于它的
+  才计入，满 36 张禁快门。**绝不能用照片库总数冒充本卷张数**——那是两回事。
+- **对焦标签三态**：`AF` / `AF LOCK` / `AF FAIL`。原型永远写 `AF LOCK`，这里按
+  `startFocusAndMetering` 的真实回调切换。
+
+### 复刻时丢弃的东西
+
+设计稿是从四页 HTML 原型里解出来的（归档在 [`docs/reference/pages/`](docs/reference/pages/)），
+但只复刻排版语言，不复刻数据（D-043）。明确不做的：
+
+| 原型内容 | 为什么不落 |
+|---|---|
+| `6000×4000 · DNG` | 本机只出 JPEG，`4096×3072`；写别的尺寸就是撒谎 |
+| `¥78` / 到期日 / 品牌故事（胶卷库） | 无处可查，只能信我们 |
+| `冲扫中 72%`、`SCANNED BY 光屋 LAB`、订单号与物流 | 本地 8 秒即时冲洗，没有订单、没有进度源（D-042） |
+| 预览上的实时 `sepia/saturate/hue-rotate` | 与 D-036 冲突；预览保持原色，只留一层不碰像素的取景器暗角（D-041） |
+| `scale(1.28)` 假变焦 | 改用 `CameraControl.setZoomRatio`，并把**实际生效倍率**回报给 UI |
 
 ---
 
@@ -267,19 +337,26 @@ adb logcat -s PocketCcdCamera -s PocketCcdCapture      # 字段有节略
 ```
 app/src/main/java/com/pocketccd/prototype/
 ├── camera/          CameraPreview（CameraX，只交出 CameraHandle）
-│                    PhotoStore（全尺寸 + 缩略图，临时文件 rename）
+│                    PhotoStore（全尺寸 + 缩略图，临时文件 rename；卷起点）
+│                    LensInfo（物理镜头倍率 + 等效焦距）
+│                    PhotoExif（读成片 JPEG 的焦距/光圈/快门/ISO）
 │                    CaptureState / CapturedFrame
 ├── fotufilm/        FotufilmNative（9 个 external 逐条对齐）
 │                    FilmPack（FSWP 解析）/ FilmStock（扫描卷）
 │                    FilmEngine（分块渲染）/ LinearColor（sRGB ↔ linear）
 │                    FilmSelfTestActivity（真机基准入口）
 ├── navigation/      AppViewModel（冲洗在 Dispatchers.Default 上）
-└── ui/              AppRoot / stage / result / gallery / settings / theme
+└── ui/              AppRoot（相机句柄/变焦/闪白/Toast 的唯一真相）
+                     film/（FilmTheme 令牌、手绘图标、取景器、控件、交互原语）
+                     result/ gallery/ settings/
 
+app/src/test/        AppStateTest（导航状态机 12 例）
 native/              fotufilm_jni.cpp + CMakeLists.txt（只链接，不处理色彩）
 .github/workflows/   fotufilm-android-native.yml（packs + android-native 两个 job）
 prebuilt/            CI 产物（.gitignore；gradlew clean 不会删）
-docs/                管线、基准、许可、构建细节
+docs/                管线、基准、许可、构建细节、UI 规格、交互对照
+docs/reference/      设计稿归档（HTML 原件与四页）
+docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压缩后给文档用的
 ```
 
 ---
@@ -287,6 +364,12 @@ docs/                管线、基准、许可、构建细节
 ## 硬约束
 
 - **D-037**：pack 尺寸 = 采集尺寸，精确相等，不允许缩放。
+- **D-036 / D-041**：预览永远是原色。取景器上只有一层**不碰任何像素**的暗角，
+  不套 `ColorMatrix` 近似色调——想看这卷拍出来什么样，只能看成片页。
+- **D-044：不做物理镜头绑定**。pack 的扩散/晕光/颗粒半径按「毫米 × 该帧 pixels-per-mm」
+  烘焙；主摄 1/1.4" 装 50MP 约 890 px/mm，长焦 1/1.95" 装 50MP 约 1240 px/mm，
+  换物理镜头等于换像素密度，颗粒与晕光半径会小约 29%。`setZoomRatio` 走逻辑相机，
+  像素密度恒等于主摄，pack 才成立。
 - **首绑不约束尺寸**。先不传 `targetSize` → 读 `attachedSurfaceResolution` → 只下发已被
   证明支持的尺寸。反过来会把会话锁死在"最接近的更高档"，之后没有任何卷能匹配。
 - **目标机实测**：`PJZ110`（OnePlus 13）后置镜头 CameraX 最大 JPEG 是 **4096×3072**，
@@ -312,6 +395,9 @@ docs/                管线、基准、许可、构建细节
 | 成片侧躺 | `SENSOR_ORIENTATION` 读不到（会打 warn 并跳过补偿） |
 | 冲洗完没有文件 | 看 `PocketCcdCapture` 的 `capture failed`，通常是设备采集尺寸小于 pack |
 | 耗时比文档慢 5–7 倍 | 在用 debug 包；换 `assembleBenchmark` |
+| 按快门没反应，但 `LIVE` 还亮着 | 相机会话被系统或别的 App 抢走，`takePicture` 抛 `Not bound to a valid Camera`。CameraX 没有 `isBound`，探针是 `attachedSurfaceResolution` 是否抛异常；探到就自增 nonce 重绑 |
+| 装完新包界面还是旧的 | `adb install -r` 之后没 `am force-stop`，`am start` 把内存里的旧进程拉回前台。必须 install → force-stop → `am start -W`（确认 `COLD`）→ 截图 |
+| 截图里按钮点了没反应 | adb 截图是 1440×3168，看图时被缩放显示；量出来的坐标要换算回原分辨率再 `input tap` |
 
 ---
 
@@ -329,6 +415,9 @@ docs/                管线、基准、许可、构建细节
 | [`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md) | CI 两个 job 的触发与 artifact 说明 |
 | [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md) | 上游与胶片数据的许可口径 |
 | [`docs/fotufilm-windows-build.md`](docs/fotufilm-windows-build.md) | WSL2 本地构建（备选路径） |
+| [`docs/film-dark-ui-spec.md`](docs/film-dark-ui-spec.md) | 暗色胶片相机 UI 规格（M9 基线：令牌映射、组件方案、已知偏差） |
+| [`docs/interaction-spec.md`](docs/interaction-spec.md) | 原型四页逐条交互对照（原型做法 / Compose 实现 / 能不能做） |
+| [`docs/screenshots/`](docs/screenshots/) | 真机截图，按时间命名，迭代过程全留 |
 
 ### 证据标记
 
@@ -339,6 +428,8 @@ docs/                管线、基准、许可、构建细节
 ## 边界
 
 - 不实现实时滤镜、不把预览伪装成成片；
+- 不虚构胶卷价格、到期日、冲扫进度、订单号——排版可以借，数据必须能查；
+- 变焦档位不冒充"当前帧就来自这颗镜头"，只声明它是这颗镜头的倍率；
 - 不引入账号、云同步、分析 SDK，不上传任何照片；
 - 不使用真实相机品牌 Logo/机型名作为产品名；
 - 不把未验证的成像结论写成事实；

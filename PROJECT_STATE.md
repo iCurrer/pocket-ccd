@@ -1,7 +1,7 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-19 12:37（Asia/Shanghai）
-**当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）  
+**快照时间：** 2026-10-19 22:56（Asia/Shanghai）
+**当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）；**M9 暗色胶片 UI 已接管默认入口并接入真实相机**（真机全链路通过；**取景页交互层已落地并逐项验证**：点按对焦 / 真变焦 / 开关+Toast / 90ms 闪白，见 `docs/interaction-spec.md` §2.1.1；成片页/照片墙/设置页仍待暗色化）  
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
 **工作区：** `D:\Android\pocket ccd`  
 **Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
@@ -92,6 +92,7 @@
 | P-032 | FOT-017 成片方向补偿（冲洗后旋转） | `CameraHandle.takeJpeg()` 在快门瞬间用 `SENSOR_ORIENTATION` 算角度（`sensor=90 display=0 -> 90°`），随 `CapturedFrame` 返回；`PhotoStore.save()` 冲洗完成后旋转位图并从旋转后的图生成缩略图；不写 EXIF、不动冲洗尺寸（D-037） | `PASS`（真机 2026-10-19 14:40:57 PORTRA 400）：`full 3072×4096 / 3,164,270 B`、`thumb 1080×1440`，画面正立 |
 | P-033 | FOT-018 多机型尺寸适配（裁切） | `decodeJpeg` 三态：采集尺寸 == pack → 直接用；> pack → 中心裁切（`BitmapRegionDecoder.decodeRegion` 只解目标区域，失败退回整帧后 `createBitmap`）；< pack → 抛错并同时给出设备尺寸与 pack 尺寸。`AppViewModel` 的精确匹配改为 `canServe`（≥）+ `servingSizeFor`（取能服务的最小档）；`programmedSize` 在能服务时下发 pack 尺寸 | `BUILD PASS` / `UNIT TEST PASS`。**裁切分支未真机验证**：PJZ110 采集尺寸精确等于 pack，走不到该路径；需第二台采集尺寸不同的机型。依据的物理事实：裁切不改 pixels-per-mm，D-037 只禁缩放 |
 | P-034 | FOT-019 成片写入系统相册 | `PhotoStore.publishToGallery()` 经 MediaStore 写 `Pictures/Pocket CCD/`，`IS_PENDING=1 → 复制文件流 → 置 0`，失败 `delete` 回滚；相册副本从已落盘的 JPEG 复制，不重新编码位图。`syncToGallery()` 一次性补齐历史（`SharedPreferences` 标记，避免删图后被补回）。成片页加 `已存入相册` 提示 | `PASS`（真机 2026-10-19 15:54:53 GOLD 200）：13 张历史成片全部补齐，`relative_path=Pictures/Pocket CCD/`、`_size` 与文件字节数一致、`is_pending=0`；新拍一张 `film_1792396493624` 立即出现在相册（`_id=1000051843`），用户已在系统相册中打开确认 |
+| P-035 | UI 重设计准备（M9 立项） | 设计稿归档 `docs/reference/film-dark-home-2026-10-19.html`（33,701 B）；规格 `docs/film-dark-ui-spec.md`（令牌映射/组件方案/保真度/冲突项）；`DECISION_LOG.md` 新增 D-038..D-041、D-027..D-032 标 `SUPERSEDED`；`TASK_BOARD.md` 新增 M9 + T9-001..T9-014 | `DONE`（仅准备；未写任何 UI 代码、未构建、未上真机） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -239,6 +240,10 @@
 | B-05 | 目标设备清单未定 | M2/M6 验收范围 | 登记 3 档设备 | 测试 |
 | B-06 | 视觉参考/原型图缺失 | “精致”无法对标 | 提供参考/设计稿，或接受一致性评审 | 设计 |
 | B-07 | ~~Gradle 依赖下载未验证~~ | 已解除：T1-003 构建成功 | 记录构建警告；后续升级时重新验证 | 开发 |
+| B-08 | ~~首页存废未定（D-039）~~ | 已解除：选定"废除首页、打开即取景"，`AppDestination.HOME` 已删除 | — | 产品 |
+| B-09 | ~~设计稿假参数处置未定（D-040）~~ | 已解除：chip 接真实值（LIVE/12.6MP/4:3），"每卷 36 张"落为真实规则（`PhotoStore.rollStartedAt` + 拍满即停） | 若产品否决 36 张容量，改 `ROLL_CAPACITY` 与满卷提示即可 | 产品 |
+| B-10 | 取景器是否叠加廉价色调近似（D-041） | 阻塞 T9-008 风格面板的文案与交互 | 确认选项 1/2，并与 D-036 对齐 | 产品 |
+| B-11 | **成片耗时 8.4–9.1s**（`GOLD 200` 4096×3072 / 24 strips，真机 `PJZ110` 两次实测 9107ms、8443ms），远超 2.0–3.2s 预算 | 快门后要等 9 秒才出片，用户在成片页干等；体验不可接受 | 查是否热降频 / strips 数变化 / 4096×3072 比 4000×3000 多出的 5% 像素触发其它路径；先用 `perfetto` 或分段计时定位，再决定降尺寸或调 strips | 技术 |
 
 ### 7.2 开放决策
 
@@ -352,7 +357,9 @@ D:\Android\pocket ccd\
 │   └── android-official-docs-2026-10-17.md
 ├── docs/
 │   ├── design-tokens.md             # 设计令牌（临时值）
-│   └── color-direction.md           # 玩具相机配色研究
+│   ├── film-dark-ui-spec.md         # 【新】暗色胶片相机 UI 规格（M9 基线）
+│   ├── reference/                   # 【新】设计参考稿归档（不参与构建）
+│   └── color-direction.md           # 玩具相机配色研究（已被 D-038 取代）
 ├── .research/                       # 官方文档抓取缓存（临时，已 gitignore）
 ├── gradle/
 │   ├── libs.versions.toml           # 版本目录
@@ -398,6 +405,7 @@ D:\Android\pocket ccd\
 | 2026-10-17 | 红色主题细节打磨 | 降刺激红、删多余线条、系统栏同色、转场 overlay 裁剪 |
 | 2026-10-17 | 持久机身 Stage | 首页/拍摄页共用同一个红框机身，拖拽 progress 驱动，按钮移动重排 |
 | 2026-10-17 | 设置页内容 App 化 | 24sp 标题/分组卡片/15+12sp 行/44dp 分段控件/LazyColumn |
+| 2026-10-19 | M9 UI 重设计立项 | 设计基线归档；`docs/film-dark-ui-spec.md`；D-038..D-041；M9 + T9-001..T9-014；D-027..D-032 标 `SUPERSEDED`。**未写 UI 代码** |
 
 ---
 
@@ -407,4 +415,5 @@ D:\Android\pocket ccd\
 - 构建通过只证明“空壳能编译打包”；安装/启动/截图已在 `PJZ110` 真机完成（P-027）；Fotufilm 引擎已在真机跑通 12MP（P-028），但**输入是程序纹理而非相机帧**。"拍照→冲洗→保存"链路的**代码**已写好（P-029），**真机端到端仍未跑过一次**；Compose UI 测试、真实照片、47 stock、Release 安装仍未执行。
 - 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。
+- **M9（UI 重设计）目前只有文档。** 设计基线已归档、规格与决策已建立，但**没有写任何 Compose 代码、没有构建、没有真机截图**。`docs/film-dark-ui-spec.md` §3 的组件方案是工程推断 `[I]`，未经实现验证；§8 的已知偏差清单同样是推断，实际偏差以真机截图为准。
 - 未执行的测试在 `TEST_PLAN.md` 中保持 `NOT_RUN` 或 `BLOCKED`，不会因为文档完成而自动变成通过。

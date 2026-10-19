@@ -1,0 +1,494 @@
+<!DOCTYPE html><html class="h-full w-full overflow-hidden" lang="zh-CN"><head><script data-mb-code-navigation>(function () {
+    var config = {"dist":false,"names":["films.html","gallery.html","home.html","roll.html"],"initialRoute":"/"};
+    if (config.dist) history.replaceState(history.state, '', location.href.split('#')[0] + '#' + config.initialRoute.replace(/^#/, ''));
+    var last = '';
+    function notify(href) {
+      if (!href || href === last) return;
+      last = href;
+      parent.postMessage({ type: 'wCode:iframe-navigate', href: href }, '*');
+    }
+    function route() { notify(location.hash.slice(1) || '/'); }
+    function matches(href) {
+      var name = href.split('#')[0].split('?')[0].split('/').pop();
+      return name && config.names.indexOf(name) !== -1;
+    }
+    document.addEventListener('click', function (event) {
+      var element = event.target;
+      while (element && element.tagName !== 'A') element = element.parentElement;
+      if (!element) return;
+      var href = element.getAttribute('href') || '';
+      if (config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        location.hash = href;
+        return;
+      }
+      if (!config.dist && href.charAt(0) === '#') {
+        event.preventDefault();
+        var id = href.slice(1);
+        try { id = decodeURIComponent(id); } catch (_) {}
+        var target = document.getElementById(id) || document.getElementsByName(id)[0];
+        if (target) target.scrollIntoView();
+        return;
+      }
+      if (!config.dist && matches(href)) { event.preventDefault(); notify(href); }
+    }, true);
+    if (!config.dist && window.navigation) window.navigation.addEventListener('navigate', function (event) {
+      if (!event.destination.sameDocument && matches(event.destination.url)) {
+        event.preventDefault(); notify(event.destination.url);
+      }
+    });
+    ['pushState', 'replaceState'].forEach(function (name) {
+      var original = history[name];
+      history[name] = function () {
+        var href = arguments[2];
+        if (!config.dist && href && matches(String(href))) { notify(String(href)); return; }
+        var result = original.apply(this, arguments);
+        if (config.dist) setTimeout(route, 0);
+        return result;
+      };
+    });
+    if (config.dist) {
+      window.addEventListener('hashchange', route);
+      window.addEventListener('popstate', route);
+    }
+  })();</script>
+<style id="mb-code-iframe-style">
+  html, body { margin: 0; width: 100%; min-height: 100%; }
+  html { --uiWidth: 100% !important; --uiHeight: 100% !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>冲扫进度 · 光屋 LAB</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #050506;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    .ctl {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.66);
+      transition: all 0.18s ease;
+    }
+    .ctl:active { transform: scale(0.93); }
+    /* ---------- scan scenes ---------- */
+    .shot {
+      position: relative;
+      overflow: hidden;
+      background: var(--sky, #14202b);
+    }
+    .shot .sun {
+      position: absolute;
+      left: var(--sun-x, 20%);
+      top: var(--sun-y, 26%);
+      width: var(--sun-size, 26%);
+      aspect-ratio: 1 / 1;
+      border-radius: 9999px;
+      background: var(--sun, radial-gradient(circle, #fff1cf, rgba(240, 184, 121, 0) 70%));
+      opacity: 0.95;
+      filter: blur(1px);
+    }
+    .shot .ridge {
+      position: absolute;
+      left: -6%;
+      right: -6%;
+      bottom: -2%;
+      height: 56%;
+      background: var(--ridge, #0a0f14);
+      clip-path: polygon(0 64%, 8% 56%, 16% 64%, 26% 46%, 34% 55%, 44% 38%, 52% 49%, 62% 32%, 70% 44%, 79% 28%, 88% 41%, 96% 35%, 100% 46%, 100% 100%, 0 100%);
+    }
+    .grain-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.7px),
+        radial-gradient(rgba(0, 0, 0, 0.45) 0.5px, transparent 0.7px);
+      background-size: 3px 3px, 4px 4px;
+      opacity: 0.16;
+      mix-blend-mode: overlay;
+      z-index: 3;
+    }
+    .f-portra {
+      --sky: linear-gradient(180deg, #1d3547 0%, #6c8b90 45%, #dcc2a0 80%, #a97c55 100%);
+      --ridge: #151d1e;
+      --sun: radial-gradient(circle, #fff1cf 0%, #f4c58b 55%, rgba(244, 197, 139, 0) 72%);
+      --sun-x: 22%;
+      --sun-y: 33%;
+      --sun-size: 30%;
+    }
+    .f-gold {
+      --sky: linear-gradient(180deg, #31536a 0%, #9fb4a6 40%, #f1c97e 74%, #c98d4c 100%);
+      --ridge: #1a1c18;
+      --sun: radial-gradient(circle, #fff6d8, #ffd27a 55%, rgba(255, 210, 122, 0) 72%);
+      --sun-x: 66%;
+      --sun-y: 30%;
+      --sun-size: 26%;
+    }
+    .f-ektar {
+      --sky: linear-gradient(180deg, #1f4258 0%, #6e97a0 38%, #eaa47c 68%, #c25f4c 100%);
+      --ridge: #181312;
+      --sun: radial-gradient(circle, #fff0d4, #ffbb85 52%, rgba(255, 187, 133, 0) 70%);
+      --sun-x: 30%;
+      --sun-y: 26%;
+      --sun-size: 24%;
+    }
+    .f-superia {
+      --sky: linear-gradient(180deg, #1b3742 0%, #5f847e 45%, #c2c8a2 100%);
+      --ridge: #111b18;
+      --sun: radial-gradient(circle, rgba(238, 243, 214, 0.95), rgba(238, 243, 214, 0) 68%);
+      --sun-x: 74%;
+      --sun-y: 22%;
+      --sun-size: 22%;
+    }
+    /* ---------- timeline ---------- */
+    .tl-dot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex: none;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #1b1e22;
+      color: rgba(255, 255, 255, 0.35);
+    }
+    .tl-dot.done {
+      background: rgba(231, 179, 122, 0.16);
+      border-color: rgba(231, 179, 122, 0.5);
+      color: #e7b37a;
+    }
+    .tl-dot.current {
+      border-color: rgba(231, 179, 122, 0.6);
+      background: rgba(231, 179, 122, 0.08);
+      animation: tlPulse 1.9s ease-in-out infinite;
+    }
+    .tl-dot.current::after {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: #e7b37a;
+    }
+    @keyframes tlPulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(231, 179, 122, 0.12); }
+      50% { box-shadow: 0 0 0 8px rgba(231, 179, 122, 0.02); }
+    }
+    .pending-tile {
+      position: relative;
+      overflow: hidden;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .pending-tile::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.07) 48%, transparent 76%);
+      background-size: 220% 100%;
+      animation: shimmer 2.4s infinite linear;
+    }
+    @keyframes shimmer {
+      0% { background-position: 180% 0; }
+      100% { background-position: -80% 0; }
+    }
+  </style>
+</head>
+<body class="m-0 flex h-full w-full items-center justify-center overflow-hidden bg-[#050506]">
+<div class="relative flex h-full max-h-[852px] w-full max-w-[393px] select-none flex-col overflow-hidden bg-[#0B0C0E] text-[#EDEFF2]" id="app">
+<!-- 状态栏 -->
+<div class="flex shrink-0 items-center justify-between px-5 pb-1 pt-3 text-[11px] tracking-wide text-white/75">
+<span class="mono">9:41</span>
+<div class="flex items-center gap-1.5 text-white/70">
+<iconify-icon icon="mdi:signal" width="13"></iconify-icon>
+<iconify-icon icon="mdi:wifi" width="13"></iconify-icon>
+<iconify-icon icon="mdi:battery" width="16"></iconify-icon>
+</div>
+</div>
+<!-- 顶部 -->
+<header class="flex h-14 shrink-0 items-center justify-between px-4">
+<a aria-label="返回胶片相册" class="ctl" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+<iconify-icon icon="mdi:arrow-left" width="18"></iconify-icon>
+</a>
+<div class="text-center">
+<h1 class="text-[15px] font-semibold tracking-[0.08em]">冲扫进度</h1>
+<p class="mt-0.5 mono text-[8px] tracking-[0.24em] text-white/30">PHOTO LAB</p>
+</div>
+<button aria-label="冲扫说明" class="ctl" onclick="toast('标准冲扫需 2–3 个工作日，加急可提前约 4 小时')">
+<iconify-icon icon="mdi:help-circle-outline" width="17"></iconify-icon>
+</button>
+</header>
+<!-- 内容 -->
+<main class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-7 [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<!-- 进度卡片 -->
+<section class="relative overflow-hidden rounded-[24px] border border-[#E7B37A]/20 bg-gradient-to-br from-[#2C2217] via-[#1A1713] to-[#111315] p-4">
+<div class="pointer-events-none absolute -right-14 -top-16 h-44 w-44 rounded-full bg-[#E7B37A]/10 blur-3xl"></div>
+<div class="relative flex items-center justify-between">
+<span class="mono text-[8px] tracking-[0.22em] text-[#E7B37A]">IN LAB · C-41</span>
+<span class="flex items-center gap-1.5 text-[9px] text-white/50">
+<span class="relative flex h-1.5 w-1.5">
+<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#E7B37A]/60"></span>
+<span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#E7B37A]"></span>
+</span>
+            显影中
+          </span>
+</div>
+<div class="relative mt-4 flex items-end justify-between gap-3">
+<div class="min-w-0">
+<p class="text-[18px] font-semibold leading-tight tracking-tight">KODAK GOLD 200</p>
+<p class="mt-1 text-[10px] text-white/40">36 张 · 光屋冲扫 LAB · 订单 GL-1024</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="mono text-[27px] leading-none text-[#E7B37A]">72<span class="text-[12px]">%</span></p>
+<p class="mt-1.5 text-[8px] text-white/35">预计 10.20 交付</p>
+</div>
+</div>
+<div class="relative mt-4 h-2 overflow-hidden rounded-full bg-black/45">
+<div class="h-full w-0 rounded-full bg-gradient-to-r from-[#C8955E] to-[#F0C892] transition-[width] duration-[1400ms] ease-out" id="progressBar"></div>
+</div>
+<div class="relative mt-2 flex items-center justify-between mono text-[8px] tracking-[0.08em] text-white/30">
+<span>收卷 10.18</span>
+<span>已用 18h 42m</span>
+<span>交付 10.20</span>
+</div>
+<div class="relative mt-3 flex items-center gap-1.5">
+<span class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 mono text-[8px] text-white/50">C-41</span>
+<span class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 mono text-[8px] text-white/50">6000×4000</span>
+<span class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 mono text-[8px] text-white/50">DNG + JPG</span>
+</div>
+</section>
+<!-- 时间线 -->
+<section class="mt-3 rounded-2xl border border-white/10 bg-[#131518] p-4">
+<div class="flex items-center justify-between">
+<h2 class="text-[12px] font-semibold tracking-wide">冲扫节点</h2>
+<span class="mono text-[8px] tracking-[0.14em] text-white/25">5 STEPS</span>
+</div>
+<ol class="mt-4">
+<li class="flex gap-3 pb-5">
+<div class="flex flex-col items-center">
+<span class="tl-dot done">
+<iconify-icon icon="mdi:check" width="10"></iconify-icon>
+</span>
+<span class="mt-1 w-px flex-1 bg-white/10"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-start justify-between gap-2">
+<p class="text-[11px] font-medium text-white/80">收卷入库</p>
+<span class="mono text-[8px] text-white/30">10.18 20:14</span>
+</div>
+<p class="mt-1 text-[9px] leading-relaxed text-white/30">已确认 36 张 · 胶卷状态良好</p>
+</div>
+</li>
+<li class="flex gap-3 pb-5">
+<div class="flex flex-col items-center">
+<span class="tl-dot done">
+<iconify-icon icon="mdi:check" width="10"></iconify-icon>
+</span>
+<span class="mt-1 w-px flex-1 bg-white/10"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-start justify-between gap-2">
+<p class="text-[11px] font-medium text-white/80">显影 · C-41</p>
+<span class="mono text-[8px] text-white/30">10.19 09:30</span>
+</div>
+<p class="mt-1 text-[9px] leading-relaxed text-white/30">38°C 恒温显影 · 3′15″ · 已完成</p>
+</div>
+</li>
+<li class="flex gap-3 pb-5">
+<div class="flex flex-col items-center">
+<span class="tl-dot current"></span>
+<span class="mt-1 w-px flex-1 bg-white/10"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-start justify-between gap-2">
+<p class="text-[11px] font-medium text-[#E7B37A]">定影与水洗</p>
+<span class="mono text-[8px] text-[#E7B37A]/70">进行中</span>
+</div>
+<p class="mt-1 text-[9px] leading-relaxed text-white/35">流动水洗第 3 轮 · 预计 14:00 完成</p>
+</div>
+</li>
+<li class="flex gap-3 pb-5">
+<div class="flex flex-col items-center">
+<span class="tl-dot"></span>
+<span class="mt-1 w-px flex-1 bg-white/10"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-start justify-between gap-2">
+<p class="text-[11px] text-white/40">扫描与校色</p>
+<span class="mono text-[8px] text-white/20">待处理</span>
+</div>
+<p class="mt-1 text-[9px] leading-relaxed text-white/25">6000×4000 · 16bit TIFF 母版 · DNG + JPG</p>
+</div>
+</li>
+<li class="flex gap-3">
+<div class="flex flex-col items-center">
+<span class="tl-dot"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-start justify-between gap-2">
+<p class="text-[11px] text-white/40">交付原片</p>
+<span class="mono text-[8px] text-white/20">10.20</span>
+</div>
+<p class="mt-1 text-[9px] leading-relaxed text-white/25">扫描件同步至胶片相册，底片顺丰寄回</p>
+</div>
+</li>
+</ol>
+</section>
+<!-- 已扫描 -->
+<section class="mt-3 rounded-2xl border border-white/10 bg-[#131518] p-4">
+<div class="flex items-center justify-between">
+<h2 class="text-[12px] font-semibold tracking-wide">已扫描 <span class="ml-1 mono text-[9px] font-normal text-[#E7B37A]">18 / 36</span></h2>
+<a class="flex items-center gap-1 text-[9px] text-white/40" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+            查看相册
+            <iconify-icon icon="mdi:chevron-right" width="12"></iconify-icon>
+</a>
+</div>
+<div class="mt-3 grid grid-cols-3 gap-1.5">
+<div class="shot f-gold relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">01</span>
+</div>
+<div class="shot f-portra relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">02</span>
+</div>
+<div class="shot f-ektar relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">03</span>
+</div>
+<div class="shot f-superia relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">04</span>
+</div>
+<div class="shot f-gold relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">05</span>
+</div>
+<div class="shot f-portra relative aspect-square overflow-hidden rounded-lg">
+<span class="sun"></span><span class="ridge"></span><span class="grain-overlay"></span>
+<span class="absolute bottom-1 left-1 z-10 mono text-[6.5px] tracking-[0.1em] text-white/60">06</span>
+</div>
+<div class="pending-tile flex aspect-square flex-col items-center justify-center gap-1 rounded-lg">
+<iconify-icon class="text-white/20" icon="mdi:image-outline" width="15"></iconify-icon>
+<span class="mono text-[6px] tracking-[0.14em] text-white/22">SCANNING</span>
+</div>
+<div class="pending-tile flex aspect-square flex-col items-center justify-center gap-1 rounded-lg">
+<iconify-icon class="text-white/20" icon="mdi:image-outline" width="15"></iconify-icon>
+<span class="mono text-[6px] tracking-[0.14em] text-white/22">SCANNING</span>
+</div>
+<div class="pending-tile flex aspect-square flex-col items-center justify-center gap-1 rounded-lg">
+<iconify-icon class="text-white/20" icon="mdi:image-outline" width="15"></iconify-icon>
+<span class="mono text-[6px] tracking-[0.14em] text-white/22">SCANNING</span>
+</div>
+</div>
+<p class="mt-2.5 text-[8.5px] leading-relaxed text-white/25">此处为最新 6 张预览，每 6 小时自动同步一次扫描件</p>
+</section>
+<!-- 订单信息 -->
+<section class="mt-3 rounded-2xl border border-white/10 bg-[#131518] p-4">
+<div class="flex items-center justify-between">
+<h2 class="text-[12px] font-semibold tracking-wide">冲扫单</h2>
+<span class="rounded-full border border-[#7FA88F]/25 bg-[#7FA88F]/10 px-2 py-0.5 mono text-[7.5px] text-[#9FC0AC]">已支付</span>
+</div>
+<dl class="mt-2 text-[10px]">
+<div class="flex items-center justify-between border-b border-white/5 py-2.5">
+<dt class="text-white/35">订单编号</dt>
+<dd class="mono text-[9px] text-white/65">GL-20261018-1024</dd>
+</div>
+<div class="flex items-center justify-between border-b border-white/5 py-2.5">
+<dt class="text-white/35">冲扫工艺</dt>
+<dd class="text-white/65">C-41 彩色负片</dd>
+</div>
+<div class="flex items-center justify-between border-b border-white/5 py-2.5">
+<dt class="text-white/35">扫描规格</dt>
+<dd class="mono text-[9px] text-white/65">6000×4000 · 16bit</dd>
+</div>
+<div class="flex items-center justify-between border-b border-white/5 py-2.5">
+<dt class="text-white/35">交付文件</dt>
+<dd class="text-white/65">DNG + JPG · 共 36 张</dd>
+</div>
+<div class="flex items-center justify-between border-b border-white/5 py-2.5">
+<dt class="text-white/35">冲扫费用</dt>
+<dd class="mono text-[9px] text-white/65">¥28.00</dd>
+</div>
+<div class="flex items-center justify-between py-2.5">
+<dt class="text-white/35">备注</dt>
+<dd class="text-right text-[9px] text-white/55">保留底片 · 寄回原址</dd>
+</div>
+</dl>
+</section>
+<!-- 操作 -->
+<div class="mt-4 space-y-2">
+<button class="flex w-full items-center justify-center gap-2 rounded-xl bg-[#EDEFF2] py-3 text-[11px] font-medium text-[#15171A]" onclick="downloadScans()" type="button">
+<iconify-icon icon="mdi:download" width="16"></iconify-icon>
+          下载已扫描（18）
+        </button>
+<button class="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E7B37A]/25 bg-[#E7B37A]/[0.06] py-3 text-[11px] text-[#E7B37A]" id="rushBtn" onclick="requestRush()" type="button">
+<iconify-icon icon="mdi:lightning-bolt" width="15"></iconify-icon>
+          申请加急冲扫 · +¥15
+        </button>
+<a class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] py-3 text-[11px] text-white/60" href="https://modao.cc/agent-py/workspace/6ad600aa039732266808a943/film-camera-app.html/gallery.html?render_html=true">
+          返回胶片相册
+        </a>
+</div>
+<p class="mt-4 text-center text-[8.5px] leading-relaxed text-white/20">
+        扫描件完成后会推送通知 · 底片按顺丰到付寄回<br>
+        有任何问题请联系光屋冲扫 LAB
+      </p>
+</main>
+<div class="flex shrink-0 justify-center pb-2 pt-1">
+<div class="h-1 w-24 rounded-full bg-white/15"></div>
+</div>
+<div class="pointer-events-none absolute bottom-[74px] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/85 px-4 py-2 text-[10px] tracking-wide text-white/85 opacity-0 backdrop-blur transition-opacity duration-300" id="toast"></div>
+</div>
+<script>
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    let rushed = false;
+
+    function toast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.remove('opacity-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.add('opacity-0');
+      }, 2200);
+    }
+
+    setTimeout(function () {
+      document.getElementById('progressBar').style.width = '72%';
+    }, 160);
+
+    function downloadScans() {
+      toast('已开始打包 18 张扫描件 · 约 320MB');
+    }
+
+    function requestRush() {
+      if (rushed) {
+        toast('加急已生效 · 扫描完成后立即通知你');
+        return;
+      }
+      rushed = true;
+      const btn = document.getElementById('rushBtn');
+      btn.textContent = '加急已提交 · 预计提前约 4 小时';
+      btn.classList.add('opacity-60');
+      toast('加急申请已提交 · 费用 ¥15 已记录');
+    }
+  </script>
+
+
+</body></html>
