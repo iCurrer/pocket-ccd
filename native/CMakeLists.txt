@@ -44,13 +44,20 @@ message(STATUS "fotufilm_android: 链接 ${kernel_count} 个 AOT kernel 归档")
 # 指向 jni.cpp 而不是真正缺的那一环 —— 上一轮就是这么丢掉 3 条错误原文的。
 #
 # 这里逐个 find_path 并打印命中位置，缺了就当场 FATAL_ERROR 并说明该去哪找。
+#
+# NO_CMAKE_FIND_ROOT_PATH 是必须的：NDK 的 android.toolchain.cmake 会设置
+# CMAKE_FIND_ROOT_PATH（sysroot）且 CMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY，
+# 于是 find_path 会把上面这些绝对路径**重新根化**（变成 <sysroot>/home/runner/...），
+# 结果三个头明明就在磁盘上也一律落空 —— 而 file(GLOB) 不受影响，所以 .a 找得到、
+# 头找不到。这层重定向只对 find_* 命令生效，正是这次 configure 失败的真因。
 foreach(header_name FotufilmHalide FotufilmConfigLayout FotufilmResolvedFrameParams)
   find_path(FOTUFILM_HEADER_DIR_${header_name} "${header_name}.h"
     PATHS
       "${FOTUFILM_ROOT}/Sources/FotufilmHalide"
       "${FOTUFILM_ROOT}/Sources/FotufilmHalide/include"
       "${FOTUFILM_KERNELS}"
-    NO_DEFAULT_PATH)
+    NO_DEFAULT_PATH
+    NO_CMAKE_FIND_ROOT_PATH)
   if(NOT FOTUFILM_HEADER_DIR_${header_name})
     message(FATAL_ERROR
       "找不到 ${header_name}.h。已查找：\n"
@@ -67,7 +74,8 @@ find_path(FOTUFILM_AOT_VARIANTS_DIR "FotufilmAotVariants.h"
   PATHS
     "${FOTUFILM_KERNELS}"
     "${FOTUFILM_ROOT}/Sources/FotufilmHalide/include"
-  NO_DEFAULT_PATH)
+  NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH)
 if(NOT FOTUFILM_AOT_VARIANTS_DIR)
   message(FATAL_ERROR
     "找不到 FotufilmAotVariants.h（FotufilmHalide.h 会 include 它）。"
