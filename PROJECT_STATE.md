@@ -88,6 +88,7 @@
 | P-028 | M8 运行时侧：Kotlin 绑定 + 12MP 真机实测 | `fotufilm` 包 5 个文件；真机 `libraryLoaded=true`/`abiVersion=1`/`available=true`/`packCount=4`；3 个 12MP stock 全 `nonFinite=0`；单帧 2.0–3.2 s（内核占 80–85%）；峰值 RSS 373–463 MB；TriX400 输出 R=G=B 精确相等 | `PASS`（方法见 `docs/fotufilm-device-benchmark.md`） |
 | P-029 | FOT-007 相机接入（代码侧） | `camera/CameraPreview.kt`（CameraX Preview+ImageCapture、`targetRotation=ROTATION_0`、用 `attachedSurfaceResolution` 匹配 pack）、`camera/PhotoStore.kt`、`camera/CaptureState.kt`、`fotufilm/FilmStock.kt`；`AppViewModel` → `AndroidViewModel`；成片页/照片墙接真实照片；`assembleDebug` + `testDebugUnitTest` 通过，APK 含 `.so` | `DONE`（构建侧） |
 | P-030 | 真机相机绑定与分辨率实测 | `adb logcat -s PocketCcdCamera` → `camera bound: lens=1 target=null attached=4096x3072 flash=true`；预览为真实画面；`dumpsys media.camera` 尺寸全表无 4000×3000；快门因 pack 尺寸不符正确置灰并显示 `相机不支持 4000×3000，最大 4096×3072` | `PASS`（绑定链路口径）；**结论：设备最大 JPEG = 4096×3072，现役 4000×3000 pack 不可拍 → FOT-016** |
+| P-031 | FOT-007 真机端到端（拍照→冲洗→落盘→照片墙） | 换成 CI 重产的 `__4096x3072` pack 后按快门：`film_1792391623930_gold200__4096x3072.jpg`，`4096×3072 / 3,038,375 B`；缩略图 `1440×1080 / 320,410 B`；照片墙出现该张（`GOLD 200 10.19`） | `PASS`（链路）。**遗留**：成片相对取景侧躺 90°，两文件均无 EXIF 方向 → FOT-017 |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
