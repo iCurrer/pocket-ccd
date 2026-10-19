@@ -500,10 +500,16 @@ C++ 把它解析成**函数声明** `std::vector<uint8_t> raw(size_t length)`（
 
 修法：改写为 `static_cast<size_t>(length)`，彻底消除歧义。
 
-### 当前进度
+### 当前进度（run 39198895398 全绿）
 
-- configure：**通过**（头命中路径已打印）；
-- 以上 3 条 error 已定位并修复，`Build libfotufilm_android.so` 与 `Verify .so` 待下一次 run 验证。
+- configure：**通过**，四个头的命中路径：
+  - `FotufilmHalide.h` / `FotufilmConfigLayout.h` / `FotufilmAotVariants.h` → `Sources/FotufilmHalide/include`
+  - `FotufilmResolvedFrameParams.h` → `Sources/FotufilmHalide`
+- `Build libfotufilm_android.so`：**通过**，`[100%] Linking CXX shared library libfotufilm_android.so`，体积 5,874,424 B（5.7 MB）
+- `Verify .so`：**通过**（`llvm-readelf -h/-d` + `llvm-nm -D`，断言 AArch64 与 8 个 JNI 导出）
+- parity：64 case 通过
+- 产物：`fotufilm-android-poc`（12.4 MB，含 `.so`、`so-configure.log`、`so-build.log`）、`fotufilm-packs`（3.6 MB）
+- **M8 Phase 0 的构建侧到此收口；唯一缺口 = Android 真机 12MP 耗时/内存**（见 EXP-13）
 
 ## 6. 常见失败
 
