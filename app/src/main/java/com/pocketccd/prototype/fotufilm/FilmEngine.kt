@@ -6,7 +6,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * 一张 12MP 的 float 平面是 `4000 × 3000 × 4 = 45.8MB`，RGB 三个平面就是 137MB。
+ * 一张 12MP 的 float 平面是 `4096 × 3072 × 4 = 48MB`，RGB 三个平面就是 144MB。
  * 输入输出各一份、再加 Halide 自己的 scratch，整帧做法在真机上会直接撞 LMK
  * （实测设备 12GB 内存常态只剩 2.4GB 可用）。所以这里一律走**行带分块**：
  * 每次只让一小段行驻留，处理完立刻编码进目标 Bitmap。
@@ -215,7 +215,7 @@ class FilmEngine(private val pack: FilmPack) {
 
             val kernelStart = System.nanoTime()
             // 输出画布就取这条带子自己（origin 全 0），这样不必为了"写入正确位置"
-            // 而持有一份全帧输出平面 —— 那是 137MB × 1 的纯浪费。
+            // 而持有一份全帧输出平面 —— 那是 144MB × 1 的纯浪费。
             val status = FotufilmNative.nativeProcessStrip(
                 pack.nativeHandle,
                 inBuffers[0], inBuffers[1], inBuffers[2],

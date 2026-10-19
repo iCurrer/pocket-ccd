@@ -152,10 +152,22 @@ class FilmSelfTest(private val context: Context) {
      */
     private fun runBitmapPath(files: List<File>): JSONObject {
         val result = JSONObject()
-        val candidate = files.firstOrNull { it.name.contains("4000x3000") } ?: return result.also {
-            it.put("status", "SKIPPED")
-            it.put("reason", "没有 12MP pack")
-        }
+        // 不写死尺寸：pack 尺寸跟着目标机的最大 JPEG 走（PJZ110 是 4096x3072），
+        // 换机型后这里若还写 4000x3000 就会静默 SKIPPED。按文件名里的 __WxH 取最大的那卷。
+        val candidate = files
+            .mapNotNull { file ->
+                val spec = file.name.substringAfter("__", "").removeSuffix(".fswp")
+                val parts = spec.split('x')
+                val width = parts.getOrNull(0)?.toIntOrNull()
+                val height = parts.getOrNull(1)?.toIntOrNull()
+                if (width != null && height != null) file to width.toLong() * height else null
+            }
+            .maxByOrNull { it.second }
+            ?.first
+            ?: return result.also {
+                it.put("status", "SKIPPED")
+                it.put("reason", "没有 12MP pack")
+            }
 
         return runCatching {
             FilmPack.fromFile(candidate).use { pack ->

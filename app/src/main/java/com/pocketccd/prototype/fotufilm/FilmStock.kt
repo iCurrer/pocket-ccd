@@ -53,7 +53,7 @@ object FilmStockCatalog {
     private const val MIN_FRAME_PIXELS = 1_000_000L
 
     /**
-     * 卷名可读化。文件名是 `gold200__4000x3000.fswp` 这种形式，
+     * 卷名可读化。文件名是 `gold200__4096x3072.fswp` 这种形式，
      * 直接大写不好看（`TRIX400`），所以给常用卷一张显式表，其余走兜底规则。
      */
     private val KNOWN_LABELS = mapOf(
