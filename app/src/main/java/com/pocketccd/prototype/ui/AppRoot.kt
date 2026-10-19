@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Size
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -120,10 +119,11 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         previewError = previewError,
         cameraViewfinder = if (cameraBound) {
             { modifier ->
-                val stock = cameraUi.activeStock
                 CameraPreview(
                     lensFacing = androidx.camera.core.CameraSelector.LENS_FACING_BACK,
-                    targetSize = stock?.let { Size(it.width, it.height) },
+                    // 用 programmedSize 而不是 activeStock 的尺寸：未验证的尺寸会把
+                    // CameraX 锁死在"最接近的更高档"上（4000×3000 → 4096×3072）。
+                    targetSize = cameraUi.programmedSize,
                     modifier = modifier,
                     onReady = { bound ->
                         handle = bound

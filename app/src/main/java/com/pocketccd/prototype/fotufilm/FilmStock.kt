@@ -1,6 +1,7 @@
 package com.pocketccd.prototype.fotufilm
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 
 /**
@@ -36,6 +37,20 @@ object FilmStockCatalog {
 
     const val DIRECTORY_NAME = "film"
     private const val EXTENSION = ".fswp"
+    private const val TAG = "FilmStockCatalog"
+
+    /**
+     * 可拍胶卷的最小帧面积。低于它的 pack 是**引擎夹具**，不是胶卷。
+     *
+     * 这不是拍脑袋的门槛，是一次真实故障留下的：CI 的 parity 用
+     * `example-negative-400__96x64.fswp` 跑 64 个 case，这个文件被 push 到手机
+     * 的 `film/` 后，因为文件名按字典序排在最前，被当成了默认卷。于是相机被
+     * 约束到 96×64，CameraX 退到 1920×1440 绑定，随后三卷 12MP 全部精确不匹配
+     * （D-037），表现为"快门按不动、且屏幕上没有任何提示"。
+     *
+     * 1 MP 是地板，远低于任何真实成片尺寸，只用来挡住 96×64 这类验收夹具。
+     */
+    private const val MIN_FRAME_PIXELS = 1_000_000L
 
     /**
      * 卷名可读化。文件名是 `gold200__4000x3000.fswp` 这种形式，
@@ -67,14 +82,23 @@ object FilmStockCatalog {
             runCatching {
                 FilmPack.fromFile(file).use { pack ->
                     val id = file.name.removeSuffix(EXTENSION)
-                    FilmStock(
-                        id = id,
-                        label = labelOf(id),
-                        file = file,
-                        width = pack.width,
-                        height = pack.height,
-                        maxHalo = pack.maxHalo,
-                    )
+                    if (pack.width.toLong() * pack.height < MIN_FRAME_PIXELS) {
+                        // 明确记一笔：静默丢弃会让"我明明 push 了为什么没有这卷"再演一次。
+                        Log.i(
+                            TAG,
+                            "跳过 $id：${pack.width}×${pack.height} 是引擎夹具，不是可拍胶卷",
+                        )
+                        null
+                    } else {
+                        FilmStock(
+                            id = id,
+                            label = labelOf(id),
+                            file = file,
+                            width = pack.width,
+                            height = pack.height,
+                            maxHalo = pack.maxHalo,
+                        )
+                    }
                 }
             }.getOrNull()
         }

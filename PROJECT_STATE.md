@@ -12,7 +12,7 @@
 
 ## 1. 一句话状态
 
-规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。**相机采集链路（FOT-007）已实现并构建通过**：CameraX Preview + ImageCapture → JPEG → 尺寸校验 → `FilmEngine` → 落盘 → 成片页/照片墙，代码侧完成、**真机端到端待手测**。剩余口径缺口是 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)，相机链路见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md)。
+规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。**相机采集链路（FOT-007）已实现并在真机完成绑定验证**：CameraX Preview + ImageCapture → JPEG → 尺寸校验 → `FilmEngine` → 落盘 → 成片页/照片墙。真机实测 `attached=4096x3072`、预览为真实画面；但 **PJZ110 最大 JPEG 是 4096×3072，没有 4000×3000**，按 D-037（尺寸必须精确相等）现役三卷 pack 在该机上不可拍，**端到端冲洗被 FOT-016 阻塞**（需用 CI `pack_size=4096x3072` 重产）。剩余口径缺口是 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)，相机链路见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md)。
 
 ---
 
@@ -86,7 +86,8 @@
 | P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE` |
 | P-027 | 真机首次安装/启动 | `PJZ110` arm64-v8a/API37；Debug APK 安装、启动、首页/拍摄页截图、下拉进入相机；截图 `docs/screenshots/2026-10-19-home.png`、`docs/screenshots/2026-10-19-camera.png` | `PASS`（UI 已真机跑通） |
 | P-028 | M8 运行时侧：Kotlin 绑定 + 12MP 真机实测 | `fotufilm` 包 5 个文件；真机 `libraryLoaded=true`/`abiVersion=1`/`available=true`/`packCount=4`；3 个 12MP stock 全 `nonFinite=0`；单帧 2.0–3.2 s（内核占 80–85%）；峰值 RSS 373–463 MB；TriX400 输出 R=G=B 精确相等 | `PASS`（方法见 `docs/fotufilm-device-benchmark.md`） |
-| P-029 | FOT-007 相机接入（代码侧） | `camera/CameraPreview.kt`（CameraX Preview+ImageCapture、`targetRotation=ROTATION_0`、用 `attachedSurfaceResolution` 匹配 pack）、`camera/PhotoStore.kt`、`camera/CaptureState.kt`、`fotufilm/FilmStock.kt`；`AppViewModel` → `AndroidViewModel`；成片页/照片墙接真实照片；`assembleDebug` + `testDebugUnitTest` 通过，APK 含 `.so` | `DONE`（构建侧）。**真机端到端未执行**，测试清单见 `docs/fotufilm-camera-capture.md` |
+| P-029 | FOT-007 相机接入（代码侧） | `camera/CameraPreview.kt`（CameraX Preview+ImageCapture、`targetRotation=ROTATION_0`、用 `attachedSurfaceResolution` 匹配 pack）、`camera/PhotoStore.kt`、`camera/CaptureState.kt`、`fotufilm/FilmStock.kt`；`AppViewModel` → `AndroidViewModel`；成片页/照片墙接真实照片；`assembleDebug` + `testDebugUnitTest` 通过，APK 含 `.so` | `DONE`（构建侧） |
+| P-030 | 真机相机绑定与分辨率实测 | `adb logcat -s PocketCcdCamera` → `camera bound: lens=1 target=null attached=4096x3072 flash=true`；预览为真实画面；`dumpsys media.camera` 尺寸全表无 4000×3000；快门因 pack 尺寸不符正确置灰并显示 `相机不支持 4000×3000，最大 4096×3072` | `PASS`（绑定链路口径）；**结论：设备最大 JPEG = 4096×3072，现役 4000×3000 pack 不可拍 → FOT-016** |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 

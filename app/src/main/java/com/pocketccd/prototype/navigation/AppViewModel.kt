@@ -247,6 +247,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val largest = supported.maxByOrNull { it.width.toLong() * it.height }
         val matches = active != null && supported.matches(active)
 
+        // 只在已经证明"这个尺寸确实被支持"时才把它发给相机。matches 成立意味着
+        // supported 里已经有同尺寸的条目，所以这个值是已验证的，不会再被替换。
+        val programmed = if (matches) active?.let { Size(it.width, it.height) } else null
+
         val reason = when {
             stocks.isEmpty() -> "没有可用的胶卷"
             camera is CameraState.Pending -> "正在启动相机"
@@ -266,6 +270,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             canShoot = reason == null,
             blockReason = reason,
             largestSupported = largest,
+            programmedSize = programmed,
         )
     }
 }

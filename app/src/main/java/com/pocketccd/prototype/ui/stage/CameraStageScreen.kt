@@ -339,14 +339,19 @@ private fun StageFaceplate(
 
         // 按不下去时必须有话说。静默失效是这类相机页最难查的问题：
         // 用户只会觉得"快门坏了"，而真正原因可能是没有 pack、权限没给或分辨率不匹配。
+        //
+        // 颜色用 RetroInk 而不是 RetroCream：这一行落在米色面板上，米色字等于没写
+        // —— 曾经真的用米色写过，真机上表现为"快门按不动且完全没有任何提示"。
         if (progress > 0.8f && !canShoot && blockReason != null) {
             Text(
                 text = blockReason,
                 style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.RetroCream.copy(alpha = 0.9f),
+                color = PocketCcdColors.RetroInk.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .offset(y = ch * 0.93f)
+                    // 0.87 落在快门下沿（0.78 + 半个快门）与品牌字（0.92）之间的空白带；
+                    // 原来写 0.93 会直接压在 "POCKET CCD" 上，两行字糊成一团。
+                    .offset(y = ch * 0.87f)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
             )

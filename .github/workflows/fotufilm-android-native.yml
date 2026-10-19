@@ -34,7 +34,13 @@ on:
       pack_size:
         description: "WIDTHxHEIGHT. Must equal the capture resolution — spatial params are baked per frame size"
         required: false
-        default: "4000x3000"
+        # 默认值按目标机实测改过，不再是"理想的 12MP"。
+        # PJZ110（OnePlus 13 / OP5D0DL1）后置镜头的 CameraX 最大 JPEG 是 4096x3072，
+        # 没有 4000x3000；请求 4000x3000 会被 CLOSEST_HIGHER_THEN_LOWER 换成 4096x3072，
+        # 而 D-037 要求尺寸精确相等 —— 于是那一套 pack 在真机上一张都拍不出来。
+        # 依据：`adb logcat -s PocketCcdCamera` → attached=4096x3072；
+        #      `dumpsys media.camera` 尺寸全表不含 4000x3000。
+        default: "4096x3072"
 
 permissions:
   contents: read
@@ -53,8 +59,8 @@ env:
   # 交付用的 pack 尺寸。**必须等于实际拍摄分辨率**：
   # main.swift:1123 写明 "A frame of another size needs another pack" —— 每个空间参数是
   # 毫米长度乘以该帧的 pixels-per-mm，尺寸是导出的一部分，不能事后缩放。
-  # 4000x3000 = 12MP（4:3），对应 FOT-004 的验收目标。
-  PACK_SIZE: ${{ inputs.pack_size || '4000x3000' }}
+  # 4096x3072 = 12.58MP（4:3），等于 PJZ110 后置镜头的最大 JPEG；见 inputs.pack_size 的说明。
+  PACK_SIZE: ${{ inputs.pack_size || '4096x3072' }}
   # parity 脚本内部固定请求这个 stock / 尺寸
   PARITY_STOCK: example-negative-400
   PARITY_SIZE: "96x64"
