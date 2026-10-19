@@ -10,6 +10,7 @@ import com.pocketccd.prototype.camera.CameraHandle
 import com.pocketccd.prototype.camera.CameraState
 import com.pocketccd.prototype.camera.CameraUiState
 import com.pocketccd.prototype.camera.CaptureState
+import com.pocketccd.prototype.camera.CapturedFrame
 import com.pocketccd.prototype.camera.PhotoStore
 import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.camera.decodeJpeg
@@ -62,7 +63,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
 
     /** 上一次快门用的取景器句柄，供成片页 RETRY 复用。 */
-    private var lastTaker: (suspend () -> ByteArray)? = null
+    private var lastTaker: (suspend () -> CapturedFrame)? = null
 
     /**
      * 防连点。`_capture.isBusy` 的检查与赋值之间隔着一次协程调度，只靠状态判断会有窗口。
@@ -138,7 +139,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * 调用方应先于导航调用本方法：这里会**同步**把状态置为 [CaptureState.Capturing]，
      * 成片页推入时读到的就已经是"正在冲洗"，不会先闪一下上一张的旧结果。
      */
-    fun capture(taker: suspend () -> ByteArray) {
+    fun capture(taker: suspend () -> CapturedFrame) {
         lastTaker = taker
         val stock = cameraUi.value.activeStock
         if (stock == null) {
@@ -151,10 +152,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                val jpeg = taker()
+                val frame = taker()
                 withContext(Dispatchers.Default) {
                     _capture.value = CaptureState.Developing(stock)
-                    val developed = develop(jpeg, stock)
+                    val developed = develop(frame.jpeg, stock, frame.rotationDegrees)
                     try {
                         _capture.value = CaptureState.Saving(stock)
                         val saved = photoStore.save(
@@ -163,6 +164,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             capturedAt = System.currentTimeMillis(),
                             renderMillis = developed.renderMillis,
                             strips = developed.strips,
+                            rotationDegrees = frame.rotationDegrees,
                         )
                         _capture.value = CaptureState.Done(saved)
                         _roll.update { listOf(saved) + it }
@@ -200,7 +202,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 冲洗本体：解码 → 引擎 → 成品位图。整个函数跑在 [Dispatchers.Default] 上。 */
-    private fun develop(jpeg: ByteArray, stock: FilmStock): Developed {
+    private fun develop(jpeg: ByteArray, stock: FilmStock, rotationDegrees: Int): Developed {
         val expected = Size(stock.width, stock.height)
         val source = decodeJpeg(jpeg, expected)
         val output = Bitmap.createBitmap(stock.width, stock.height, Bitmap.Config.ARGB_8888)
@@ -215,7 +217,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     TAG,
                     "developed ${stock.label} ${source.width}x${source.height} " +
                         "in ${result.totalMillis}ms / ${result.strips} strips / " +
-                        "nonFinite=${result.nonFinite}",
+                        "nonFinite=${result.nonFinite} / rotate=$rotationDegrees°",
                 )
                 Developed(result.totalMillis, result.strips, output)
             }

@@ -4,11 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.hardware.camera2.CameraCharacteristics
 import android.media.ExifInterface
 import android.util.Size
 import android.util.Log
 import android.view.Surface
 import android.view.ViewGroup
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -36,10 +38,23 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
+ * 一张刚拍下、尚未冲洗的帧。
+ *
+ * [rotationDegrees] 是**成品需要顺时针旋转的角度**（0/90/180/270），不是 EXIF 标记。
+ * 为什么必须由相机侧算出来：JPEG 的像素恒为传感器原始方向（见
+ * [CameraHandle.takeJpeg]），而"正立"是相对于用户此刻的握持姿势的，
+ * 只有拍照那一瞬间读得到 display rotation。
+ */
+data class CapturedFrame(
+    val jpeg: ByteArray,
+    val rotationDegrees: Int,
+)
+
+/**
  * 一次相机会话。由 [CameraPreview] 在绑定时产生，解绑时作废。
  *
  * 存在的意义是把 CameraX 挡在 UI 之外：Compose 层只拿到一个
- * `suspend () -> ByteArray`，ViewModel 因此不需要认识 CameraX。
+ * `suspend () -> CapturedFrame`，ViewModel 因此不需要认识 CameraX。
  */
 class CameraHandle internal constructor(
     private val imageCapture: ImageCapture,
@@ -48,14 +63,28 @@ class CameraHandle internal constructor(
     val supportedSizes: Set<Size>,
     /** 该镜头是否有闪光灯。前置通常没有。 */
     val hasFlash: Boolean,
+    private val lensFacing: Int,
+    /** 传感器安装角（`CameraCharacteristics.SENSOR_ORIENTATION`）。读不到时为 null。 */
+    private val sensorOrientation: Int?,
+    /** 拍照瞬间读当前显示方向，返回 `Surface.ROTATION_*`。 */
+    private val displayRotation: () -> Int,
 ) {
     /**
-     * 拍一张 JPEG，返回原始字节（EXIF 未处理）。
+     * 拍一张 JPEG，返回原始字节 + 方向补偿。
      *
      * 走内存回调而不是写文件：12MP 的 JPEG 只有 3–5MB，而多一次落盘再读回
      * 会在内存最紧张的时刻多占一份。EXIF 方向由 [decodeJpeg] 负责应用。
+     *
+     * **为什么图像永远是横的**：ImageCapture 固定 `targetRotation = ROTATION_0`，
+     * 为的是让像素尺寸恒等于 pack 声明的 4096×3072（D-037 要求精确相等）。
+     * CameraX 在这个组合下不写 EXIF、也不旋转像素，于是竖持拍出来的成品侧躺 90°。
+     * 方向因此分两步补：这里只算出该转多少度，真正旋转发生在**冲洗完成之后**
+     * （`PhotoStore.save`），因为 pack 的空间参数绑定的是像素尺寸，不能在冲洗前转。
      */
-    suspend fun takeJpeg(): ByteArray = suspendCancellableCoroutine { continuation ->
+    suspend fun takeJpeg(): CapturedFrame = suspendCancellableCoroutine { continuation ->
+        // 角度必须在按下快门的瞬间取：用户可能拍完就转手机，
+        // 冲洗要 2–3 秒，等到那时再读 display 会拿到错的姿势。
+        val rotation = rotationDegrees()
         imageCapture.takePicture(
             executor,
             object : ImageCapture.OnImageCapturedCallback() {
@@ -64,7 +93,7 @@ class CameraHandle internal constructor(
                         val buffer = image.planes[0].buffer
                         val bytes = ByteArray(buffer.remaining())
                         buffer.get(bytes)
-                        if (continuation.isActive) continuation.resume(bytes)
+                        if (continuation.isActive) continuation.resume(CapturedFrame(bytes, rotation))
                     } catch (error: Throwable) {
                         if (continuation.isActive) continuation.resumeWithException(error)
                     } finally {
@@ -85,6 +114,31 @@ class CameraHandle internal constructor(
         } else {
             ImageCapture.FLASH_MODE_OFF
         }
+    }
+
+    /**
+     * 成品需要顺时针旋转的度数。
+     *
+     * 用 Android 官方的传感器公式，而不是 CameraX 的 `sensorRotationDegrees`：
+     * 后者在 `targetRotation = ROTATION_0` 时返回 0（它认为已经正立），
+     * 与本机实测"像素是传感器原始方向"矛盾。`SENSOR_ORIENTATION` 是硬件事实，不会被推导规则影响：
+     *
+     * - 后置：`(sensor - device + 360) % 360`
+     * - 前置：`(sensor + device) % 360`（前置是镜像的，方向相加而非相减）
+     */
+    private fun rotationDegrees(): Int {
+        val sensor = sensorOrientation ?: run {
+            Log.w(TAG, "读不到 SENSOR_ORIENTATION，成片方向不做补偿")
+            return 0
+        }
+        val device = displayRotation() * 90
+        val degrees = if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
+            (sensor + device) % 360
+        } else {
+            (sensor - device + 360) % 360
+        }
+        Log.i(TAG, "capture rotation: sensor=$sensor display=${displayRotation()} -> $degrees°")
+        return degrees
     }
 }
 
@@ -199,11 +253,21 @@ fun CameraPreview(
             }
 
             val attachedSize = attached ?: targetSize
+
+            // 传感器安装角。这是硬件事实（通常 90 或 270），成片方向补偿全靠它 ——
+            // CameraX 的 sensorRotationDegrees 在 targetRotation=ROTATION_0 时给 0，
+            // 与本机实测"像素是传感器原始方向"矛盾，不能拿来用。
+            val sensorOrientation = runCatching {
+                Camera2CameraInfo.from(camera.cameraInfo)
+                    .getCameraCharacteristic(CameraCharacteristics.SENSOR_ORIENTATION)
+            }.getOrNull()
+
             Log.i(
                 TAG,
                 "camera bound: lens=$lensFacing target=${targetSize?.let { "${it.width}x${it.height}" }} " +
                     "attached=${attached?.let { "${it.width}x${it.height}" }} " +
                     "effective=${attachedSize?.let { "${it.width}x${it.height}" }} " +
+                    "sensorOrientation=$sensorOrientation " +
                     "flash=${camera.cameraInfo.hasFlashUnit()} waited=${attempts * 25}ms",
             )
 
@@ -216,6 +280,9 @@ fun CameraPreview(
                     // 那种失败至少带着"实际 X 与 pack 的 Y 不一致"的可读信息。
                     supportedSizes = setOfNotNull(attachedSize),
                     hasFlash = camera.cameraInfo.hasFlashUnit(),
+                    lensFacing = lensFacing,
+                    sensorOrientation = sensorOrientation,
+                    displayRotation = { previewView.display?.rotation ?: Surface.ROTATION_0 },
                 ),
             )
         }.onFailure { error ->
