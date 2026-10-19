@@ -42,7 +42,7 @@
 | M5 | 图库 / 成片 / 存储 | 7 | `TODO` | M3 输出稳定 + D-014 |
 | M6 | 兼容性与性能 | 5 | `TODO` | M2–M5 功能可用 |
 | M7 | 发布准备 | 4 | `TODO` | M6 通过 |
-| M8 | Fotufilm Android 原生移植 | 14 | `IN_PROGRESS`（CI 路线已取代 WSL2：GitHub Actions 已跑绿，最新 run `39198895398` 全绿；FOT-001/002/003 `DONE`；FOT-004 **构建侧 `DONE`**——`libfotufilm_android.so` 已编出（5,874,424 B）并通过 AArch64 + JNI 符号断言，缺真机 12MP 验证。方案见 `docs/github-actions-fotufilm.md`、`docs/fotufilm-android-port-plan.md`） | FOT-001 + M2 可并行 |
+| M8 | Fotufilm Android 原生移植 | 14 | `IN_PROGRESS`（CI 路线已取代 WSL2：GitHub Actions 已跑绿，最新 run `39198895398` 全绿；FOT-001/002/003 `DONE`；FOT-004 **构建侧 `DONE`**——`libfotufilm_android.so` 已编出（5,874,424 B）并通过 AArch64 + JNI 符号断言；真机 `PJZ110` 已就位，但无 Kotlin 调用方，12MP 未实测。方案见 `docs/github-actions-fotufilm.md`、`docs/fotufilm-android-port-plan.md`） | FOT-001 + M2 可并行 |
 
 > 说明：M0 的 `DONE` 仅指文档文件已建立；不包含任何 App 构建或相机测试。文档内容仍需负责人评审后才能作为最终基线。
 
@@ -126,7 +126,7 @@
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P0 |
-| 状态 | `DONE`（构建/manifest/SDK 已验证；安装/启动因无设备 `BLOCKED`，未达 `VERIFIED`） |
+| 状态 | `DONE`（构建/manifest/SDK 已验证；安装/启动已于 2026-10-19 在 `PJZ110` 真机完成，见 P-027） |
 | 预估 | 1–1.5 天 |
 | 前置条件 | Android SDK Platform 37、Build Tools 36.0.0；JDK 21（Studio JBR）；Gradle 9.6.1；网络/代理可拉取缺失依赖；T1-002 完成 |
 | 涉及模块 | `settings.gradle.kts`、根 `build.gradle.kts`、`app/build.gradle.kts`、`gradle/libs.versions.toml`、`gradle/wrapper/`、`app/src/main/`、`MainActivity` |
@@ -134,7 +134,7 @@
 | 验收标准 | `./gradlew :app:assembleDebug` 成功；APK 产物存在；Manifest 无 `CAMERA`/`INTERNET`/存储权限；`compileSdk=37`、`targetSdk=36`、`minSdk=29`；依赖无 alpha/beta（CameraX 本阶段不引入）；应用可启动（需设备/模拟器） |
 | 测试方式 | `./gradlew :app:assembleDebug`；`aapt dump badging`；`aapt dump permissions`；`adb install` + `am start`（环境具备时）；`./gradlew :app:dependencies` |
 | 证据/用例 | `TC-ENV-002`、`TC-P1-001`、`TC-P1-017` |
-| 实际结果 | 2026-10-17 `./gradlew :app:assembleDebug` **BUILD SUCCESSFUL**（首次 59s，wrapper 复跑 up-to-date）；APK `app/build/outputs/apk/debug/app-debug.apk`，29,570,230 bytes，SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C`；`aapt` 确认 compileSdk 37 / targetSdk 36 / minSdk 29；无 CAMERA/INTERNET/存储权限（仅有 AndroidX 自定义签名权限）；`TC-ENV-004` `BLOCKED`（无设备） |
+| 实际结果 | 2026-10-17 `./gradlew :app:assembleDebug` **BUILD SUCCESSFUL**（首次 59s，wrapper 复跑 up-to-date）；APK `app/build/outputs/apk/debug/app-debug.apk`，29,570,230 bytes，SHA-256 `B77DB7171C99DDC10685DCB046512BD8BC48B2801679DAEDBDE47A702168912C`；`aapt` 确认 compileSdk 37 / targetSdk 36 / minSdk 29；无 CAMERA/INTERNET/存储权限（仅有 AndroidX 自定义签名权限）；`TC-ENV-004` 后于 2026-10-19 以 `PJZ110` 真机 `PASS`（安装/启动/截图） |
 | 风险/备注 | 已把“构建成功”和“App 已验证”分开：安装/启动/UI 仍待 T1-015。首次构建出现 SDK platform `android-37.0` 与 `android-37.0-2` 重复目录警告，但不影响构建，记录在 `PROJECT_STATE.md`。 |
 
 **已验证工具链（`[D]` D-004，2026-10-17 T1-003 构建通过）：**
@@ -399,7 +399,7 @@ RESULT
 | 字段 | 内容 |
 |---|---|
 | 优先级 | P0 |
-| 状态 | `BLOCKED`（本机无 AVD、无 system image、无设备） |
+| 状态 | `DONE`（真机路线 `PASS`：`PJZ110` arm64-v8a / API 37；安装、启动、截图、下拉进入拍摄页均通过，2026-10-19。AVD/system image 未安装，模拟器用例仍 `NOT_RUN`） |
 | 预估 | 0.5–1 天（下载/配置） |
 | 前置条件 | Android SDK；网络/代理；至少 8GB 磁盘 |
 | 涉及模块 | 测试环境（不属于 App 代码） |
@@ -573,7 +573,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 **路径：** 离线 FSWP pack + C++ AOT + JNI；不在 Android 上跑完整 Swift App。
 **方案文档：** [`docs/fotufilm-android-port-plan.md`](docs/fotufilm-android-port-plan.md)
 **License 清单：** [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md)
-**当前状态：** `IN_PROGRESS` — CI 已跑绿（run `39143317856`、`39145196597`、`39198895398`），FSWP pack、arm64 AOT 内核、parity（64 case）、`libfotufilm_android.so` 均有实证：最新 run `39198895398` 全绿，configure 期四个头命中 `Sources/FotufilmHalide`，`libfotufilm_android.so` 链接成功（5,874,424 B），`Verify .so` 断言 AArch64 通过，产物 `fotufilm-android-poc`（12.4 MB）含 `.so` 与 `so-*.log`。**唯一缺口仍是 Android 真机**：12MP 耗时/峰值内存未测，FOT-004 因此不能标 `VERIFIED`。
+**当前状态：** `IN_PROGRESS` — CI 已跑绿（run `39143317856`、`39145196597`、`39198895398`），FSWP pack、arm64 AOT 内核、parity（64 case）、`libfotufilm_android.so` 均有实证：最新 run `39198895398` 全绿，configure 期四个头命中 `Sources/FotufilmHalide`，`libfotufilm_android.so` 链接成功（5,874,424 B），`Verify .so` 断言 AArch64 通过，产物 `fotufilm-android-poc`（12.4 MB）含 `.so` 与 `so-*.log`。**缺口已从"无设备"变为"无调用方"**：`PJZ110` 真机已就位（arm64-v8a / API 37 / 12GB RAM / 8 核）并完成 App 安装/启动/截图（P-027），但 `app/src` 下还没有 `fotufilm` 包的 Kotlin 绑定，`libfotufilm_android.so` 的 8 个 JNI 符号没有任何调用方，因此 12MP 耗时/峰值内存仍无数据，FOT-004 不能标 `VERIFIED`。下一个可交付是 FOT-005。
 
 | ID | 任务 | 前置 | 模块/文件 | 交付物 | 验收标准 | 测试方式 | 状态 |
 |---|---|---|---|---|---|---|---|

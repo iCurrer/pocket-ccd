@@ -12,7 +12,7 @@
 
 ## 1. 一句话状态
 
-规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 8 个 JNI 导出）。**唯一缺口是 Android 真机**：12MP 耗时/峰值内存未测，FOT-004 仍是 `IN_PROGRESS`；App 也尚未在设备上安装/启动。
+规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 8 个 JNI 导出）。**真机已接入**（`PJZ110`，arm64-v8a / API 37 / 12GB RAM / 8 核），App 已完成安装/启动/截图（P-027）。当前缺口不是设备，而是 **12MP 单帧实测未执行**：`.so` 与 pack 都齐了，但 Kotlin 侧尚无调用方（FOT-005 未开始），所以耗时/峰值内存仍无数据，FOT-004 保持 `IN_PROGRESS`。
 
 ---
 
@@ -81,7 +81,7 @@
 | P-023 | 持久机身 Stage + 跟手动画 | `CameraStageScreen`；HOME/CAMERA 共用机身；拖拽驱动 progress；快门/闪光灯移动，镜头→取景器，按钮重排；移除 sharedBounds | `DONE`（真机动画未验证） |
 | P-024 | 设置页内容 App 化 | 保留红框；内容改为 24sp 标题 + 分组卡片 + 15/12sp 行 + 44dp 滤镜分段控件 + LazyColumn | `DONE`（真机视觉未验证） |
 | P-025 | Fotufilm Android 原生移植评估/计划 | 本地源码分析；FSWP + C++ AOT + JNI 路线；M8/FOT 任务；License 清单 | `DONE`（计划文档） |
-| P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE`（缺真机） |
+| P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE`（构建侧；运行时未接） |
 | P-027 | 真机首次安装/启动 | `PJZ110` arm64-v8a/API37；Debug APK 安装、启动、首页/拍摄页截图、下拉进入相机；截图 `docs/screenshots/2026-10-19-home.png`、`docs/screenshots/2026-10-19-camera.png` | `PASS`（UI 已真机跑通；FOT 12MP 未测） |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
@@ -93,18 +93,18 @@
 | 事项 | 状态 | 说明 |
 |---|---|---|
 | Android 工程初始化 | `DONE` | T1-002/T1-003；可构建空壳 |
-| App 安装/启动 | `BLOCKED` | 无 AVD/真机（T1-015） |
+| App 安装/启动 | `PASS` | 2026-10-19 `PJZ110` 真机：Debug APK 安装、冷启动、首页/拍摄页截图（P-027） |
 | Compose 主题/设计令牌 | `DONE` | T1-004；`docs/design-tokens.md`；对比度/字体待设备 |
 | 页面状态机/导航 | `DONE` | T1-005；`AppStateTest` 12/12；UI/旋转待设备 |
 | 五个静态页面 | `DONE` | 首页/拍摄页/照片墙/成片页/设置页均已完成静态 UI；设备 UI 待验 |
 | 下拉/上拉手势/转场 | `IN_PROGRESS` | 下拉 88dp 相机、上拉 88dp 照片墙；共享机身转场已优化；速度阈值/手势测试未做 |
 | 自适应/无障碍 | `NOT_STARTED` | T1-013 |
 | 截图基线/视觉评审 | `NOT_STARTED` | T1-014 |
-| AVD/真机 | `BLOCKED` | 无 AVD、无 system image、无设备 |
+| AVD/真机 | `PASS`（真机） | `PJZ110` arm64-v8a / API 37 / Android 17 / 1440×3168@640 / 12GB RAM / 8 核；AVD 与 system image 仍未安装 |
 | Gradle 构建验证 | `PASS` | 2026-10-17 `assembleDebug` + `assembleRelease` 成功；APK/哈希见第 5 节 |
 | Release 安装/UI | `NOT_RUN` | 未签名 Release APK 已生成，未安装 |
 | 相机预览/拍摄 | `NOT_STARTED` | 阶段 2；当前明确不做 |
-| M8 原生构建 | `IN_PROGRESS` | CI run `39198895398` 全绿；packs/AOT/`libfotufilm_android.so` 已产出；缺真机 12MP |
+| M8 原生构建 | `IN_PROGRESS` | CI run `39198895398` 全绿；packs/AOT/`libfotufilm_android.so` 已产出；真机已就位，**12MP 实测未执行**（无 Kotlin 调用方） |
 | 图像处理/滤镜 | `NOT_STARTED` | 阶段 3/4；M8 接入中 |
 | MediaStore/Room | `NOT_STARTED` | 阶段 5 |
 | 性能/兼容性 | `NOT_STARTED` | 阶段 6 |
@@ -186,9 +186,10 @@
 | 设置页 Release 构建 | `assembleRelease` → `BUILD SUCCESSFUL in 5s`；`app-release-unsigned.apk` 23,514,922 bytes；SHA-256 `CC1D58232FF039ADD3E9AD8116DA0B13DA9E38CBFBC740633502430CE4888E0E`；未签名/未安装 |
 | SDK | compileSdk 37 / targetSdk 36 / minSdk 29 |
 | 权限 | 无 CAMERA/INTERNET/存储/麦克风/位置；仅有 AndroidX 自定义签名权限 `com.pocketccd.prototype.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
-| 未执行 | `adb install`、启动、UI 截图、Compose UI 测试、相机/图像/性能测试（无设备） |
+| 已执行 | `adb install`、冷启动、首页/拍摄页截图（`docs/screenshots/2026-10-19-*.png`）；设备信息见第 3 节 |
+| 未执行 | Compose UI 测试、相机/图像/性能测试、FOT 12MP 实测 |
 
-**注意：** 构建成功不等于 App 已验证。安装/启动仍被 B-01 阻塞。
+**注意：** 构建成功不等于 App 已验证。安装/启动已解除 B-01 阻塞；相机、滤镜、性能仍是 `NOT_RUN`。
 
 ---
 
@@ -222,7 +223,7 @@
 
 | ID | 阻塞 | 影响 | 解除方式 | 负责人 |
 |---|---|---|---|---|
-| B-01 | 无 AVD/system image/真机 | T1-015、所有 UI/设备测试无法执行 | 通过 Android Studio SDK Manager 安装 API 36/37 system image，或连接真机 | 开发/测试 |
+| B-01 | AVD/system image 未安装 | 模拟器相关用例无法执行（真机已就位，不再阻塞安装/启动/UI 手测） | 通过 Android Studio SDK Manager 安装 API 36/37 system image；或继续用 `PJZ110` 真机 | 开发/测试 |
 | B-02 | 应用 ID/名称未定 | T1-001；发布配置无法最终化 | 产品确认 D-020 | 产品 |
 | B-03 | minSdk 未最终确认 | 权限分支/测试范围 | 确认 D-003/D-025 | 产品+技术 |
 | B-04 | 原图保留策略未定 | “重新处理”语义/存储设计 | 确认 D-014 | 产品 |
@@ -281,13 +282,14 @@
 - 更新 `PROJECT_STATE.md`/`TASK_BOARD.md`/`TEST_PLAN.md`；
 - 打 tag `phase-1-prototype`（Git 初始化后）。
 
-### 第 6 步：Fotufilm M8 Phase 0（构建侧已完成，缺真机）
+### 第 6 步：Fotufilm M8 Phase 0（构建侧已完成，真机已就位）
 
 - 先读 `docs/fotufilm-android-port-plan.md` 与 `docs/fotufilm-license-inventory.md`；
 - FOT-001/002/003 已完成：License 清单、GitHub Actions CI、12MP FSWP packs；
 - FOT-004 构建侧已完成：`native/` + `libfotufilm_android.so` 5,874,424 B；CI run `39198895398` 全绿；
-- **唯一阻塞**：没有 Android 真机，12MP 耗时/峰值内存未测；FOT-004 不能标 `VERIFIED`；
-- 下一步：接 FOT-005（FSWP 解析 + Kotlin FilmEngine API）或先解决真机；
+- **当前阻塞**：Kotlin 侧无调用方（FOT-005 未开始），`.so` 无法被调起，12MP 耗时/峰值内存仍无数据；FOT-004 不能标 `VERIFIED`；
+- 真机约束（实测）：12GB RAM 但系统常态只剩 ~2.4GB 可用；单帧 12MP float RGB 平面约 144MB，必须按 strip 分块，不能整帧多份驻留；
+- 下一步：FOT-005（FSWP 解析 + Kotlin FilmEngine API），或先加一个 CI 交叉编译的 arm64 自测二进制，`adb push` 到真机直接测 12MP；
 - EXP-13 通过前，不进入正式相机链路替换；
 - 不把 47 个 stock 一次性打包，先 3 → 12 → 47。
 
@@ -390,8 +392,8 @@ D:\Android\pocket ccd\
 
 ## 12. 诚实声明
 
-- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、Debug/Release 构建（`TC-ENV-002`、`TC-P1-018`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）、拍摄页静态约束（`TC-P1-028`）、共享转场代码路径（`TC-P1-029`）、配色对比度（`TC-P1-030`）、照片墙/成片/设置静态检查（`TC-P1-031`、`TC-P1-034`、`TC-P1-035`、`TC-P1-036`、`TC-P1-037`）。**没有任何页面在设备上运行、没有相机/图像/性能功能被实际验证。**
-- 构建通过只证明“空壳能编译打包”；安装、启动、UI 测试仍被无设备阻塞。
+- 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、Debug/Release 构建（`TC-ENV-002`、`TC-P1-018`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）、拍摄页静态约束（`TC-P1-028`）、共享转场代码路径（`TC-P1-029`）、配色对比度（`TC-P1-030`）、照片墙/成片/设置静态检查（`TC-P1-031`、`TC-P1-034`、`TC-P1-035`、`TC-P1-036`、`TC-P1-037`）。**首页与拍摄页已在 `PJZ110` 真机运行并截图（P-027）；但没有相机/图像/性能功能被实际验证，照片墙/成片页/设置页也尚未在设备上逐一验收。**
+- 构建通过只证明“空壳能编译打包”；安装/启动/截图已在 `PJZ110` 真机完成（P-027），但 Compose UI 测试、相机、FOT 12MP、性能仍未执行。
 - 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。
 - 未执行的测试在 `TEST_PLAN.md` 中保持 `NOT_RUN` 或 `BLOCKED`，不会因为文档完成而自动变成通过。

@@ -24,7 +24,7 @@
 | 成片页 | 相机吐出的奶油相纸打印 + 状态变体 + 两个物理圆键（T1-010）；运行时 demo 不伪造保存 |
 | 设置页 | 红框机身内 App 式设置：24sp 标题、分组卡片、15/12sp 行、44dp 滤镜分段控件（T1-011） |
 | 下拉/上拉手势 | 下拉 88dp 进入相机、上拉 88dp 进入照片墙；共享机身转场（T1-007，`IN_PROGRESS`） |
-| M8 Fotufilm | CI run `39198895398` 全绿；12MP packs + arm64 AOT + `libfotufilm_android.so` 5,874,424 B；缺真机 12MP 验证 |
+| M8 Fotufilm | CI run `39198895398` 全绿；12MP packs + arm64 AOT + `libfotufilm_android.so` 5,874,424 B；真机已就位，**12MP 实测未执行**（缺 Kotlin 调用方） |
 | 构建 | `assembleDebug` 通过（2026-10-19）；Release 旧包未重打；Release 未签名、未安装 |
 | 安装/启动/真机测试 | `PJZ110` (arm64-v8a, API37) 已安装/启动/截图；下拉进入拍摄页；相机/FOT 12MP 未测 |
 
