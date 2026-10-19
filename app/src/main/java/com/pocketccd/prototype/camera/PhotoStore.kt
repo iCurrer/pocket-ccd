@@ -223,6 +223,29 @@ class PhotoStore(context: Context) {
         )?.use { it.count > 0 } ?: false
     }.getOrDefault(false)
 
+    /**
+     * 本卷的起始时间戳（毫秒）。
+     *
+     * 「一卷 36 张」要成立，计数就必须有起点——否则计数器显示的是整个照片库的
+     * 张数，那是在撒谎（库里有 35 张并不代表这卷只剩 1 张）。首次调用时把起点
+     * 落成"现在"：老照片属于之前的卷，不该算进新卷。
+     */
+    fun rollStartedAt(): Long {
+        val stored = prefs.getLong(KEY_ROLL_STARTED_AT, 0L)
+        if (stored > 0L) return stored
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_ROLL_STARTED_AT, now).apply()
+        return now
+    }
+
+    /** 换卷：把起点推到此刻，计数器归零。 */
+    fun startNewRoll(): Long {
+        val now = System.currentTimeMillis()
+        // 用 commit 而不是 apply：换卷后马上会读计数，异步落盘会有一次闪回旧值。
+        prefs.edit().putLong(KEY_ROLL_STARTED_AT, now).commit()
+        return now
+    }
+
     /** 按拍摄时间倒序列出所有成片。解析不出卷名的文件跳过，不让坏文件污染列表。 */
     fun list(): List<SavedPhoto> {
         val files = fullDir.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
@@ -286,6 +309,9 @@ class PhotoStore(context: Context) {
 
         /** 历史补齐的一次性标记。改名等于重新跑一次迁移。 */
         private const val KEY_BACKFILL_DONE = "gallery_backfill_done_v1"
+
+        /** 本卷起点。0 表示还没初始化过，首次读取时落成"现在"。 */
+        private const val KEY_ROLL_STARTED_AT = "roll_started_at_v1"
 
         private const val TAG = "PocketCcdGallery"
     }

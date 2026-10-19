@@ -44,6 +44,16 @@
             android:name=".fotufilm.FilmSelfTestActivity"
             android:exported="true"
             android:label="Fotufilm self test" />
+
+        <!--
+          M9 重设计的独立预览入口（T9-012 需要新旧对照）。
+          不接相机、不改现有导航；用静态画面校验间距与金属层次。
+          adb shell am start -n com.pocketccd.prototype/.ui.film.FilmPreviewActivity
+        -->
+        <activity
+            android:name=".ui.film.FilmPreviewActivity"
+            android:exported="true"
+            android:label="Film UI preview" />
     </application>
 
 </manifest>

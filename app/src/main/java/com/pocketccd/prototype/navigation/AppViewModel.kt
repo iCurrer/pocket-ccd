@@ -49,6 +49,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _roll = MutableStateFlow<List<SavedPhoto>>(emptyList())
     val roll: StateFlow<List<SavedPhoto>> = _roll.asStateFlow()
 
+    /** 本卷起点。UI 只关心"这卷拍了几张"，所以起点本身留在内部。 */
+    private val _rollStartedAt = MutableStateFlow(photoStore.rollStartedAt())
+
+    /**
+     * 本卷已拍张数。**不是**照片库总数——库里有 35 张，不代表这卷只剩 1 张。
+     * 计数器、进度条、满卷判断都以它为准。
+     */
+    val rollShots: StateFlow<Int> =
+        combine(_roll, _rollStartedAt) { roll, startedAt ->
+            roll.count { it.capturedAt > startedAt }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0,
+        )
+
     private val _stocks = MutableStateFlow<List<FilmStock>>(emptyList())
     private val _selectedStockId = MutableStateFlow<String?>(null)
     private val _camera = MutableStateFlow<CameraState>(CameraState.Pending)
@@ -111,6 +127,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (stocks.isEmpty()) return
         val index = stocks.indexOfFirst { it.id == _selectedStockId.value }
         _selectedStockId.value = stocks[(index + 1).mod(stocks.size)].id
+    }
+
+    /** 换卷：计数器归零，照片库不动。相机页底部的「换卷」磁贴走这里。 */
+    fun newRoll() {
+        _rollStartedAt.value = photoStore.startNewRoll()
     }
 
     // ---- 相机 ----

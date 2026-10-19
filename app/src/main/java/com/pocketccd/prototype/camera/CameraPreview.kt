@@ -13,10 +13,14 @@ import android.util.Log
 import android.view.Surface
 import android.view.ViewGroup
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.core.CameraControl
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.MeteringPointFactory
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -36,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -60,16 +65,29 @@ data class CapturedFrame(
  */
 class CameraHandle internal constructor(
     private val imageCapture: ImageCapture,
+    private val cameraControl: CameraControl,
     private val executor: Executor,
     /** 该镜头在 ImageCapture 用例下**支持的全部输出尺寸**，用于匹配 pack。 */
     val supportedSizes: Set<Size>,
     /** 该镜头是否有闪光灯。前置通常没有。 */
     val hasFlash: Boolean,
+    /**
+     * 取景器坐标 → 传感器坐标的换算器。必须是 `PreviewView.meteringPointFactory`：
+     * 它知道 FIT_CENTER 的留边，手算会偏。
+     */
+    private val meteringPointFactory: () -> MeteringPointFactory,
+    private val cameraInfo: CameraInfo,
     private val lensFacing: Int,
     /** 传感器安装角（`CameraCharacteristics.SENSOR_ORIENTATION`）。读不到时为 null。 */
     private val sensorOrientation: Int?,
     /** 拍照瞬间读当前显示方向，返回 `Surface.ROTATION_*`。 */
     private val displayRotation: () -> Int,
+    /**
+     * 该逻辑相机底下的**真实光学档位**（D-044）。空列表表示探不到
+     * （单摄 / 厂商裁掉 / 非 camera2 后端），此时界面必须退回数码档，
+     * 不能凭空标一个光学倍率。
+     */
+    val lensStops: List<LensStop> = emptyList(),
 ) {
     /**
      * 拍一张 JPEG，返回原始字节 + 方向补偿。
@@ -120,6 +138,81 @@ class CameraHandle internal constructor(
     }
 
     /**
+     * 这条会话是否还挂在相机上。
+     *
+     * CameraX 没有公开的 `isBound`，但 `attachedSurfaceResolution` 在未 attach 时
+     * 会抛 `IllegalStateException` —— 这是唯一可用的探针。真机上遇到过：
+     * 进程被反复强停/重启后，相机会话被别的客户端抢走，预览变黑、`ImageCapture`
+     * 失效，而界面仍然亮着 `LIVE`，按快门只会弹一句 "Not bound to a valid Camera"。
+     *
+     * 探针只在回到前台和按快门时调，不进每帧组合。
+     */
+    fun isAttached(): Boolean =
+        runCatching { imageCapture.attachedSurfaceResolution }.isSuccess
+
+    /**
+     * 在取景器坐标系内点按对焦 / 测光。
+     *
+     * 坐标是**取景器 View 的像素**，不是屏幕像素：`PreviewView.meteringPointFactory`
+     * 会把 FIT_CENTER 的留边算进去，所以上层只要把 `pointerInput` 拿到的
+     * offset 原样传进来就不会偏。
+     *
+     * [onResult] 在主线程回调真实结果。界面据此显示 `AF LOCK` 或 `AF FAIL` ——
+     * 设计稿的点按只是把光圈挪到手指下面，永远显示 `AF LOCK`；
+     * 我们真的调了 `startFocusAndMetering`，就该照实说。
+     */
+    fun focusAt(x: Float, y: Float, onResult: (Boolean) -> Unit = {}) {
+        val point = runCatching { meteringPointFactory().createPoint(x, y) }.getOrNull()
+        if (point == null) {
+            onResult(false)
+            return
+        }
+        val action = FocusMeteringAction
+            .Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+            // 5 秒后自动取消：没有这一步，对焦点会永久锁在旧位置，
+            // 用户移动手机后画面就一直是虚的。
+            .setAutoCancelDuration(5, TimeUnit.SECONDS)
+            .build()
+        val future = runCatching { cameraControl.startFocusAndMetering(action) }.getOrNull()
+        if (future == null) {
+            onResult(false)
+            return
+        }
+        future.addListener(
+            {
+                val ok = runCatching { future.get().isFocusSuccessful }.getOrDefault(false)
+                Log.i(TAG, "tap to focus ($x,$y) -> $ok")
+                onResult(ok)
+            },
+            executor,
+        )
+    }
+
+    /**
+     * 真实变焦。
+     *
+     * 设计稿的 2x 是 `transform: scale(1.28)` —— 只是把画面拉伸 1.28 倍，
+     * 既没换镜头也没改采样，属于假变焦。这里走 `CameraControl.setZoomRatio`，
+     * 由相机管线自己裁切/采样，成片分辨率仍是 pack 声明的尺寸（D-037 不受影响）。
+     *
+     * 返回**实际生效**的倍率（同步 clamp）。为什么不在绑定时就把上限存成常量：
+     * `CameraInfo.zoomState` 是 LiveData，初始化时机不稳定 —— 实测同一台机器，
+     * 有时绑定后 0ms 就有值，有时 500ms 还是 null。存成常量会导致某些启动里
+     * 2x 直接变灰；改成"调用时现读"就永远是对的。
+     */
+    fun requestZoom(requested: Float): Float {
+        val max = maxZoomRatio()
+        val applied = requested.coerceIn(1f, max)
+        runCatching { cameraControl.setZoomRatio(applied) }
+            .onSuccess { Log.i(TAG, "zoom -> ${"%.2f".format(applied)}x (max=${"%.2f".format(max)})") }
+        return applied
+    }
+
+    /** 该镜头当前的最大变焦比。读不到就当 1x（不变焦）。 */
+    fun maxZoomRatio(): Float =
+        cameraInfo.zoomState.value?.maxZoomRatio?.coerceAtLeast(1f) ?: 1f
+
+    /**
      * 成品需要顺时针旋转的度数。
      *
      * 用 Android 官方的传感器公式，而不是 CameraX 的 `sensorRotationDegrees`：
@@ -162,6 +255,8 @@ fun CameraPreview(
     lensFacing: Int,
     targetSize: Size?,
     modifier: Modifier = Modifier,
+    /** 自增即强制重绑。相机被系统或其他客户端抢走后，靠它恢复。 */
+    rebindNonce: Int = 0,
     onReady: (CameraHandle?) -> Unit,
     onError: (String) -> Unit,
 ) {
@@ -188,7 +283,7 @@ fun CameraPreview(
 
     AndroidView(factory = { previewView }, modifier = modifier)
 
-    LaunchedEffect(lensFacing, targetSize) {
+    LaunchedEffect(lensFacing, targetSize, rebindNonce) {
         readyState.value(null)
         runCatching {
             val provider = context.awaitCameraProvider()
@@ -274,18 +369,36 @@ fun CameraPreview(
                     "flash=${camera.cameraInfo.hasFlashUnit()} waited=${attempts * 25}ms",
             )
 
+            // D-044：把逻辑相机底下的物理镜头表读出来。读不到就是空列表，
+            // 界面看到空列表会退回 1x/2x 数码档，不会显示假的光学倍率。
+            val lensStops = readLensStops(camera.cameraInfo)
+            Log.i(
+                TAG,
+                "lens stops: " + if (lensStops.isEmpty()) {
+                    "none (logical multi-camera 不可用，退回数码档)"
+                } else {
+                    lensStops.joinToString { stop ->
+                        "${stop.ratioLabel}(${stop.focalLabel ?: "?"})"
+                    }
+                },
+            )
+
             readyState.value(
                 CameraHandle(
                     imageCapture = capture,
+                    cameraControl = camera.cameraControl,
                     executor = ContextCompat.getMainExecutor(context),
                     // 拿不到实际尺寸时退回 targetSize：宁可让用户按下去、由
                     // decodeJpeg 拿真实头像去校验，也不要在这里把快门锁死。
                     // 那种失败至少带着"实际 X 与 pack 的 Y 不一致"的可读信息。
                     supportedSizes = setOfNotNull(attachedSize),
                     hasFlash = camera.cameraInfo.hasFlashUnit(),
+                    meteringPointFactory = { previewView.meteringPointFactory },
+                    cameraInfo = camera.cameraInfo,
                     lensFacing = lensFacing,
                     sensorOrientation = sensorOrientation,
                     displayRotation = { previewView.display?.rotation ?: Surface.ROTATION_0 },
+                    lensStops = lensStops,
                 ),
             )
         }.onFailure { error ->
@@ -295,6 +408,9 @@ fun CameraPreview(
 
     DisposableEffect(Unit) {
         onDispose {
+            // 先作废句柄再解绑：否则上层会留着一条指向已解绑 ImageCapture 的引用，
+            // 按快门时才炸（真机日志 "Not bound to a valid Camera"）。
+            readyState.value(null)
             runCatching { boundProvider?.unbindAll() }
             boundProvider = null
         }

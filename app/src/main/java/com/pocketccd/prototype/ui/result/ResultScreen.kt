@@ -1,18 +1,21 @@
 package com.pocketccd.prototype.ui.result
 
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,41 +24,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.rotate
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.pocketccd.prototype.R
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.pocketccd.prototype.camera.PhotoExif
 import com.pocketccd.prototype.camera.SavedPhoto
-import com.pocketccd.prototype.ui.components.ToyCameraBody
-import com.pocketccd.prototype.ui.components.ToyRoundButton
-import com.pocketccd.prototype.ui.theme.PocketCcdColors
-import com.pocketccd.prototype.ui.theme.PocketCcdRadius
-import com.pocketccd.prototype.ui.theme.PocketCcdSizes
-import com.pocketccd.prototype.ui.theme.PocketCcdSpacing
-import com.pocketccd.prototype.ui.theme.PocketCcdTheme
-import com.pocketccd.prototype.ui.theme.PocketCcdType
+import com.pocketccd.prototype.camera.readPhotoExif
+import com.pocketccd.prototype.ui.film.FilmIconKind
+import com.pocketccd.prototype.ui.film.FilmRoundButton
+import com.pocketccd.prototype.ui.film.FilmTheme
+import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import java.util.Calendar
 
 enum class ResultStatus {
     PROCESSING,
@@ -64,12 +61,22 @@ enum class ResultStatus {
     FAILED,
 }
 
+/** 页面实际呈现的四种形态。`status` + `photo` + `demo` 三个输入都折到这里。 */
+private enum class Stage { SAVED, DEVELOPING, FAILED, EMPTY }
+
 /**
- * Toy-camera print page.
+ * 成片页（T9-018 / D-043 / D-045）。
  *
- * 这个页面只显示传入的状态，不碰相机、文件和 MediaStore：
- * [photo] 有值就显示真实成片（缩略图），为空则回到测试帧并标 `DEMO`，
- * 绝不把占位画面冒充成刚拍的照片。
+ * 视觉照 `docs/reference/pages/gallery.html` 的单张详情重排：顶部标题栏、
+ * 居中的画框、`FRAME n / capacity` 行、三列参数网格、底部动作行。
+ *
+ * **数据只显示真的**：
+ * - 画幅比例取 [SavedPhoto.width]/[SavedPhoto.height]，不写死 4:3；
+ * - 参数网格全部来自 [readPhotoExif]，读不到的那一项显示 `—`；
+ * - `FRAME` 行只在拿到真实本卷张数（[frameIndex]）时才画；
+ * - 原型右上角的 `3:2 · 6000×4000` 换成真实像素尺寸，`DNG + JPG` 直接删掉（只出 JPEG）。
+ *
+ * 这个页面仍然不碰相机、文件和 MediaStore：只渲染传进来的状态。
  */
 @Composable
 fun ResultScreen(
@@ -82,361 +89,552 @@ fun ResultScreen(
     photo: SavedPhoto? = null,
     failureMessage: String? = null,
     stockLabel: String? = null,
+    /** 这张照片是**本卷**第几张，来自 `AppViewModel.rollShots`。0 表示未知。 */
+    frameIndex: Int = 0,
+    rollCapacity: Int = 0,
 ) {
-    Box(
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+
+    val stage = when {
+        status == ResultStatus.FAILED -> Stage.FAILED
+        photo != null -> Stage.SAVED
+        demo -> Stage.EMPTY
+        else -> Stage.DEVELOPING
+    }
+
+    val exif = remember(photo?.fullFile?.absolutePath) {
+        photo?.fullFile?.let { readPhotoExif(it) } ?: PhotoExif()
+    }
+    val resolvedStock = photo?.stockLabel ?: stockLabel
+
+    Column(
         modifier = modifier
+            .fillMaxSize()
+            .background(p.appBg)
+            .padding(horizontal = spec.metrics.gutterWide),
+    ) {
+        ResultTopBar(
+            stage = stage,
+            stockLabel = resolvedStock,
+            canOpenWall = stage == Stage.SAVED,
+            onBackToCamera = onBackToCamera,
+            onOpenPhotoWall = onOpenPhotoWall,
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            PhotoFrame(stage = stage, photo = photo, stockLabel = resolvedStock)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        FrameCaption(
+            photo = photo,
+            frameIndex = frameIndex,
+            rollCapacity = rollCapacity,
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ParameterGrid(
+            capturedAt = photo?.capturedAt,
+            exif = exif,
+            stockLabel = resolvedStock,
+        )
+
+        if (stage == Stage.FAILED && failureMessage != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = failureMessage,
+                style = MonoSmall.copy(color = p.error),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        StatusRow(status = status, stage = stage, photo = photo)
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        ActionRow(
+            stage = stage,
+            onPrimary = if (stage == Stage.FAILED) onRetry else onBackToCamera,
+            onSecondary = if (stage == Stage.SAVED) onOpenPhotoWall else onBackToCamera,
+            primaryLabel = if (stage == Stage.FAILED) "重试" else "继续拍摄",
+            secondaryLabel = if (stage == Stage.SAVED) "打开相册" else "返回相机",
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ResultTopBar(
+    stage: Stage,
+    stockLabel: String?,
+    canOpenWall: Boolean,
+    onBackToCamera: () -> Unit,
+    onOpenPhotoWall: () -> Unit,
+) {
+    val p = LocalFilmTheme.current.palette
+    // 左右两侧都是 48dp 热区，标题因此天然居中，不需要再算偏移。
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FilmRoundButton(
+            icon = FilmIconKind.Close,
+            onClick = onBackToCamera,
+            iconSize = 15.dp,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.weight(4f),
+        ) {
+            Text(
+                text = when (stage) {
+                    Stage.SAVED -> "已冲洗"
+                    Stage.DEVELOPING -> "正在冲洗"
+                    Stage.FAILED -> "冲洗失败"
+                    Stage.EMPTY -> "还没有照片"
+                },
+                style = TextStyle(
+                    fontFamily = FontFamily.Default,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.04.em,
+                    color = p.textPrimary,
+                ),
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = stockLabel ?: "POCKET CCD",
+                style = MonoSmall.copy(color = p.inkFaint),
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        FilmRoundButton(
+            icon = FilmIconKind.ImageMultiple,
+            onClick = onOpenPhotoWall,
+            enabled = canOpenWall,
+            iconSize = 15.dp,
+        )
+    }
+}
+
+/**
+ * 画框。宽度取 `min(可用宽, 可用高 × 画幅比)`，保证 4:3 的框在任何屏幕上
+ * 都不会被压扁或溢出 —— 直接用 `aspectRatio` + `fillMaxWidth` 在小屏上会顶出父容器。
+ */
+@Composable
+private fun PhotoFrame(
+    stage: Stage,
+    photo: SavedPhoto?,
+    stockLabel: String?,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val shape = RoundedCornerShape(10.dp)
+
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        val ratio = if (photo != null && photo.width > 0 && photo.height > 0) {
+            photo.width.toFloat() / photo.height.toFloat()
+        } else {
+            4f / 3f
+        }
+        val frameWidth = minOf(maxWidth, maxHeight * ratio)
+        val frameHeight = frameWidth / ratio
+
+        Box(
+            modifier = Modifier
+                .size(frameWidth, frameHeight)
+                .clip(shape)
+                .background(spec.palette.windowBg)
+                .border(spec.metrics.hairline, p.hairlineStrong, shape),
+        ) {
+            when (stage) {
+                Stage.SAVED -> {
+                    val bitmap = remember(photo?.thumbnailFile?.absolutePath) {
+                        photo?.thumbnailFile?.absolutePath
+                            ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        // 缩略图丢了但记录还在：说明文件被外部删了。照实说，不画假画面。
+                        MissingFrameNote("缩略图缺失")
+                    }
+                    if (photo != null) {
+                        FrameTag(
+                            text = "${photo.width}×${photo.height}",
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp),
+                        )
+                    }
+                    if (stockLabel != null) {
+                        Text(
+                            text = stockLabel,
+                            style = MonoTag.copy(color = Color.White.copy(alpha = 0.66f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp),
+                        )
+                    }
+                }
+
+                Stage.DEVELOPING -> DevelopingFrame(stockLabel)
+                Stage.FAILED -> MissingFrameNote("本次冲洗没有产出照片")
+                Stage.EMPTY -> MissingFrameNote("按快门开始拍摄")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevelopingFrame(stockLabel: String?) {
+    val p = LocalFilmTheme.current.palette
+    val transition = rememberInfiniteTransition(label = "developing")
+    val pulse by transition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "developing-pulse",
+    )
+    Box(
+        modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(
-                        PocketCcdColors.Background,
-                        PocketCcdColors.BackgroundElevated,
-                    ),
+                    listOf(p.windowBg, p.sheetBg, p.windowBg),
                 ),
-            )
-            .padding(PocketCcdSizes.cameraPanelMargin),
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        ToyCameraBody(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(PocketCcdSpacing.md),
-            ) {
-                ResultHeader(
-                    demo = demo,
-                    onBackToCamera = onBackToCamera,
-                )
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PhotoPrint(photo = photo, stockLabel = stockLabel)
-                }
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                ResultStatusRow(
-                    status = status,
-                    demo = demo,
-                    onRetry = onRetry,
-                )
-                if (failureMessage != null) {
-                    Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
-                    Text(
-                        text = failureMessage,
-                        style = PocketCcdType.MonoMicro,
-                        color = PocketCcdColors.Error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (photo != null) {
-                    Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
-                    Text(
-                        // 诊断行：冲洗耗时与条带数。都是实测值，不写估值。
-                        text = "${photo.width}×${photo.height} · ${photo.renderMillis}ms · ${photo.strips} strips",
-                        style = PocketCcdType.MonoMicro,
-                        color = PocketCcdColors.TextTertiary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (photo.galleryUri != null) {
-                        Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
-                        Text(
-                            // 明确告诉用户照片去哪儿了：这台机器的照片墙只显示 App 自己
-                            // 拍的照片，而出门要分享时用的是系统相册，两者容易混淆。
-                            text = "已存入相册 · Pictures/Pocket CCD",
-                            style = PocketCcdType.MonoMicro,
-                            color = PocketCcdColors.TextTertiary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ToyRoundButton(
-                        onClick = onBackToCamera,
-                        contentDescription = stringResource(R.string.result_back_to_camera),
-                        size = 52.dp,
-                        color = PocketCcdColors.Mint,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = PocketCcdColors.TextPrimary,
-                            modifier = Modifier.size(PocketCcdSizes.icon),
-                        )
-                    }
-                    ToyRoundButton(
-                        onClick = onOpenPhotoWall,
-                        contentDescription = stringResource(R.string.result_open_wall),
-                        size = 52.dp,
-                        color = PocketCcdColors.Butter,
-                    ) {
-                        FilmIcon()
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResultHeader(
-    demo: Boolean,
-    onBackToCamera: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ToyRoundButton(
-            onClick = onBackToCamera,
-            contentDescription = stringResource(R.string.result_back_to_camera),
-            size = 38.dp,
-            color = PocketCcdColors.Mint,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = PocketCcdColors.TextPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-        Text(
-            text = stringResource(R.string.result_header),
-            style = PocketCcdType.Brand,
-            color = PocketCcdColors.TextPrimary,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        if (demo) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = stringResource(R.string.result_demo),
-                style = PocketCcdType.MonoMicro,
-                color = PocketCcdColors.TextTertiary,
+                text = "DEVELOPING",
+                style = MonoTag.copy(color = p.accent.copy(alpha = pulse)),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stockLabel ?: "POCKET CCD",
+                style = MonoSmall.copy(color = p.inkGhost),
             )
         }
     }
 }
 
 @Composable
-private fun PhotoPrint(photo: SavedPhoto?, stockLabel: String?) {
-    val paperShape = RoundedCornerShape(PocketCcdRadius.xs)
+private fun MissingFrameNote(text: String) {
+    val p = LocalFilmTheme.current.palette
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = PocketCcdSpacing.sm)
-            .rotate(-1.2f)
-            .shadow(
-                elevation = 10.dp,
-                shape = paperShape,
-                clip = false,
-                ambientColor = PocketCcdColors.TextPrimary.copy(alpha = 0.25f),
-                spotColor = PocketCcdColors.TextPrimary.copy(alpha = 0.35f),
-            )
-            .clip(paperShape)
-            .background(Color(0xFFFFFBF2))
-            .border(
-                width = PocketCcdSizes.hairline,
-                color = PocketCcdColors.Outline,
-                shape = paperShape,
-            )
-            .padding(PocketCcdSpacing.sm),
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(listOf(p.windowBg, p.appBg)),
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(4f / 3f)
-                    .clip(RoundedCornerShape(PocketCcdRadius.xs)),
-            ) {
-                // 有真实成片就显示缩略图。加载的是长边 1440 的 thumb，不是 12MP 原图：
-                // 成片页的实际显示尺寸不到 400dp，解原图只是白烧 48MB。
-                val image = remember(photo?.thumbnailFile?.absolutePath) {
-                    photo?.thumbnailFile?.absolutePath
-                        ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-                }
-                if (image != null) {
-                    Image(
-                        bitmap = image,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFF8FB7AE),
-                                    Color(0xFFF2D9A9),
-                                ),
-                            ),
-                        )
-                        drawRect(
-                            color = Color(0xFF6C9A83),
-                            topLeft = Offset(0f, size.height * 0.64f),
-                            size = Size(size.width, size.height * 0.36f),
-                        )
-                        drawCircle(
-                            color = Color(0xFFF7D774),
-                            radius = size.width * 0.06f,
-                            center = Offset(size.width * 0.72f, size.height * 0.28f),
-                        )
-                    }
-                    Text(
-                        // 只有这里真的没有照片时才挂 TEST FRAME。这张字是在说
-                        // "画面是假的"，不能出现在真成片上。
-                        text = stringResource(R.string.result_frame_test),
-                        style = PocketCcdType.MonoMicro,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(PocketCcdSpacing.sm),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "POCKET CCD",
-                    style = PocketCcdType.MonoMicro,
-                    color = PocketCcdColors.TextSecondary,
-                )
-                Text(
-                    text = stockLabel ?: stringResource(R.string.result_filter),
-                    style = PocketCcdType.MonoMicro,
-                    color = PocketCcdColors.TextSecondary,
-                )
-            }
-        }
+        Text(
+            text = text,
+            style = MonoSmall.copy(color = p.inkFaint),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+    }
+}
+
+/** 画框右上角的像素尺寸角标。原型这里写的是 `3:2 · 6000×4000`，改成真实值。 */
+@Composable
+private fun FrameTag(text: String, modifier: Modifier = Modifier) {
+    val p = LocalFilmTheme.current.palette
+    Text(
+        text = text,
+        style = MonoTag.copy(color = p.ink),
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color.Black.copy(alpha = 0.30f))
+            .border(1.dp, p.hairlineStrong, RoundedCornerShape(3.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+    )
+}
+
+/**
+ * `FRAME 03 / 36` + 本机标识。
+ *
+ * 原型写死 `01 / 24`、右边 `KODAK 135 · DNG + JPG`。我们不产 DNG，
+ * 也不按 24 张成卷，所以左边用真实的卷内序号，右边只留本机标识。
+ */
+@Composable
+private fun FrameCaption(
+    photo: SavedPhoto?,
+    frameIndex: Int,
+    rollCapacity: Int,
+) {
+    val p = LocalFilmTheme.current.palette
+    val hasIndex = photo != null && frameIndex > 0 && rollCapacity > 0
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (hasIndex) {
+                "FRAME ${"%02d".format(frameIndex)} / $rollCapacity"
+            } else {
+                // 没有真实序号就不画片号，不拿 01 充数。
+                "POCKET CCD"
+            },
+            style = MonoSmall.copy(color = p.inkGhost),
+        )
+        Text(
+            // 原型右侧是 `KODAK 135 · DNG + JPG`。我们只出 JPEG，也不存在"135"这个卷型，
+            // 所以留能对得上的部分；条带数属于引擎内部指标，放在状态行右侧。
+            text = "JPEG · 4:3",
+            style = MonoSmall.copy(color = p.inkGhost),
+        )
+    }
+}
+
+/**
+ * 三列参数网格。三个格子固定存在（缺项写 `—`），因为网格是三列布局，
+ * 少一列会让整块塌掉；`—` 在等宽字体里读作"未知"，不是伪造的值。
+ */
+@Composable
+private fun ParameterGrid(
+    capturedAt: Long?,
+    exif: PhotoExif,
+    stockLabel: String?,
+) {
+    val p = LocalFilmTheme.current.palette
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(p.controlFill)
+            .border(1.dp, p.hairline, shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        ParamCell(
+            label = "DATE",
+            value = capturedAt?.let(::formatDateBlock) ?: "—",
+            modifier = Modifier.weight(1f),
+        )
+        ParamCell(
+            label = "EXPOSURE",
+            value = buildString {
+                val line = exif.exposureLine()
+                if (line != null) append(line) else append("—")
+                exif.isoLabel()?.let { append("\n").append(it) }
+            },
+            modifier = Modifier.weight(1.5f),
+        )
+        ParamCell(
+            label = "FILM",
+            value = stockLabel?.split(' ')?.joinToString("\n") ?: "—",
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
 @Composable
-private fun ResultStatusRow(
-    status: ResultStatus,
-    demo: Boolean,
-    onRetry: () -> Unit,
-) {
-    val (label, color) = if (demo) {
-        stringResource(R.string.result_status_demo) to PocketCcdColors.TextTertiary
-    } else {
-        when (status) {
-            ResultStatus.PROCESSING -> stringResource(R.string.result_status_processing) to
-                PocketCcdColors.Warning
-            ResultStatus.OUTPUT_WRITING -> stringResource(R.string.result_status_writing) to
-                PocketCcdColors.Warning
-            ResultStatus.SAVED -> stringResource(R.string.result_status_saved) to
-                PocketCcdColors.AccentText
-            ResultStatus.FAILED -> stringResource(R.string.result_status_failed) to
-                PocketCcdColors.Error
-        }
+private fun ParamCell(label: String, value: String, modifier: Modifier = Modifier) {
+    val p = LocalFilmTheme.current.palette
+    Column(modifier = modifier) {
+        Text(text = label, style = MonoLabel.copy(color = p.inkGhost))
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = value,
+            style = MonoValue.copy(color = p.ink),
+        )
     }
+}
 
+@Composable
+private fun StatusRow(status: ResultStatus, stage: Stage, photo: SavedPhoto?) {
+    val p = LocalFilmTheme.current.palette
+    val dotColor = when (stage) {
+        Stage.SAVED -> p.accent
+        Stage.DEVELOPING -> p.inkMuted
+        Stage.FAILED -> p.error
+        Stage.EMPTY -> p.inkGhost
+    }
+    val label = when (stage) {
+        Stage.SAVED -> if (photo?.galleryUri != null) "已存入系统相册" else "已保存到本机"
+        Stage.DEVELOPING -> when (status) {
+            ResultStatus.OUTPUT_WRITING -> "正在写入相册"
+            else -> "正在冲洗"
+        }
+        Stage.FAILED -> "未产出照片"
+        Stage.EMPTY -> "等待拍摄"
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(6.dp)
                 .clip(CircleShape)
-                .background(color),
+                .background(dotColor),
         )
-        Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-        Text(
-            text = label,
-            style = PocketCcdType.MonoLabel,
-            color = PocketCcdColors.TextSecondary,
-            textAlign = TextAlign.Center,
-        )
-        if (status == ResultStatus.FAILED) {
-            Spacer(modifier = Modifier.width(PocketCcdSpacing.sm))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(PocketCcdRadius.pill))
-                    .background(PocketCcdColors.Accent)
-                    .clickable(role = Role.Button, onClick = onRetry)
-                    .padding(
-                        horizontal = PocketCcdSpacing.md,
-                        vertical = PocketCcdSpacing.xs,
-                    ),
-            ) {
-                Text(
-                    text = stringResource(R.string.result_retry),
-                    style = PocketCcdType.MonoMicro,
-                    color = PocketCcdColors.OnAccent,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilmIcon() {
-    val color = PocketCcdColors.TextPrimary
-    Canvas(modifier = Modifier.size(PocketCcdSizes.icon)) {
-        drawRect(
-            color = color,
-            topLeft = Offset(0f, size.height * 0.18f),
-            size = Size(size.width, size.height * 0.64f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx()),
-        )
-        val hole = 2.dp.toPx()
-        listOf(0.08f, 0.3f, 0.52f, 0.74f, 0.96f).forEach { fraction ->
-            drawRect(
-                color = color,
-                topLeft = Offset(size.width * fraction - hole / 2, size.height * 0.08f),
-                size = Size(hole, hole),
-            )
-            drawRect(
-                color = color,
-                topLeft = Offset(size.width * fraction - hole / 2, size.height * 0.88f),
-                size = Size(hole, hole),
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label, style = MonoSmall.copy(color = p.inkMuted))
+        Spacer(modifier = Modifier.weight(1f))
+        // 诊断行：冲洗耗时与条带数，都是实测值。
+        if (photo != null) {
+            Text(
+                text = "${photo.renderMillis}ms · ${photo.strips} strips",
+                style = MonoSmall.copy(color = p.inkGhost),
             )
         }
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFE6F0EA)
 @Composable
-private fun ResultSavedPreview() {
-    PocketCcdTheme {
+private fun ActionRow(
+    stage: Stage,
+    primaryLabel: String,
+    secondaryLabel: String,
+    onPrimary: () -> Unit,
+    onSecondary: () -> Unit,
+) {
+    val p = LocalFilmTheme.current.palette
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(shape)
+                .background(p.controlFill)
+                .border(1.dp, p.hairlineStrong, shape)
+                .clickable(role = Role.Button, onClick = onSecondary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = secondaryLabel,
+                style = MonoLabel.copy(color = p.ink),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(shape)
+                .background(if (stage == Stage.FAILED) p.error else p.textPrimary)
+                .clickable(role = Role.Button, onClick = onPrimary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = primaryLabel,
+                style = MonoLabel.copy(color = p.windowBg),
+            )
+        }
+    }
+}
+
+private fun formatDateBlock(epochMillis: Long): String {
+    val calendar = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    val month = calendar.get(Calendar.MONTH) + 1
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+    val hour = calendar.get(Calendar.HOUR_OF_DAY)
+    val minute = calendar.get(Calendar.MINUTE)
+    return "%02d.%02d\n%02d:%02d".format(month, day, hour, minute)
+}
+
+private val MonoSmall = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 8.5.sp,
+    letterSpacing = 0.08.em,
+)
+
+private val MonoTag = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 7.5.sp,
+    letterSpacing = 0.16.em,
+)
+
+private val MonoLabel = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 9.sp,
+    letterSpacing = 0.12.em,
+)
+
+private val MonoValue = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 9.5.sp,
+    lineHeight = 12.sp,
+    letterSpacing = 0.04.em,
+)
+
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Composable
+private fun ResultDevelopingPreview() {
+    FilmTheme {
         ResultScreen(
-            status = ResultStatus.SAVED,
+            status = ResultStatus.PROCESSING,
             onBackToCamera = {},
             onOpenPhotoWall = {},
             onRetry = {},
-            demo = false,
+            stockLabel = "GOLD 200",
+            frameIndex = 3,
+            rollCapacity = 36,
         )
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFFE6F0EA)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
 @Composable
 private fun ResultFailedPreview() {
-    PocketCcdTheme {
+    FilmTheme {
         ResultScreen(
             status = ResultStatus.FAILED,
             onBackToCamera = {},
             onOpenPhotoWall = {},
             onRetry = {},
-            demo = false,
+            stockLabel = "GOLD 200",
+            failureMessage = "「GOLD 200」需要 4096×3072，这台设备的采集尺寸只有 3264×2448。",
+        )
+    }
+}
+
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Composable
+private fun ResultEmptyPreview() {
+    FilmTheme {
+        ResultScreen(
+            status = ResultStatus.SAVED,
+            onBackToCamera = {},
+            onOpenPhotoWall = {},
+            onRetry = {},
+            demo = true,
         )
     }
 }

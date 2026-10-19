@@ -3,28 +3,22 @@ package com.pocketccd.prototype.navigation
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/**
+ * D-039 removed HOME: the app starts on the viewfinder and CAMERA is the root.
+ * These cases pin that down, plus the four overlay destinations that can still
+ * be entered from it.
+ */
 class AppStateTest {
 
     @Test
-    fun homeOpensCamera() {
-        val next = reduce(AppUiState(), AppEvent.OpenCamera)
-        assertEquals(AppDestination.CAMERA, next.destination)
-    }
-
-    @Test
-    fun homeOpensGalleryAndBackReturnsHome() {
-        val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
-        assertEquals(AppDestination.GALLERY, gallery.destination)
-        assertEquals(AppDestination.HOME, gallery.galleryOrigin)
-
-        val back = reduce(gallery, AppEvent.NavigateBack)
-        assertEquals(AppDestination.HOME, back.destination)
+    fun appStartsOnCamera() {
+        assertEquals(AppDestination.CAMERA, AppUiState().destination)
     }
 
     @Test
     fun cameraOpensGalleryAndBackReturnsCamera() {
-        val camera = reduce(AppUiState(), AppEvent.OpenCamera)
-        val gallery = reduce(camera, AppEvent.OpenGallery)
+        val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
+        assertEquals(AppDestination.GALLERY, gallery.destination)
         assertEquals(AppDestination.CAMERA, gallery.galleryOrigin)
 
         val back = reduce(gallery, AppEvent.NavigateBack)
@@ -33,8 +27,7 @@ class AppStateTest {
 
     @Test
     fun cameraOpensResultAndBackReturnsCamera() {
-        val camera = reduce(AppUiState(), AppEvent.OpenCamera)
-        val result = reduce(camera, AppEvent.OpenResult)
+        val result = reduce(AppUiState(), AppEvent.OpenResult)
         assertEquals(AppDestination.RESULT, result.destination)
         assertEquals(AppDestination.CAMERA, result.resultOrigin)
 
@@ -54,8 +47,7 @@ class AppStateTest {
 
     @Test
     fun resultOpensGalleryAndBackReturnsResult() {
-        val camera = reduce(AppUiState(), AppEvent.OpenCamera)
-        val result = reduce(camera, AppEvent.OpenResult)
+        val result = reduce(AppUiState(), AppEvent.OpenResult)
         val gallery = reduce(result, AppEvent.OpenGallery)
         assertEquals(AppDestination.RESULT, gallery.galleryOrigin)
 
@@ -64,20 +56,19 @@ class AppStateTest {
     }
 
     @Test
-    fun resultOpensCamera() {
-        val camera = reduce(AppUiState(), AppEvent.OpenCamera)
-        val result = reduce(camera, AppEvent.OpenResult)
+    fun resultReturnsToCamera() {
+        val result = reduce(AppUiState(), AppEvent.OpenResult)
         val backToCamera = reduce(result, AppEvent.OpenCamera)
         assertEquals(AppDestination.CAMERA, backToCamera.destination)
     }
 
     @Test
-    fun settingsOnlyOpensFromHomeAndBackReturnsHome() {
+    fun settingsOpensFromCameraAndBackReturnsCamera() {
         val settings = reduce(AppUiState(), AppEvent.OpenSettings)
         assertEquals(AppDestination.SETTINGS, settings.destination)
 
         val back = reduce(settings, AppEvent.NavigateBack)
-        assertEquals(AppDestination.HOME, back.destination)
+        assertEquals(AppDestination.CAMERA, back.destination)
     }
 
     @Test
@@ -102,7 +93,13 @@ class AppStateTest {
     }
 
     @Test
-    fun backOnHomeIsNoOp() {
+    fun cameraIgnoresOpenCamera() {
+        val state = AppUiState()
+        assertEquals(state, reduce(state, AppEvent.OpenCamera))
+    }
+
+    @Test
+    fun backOnCameraIsNoOpSoSystemFinishes() {
         val state = AppUiState()
         assertEquals(state, reduce(state, AppEvent.NavigateBack))
     }

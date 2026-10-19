@@ -1,8 +1,14 @@
 package com.pocketccd.prototype.navigation
 
-/** Top-level destinations. Photo-processing states are intentionally not modeled here. */
+/**
+ * Top-level destinations.
+ *
+ * `HOME` was removed on 2026-10-19 (D-039): the app now opens straight into the
+ * viewfinder, the way a film camera does. There is no intermediate "camera
+ * body" page any more, so `CAMERA` is the root — and back from it belongs to
+ * the system, not to a state transition.
+ */
 enum class AppDestination {
-    HOME,
     CAMERA,
     GALLERY,
     RESULT,
@@ -10,7 +16,9 @@ enum class AppDestination {
 }
 
 sealed interface AppEvent {
+    /** Result screen → back to shooting. Also used after a capture. */
     data object OpenCamera : AppEvent
+
     data object OpenGallery : AppEvent
     data object OpenSettings : AppEvent
     data object OpenResult : AppEvent
@@ -22,20 +30,21 @@ sealed interface AppEvent {
  * explicit instead of relying on an animation or a hidden back stack.
  */
 data class AppUiState(
-    val destination: AppDestination = AppDestination.HOME,
-    val galleryOrigin: AppDestination = AppDestination.HOME,
+    val destination: AppDestination = AppDestination.CAMERA,
+    val galleryOrigin: AppDestination = AppDestination.CAMERA,
     val resultOrigin: AppDestination = AppDestination.CAMERA,
 )
 
 fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
     AppEvent.OpenCamera -> when (state.destination) {
-        AppDestination.HOME, AppDestination.RESULT -> state.copy(destination = AppDestination.CAMERA)
+        // Already shooting: ignore. Only RESULT has somewhere to come back from.
+        AppDestination.RESULT -> state.copy(destination = AppDestination.CAMERA)
         else -> state
     }
 
     AppEvent.OpenGallery -> when (state.destination) {
         AppDestination.GALLERY -> state
-        AppDestination.HOME, AppDestination.CAMERA, AppDestination.RESULT -> state.copy(
+        AppDestination.CAMERA, AppDestination.RESULT -> state.copy(
             destination = AppDestination.GALLERY,
             galleryOrigin = state.destination,
         )
@@ -43,7 +52,8 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
     }
 
     AppEvent.OpenSettings -> when (state.destination) {
-        AppDestination.HOME -> state.copy(destination = AppDestination.SETTINGS)
+        // Settings is reachable from the viewfinder's top bar, not from home.
+        AppDestination.CAMERA -> state.copy(destination = AppDestination.SETTINGS)
         else -> state
     }
 
@@ -56,8 +66,10 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
     }
 
     AppEvent.NavigateBack -> when (state.destination) {
-        AppDestination.HOME -> state
-        AppDestination.CAMERA, AppDestination.SETTINGS -> state.copy(destination = AppDestination.HOME)
+        // CAMERA is the root: [BackHandler] stays disabled so the system can
+        // finish the activity instead of looping inside the app.
+        AppDestination.CAMERA -> state
+        AppDestination.SETTINGS -> state.copy(destination = AppDestination.CAMERA)
         AppDestination.GALLERY -> state.copy(destination = state.galleryOrigin)
         AppDestination.RESULT -> state.copy(destination = state.resultOrigin)
     }
