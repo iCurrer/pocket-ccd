@@ -419,7 +419,10 @@ gmake[1]: *** [CMakeFiles/Makefile2:87: CMakeFiles/fotufilm_android.dir/all] Err
 
 1. **`gmake` 而不是链接器报错** → 失败在编译，不在链接。`--no-undefined` 那层断言根本没轮到。
 2. **只有 `fotufilm_jni.cpp.o`** → 上游的 `FotufilmHalideAndroid.cpp` 没报错（`Waiting for unfinished jobs` 说明它还在编，被中断）。
-3. **1 秒** → 预处理阶段或极早的语义检查就挂了。`FotufilmConfigLayout.h` 有 18271 个枚举值，正常编译一个 TU 要好几秒；1 秒内结束说明 clang 没走多远。
+3. **1 秒** —— 当时据此推断"卡在预处理阶段"，**这条推断后来被证伪**。全绿那次（run `39198895398`）
+   同一个步骤只用 2 秒就跑完了 configure + 两个 TU 编译 + 链接 5 个 `.a`。这个工程的编译本来就这么快，
+   所以耗时数字在这里**不具备区分度**，不能用来区分"预处理失败"和"语义分析失败"。真因是 most vexing
+   parse，属于语义分析阶段（编译后段）。
 
 ### 已排除的
 
@@ -433,7 +436,7 @@ gmake[1]: *** [CMakeFiles/Makefile2:87: CMakeFiles/fotufilm_android.dir/all] Err
 
 所以**不是调用写错，也不是头缺失**。
 
-### 最可能的根因：同名头遮蔽
+### 当时的猜测：同名头遮蔽（已被否，见文末「定论」）
 
 `jni.cpp` 里只引用了三个来自上游头的标识符：
 
