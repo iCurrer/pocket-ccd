@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.util.Size
+import android.util.Log
 import android.view.Surface
 import android.view.ViewGroup
 import androidx.camera.core.CameraSelector
@@ -197,6 +198,15 @@ fun CameraPreview(
                 }
             }
 
+            val attachedSize = attached ?: targetSize
+            Log.i(
+                TAG,
+                "camera bound: lens=$lensFacing target=${targetSize?.let { "${it.width}x${it.height}" }} " +
+                    "attached=${attached?.let { "${it.width}x${it.height}" }} " +
+                    "effective=${attachedSize?.let { "${it.width}x${it.height}" }} " +
+                    "flash=${camera.cameraInfo.hasFlashUnit()} waited=${attempts * 25}ms",
+            )
+
             readyState.value(
                 CameraHandle(
                     imageCapture = capture,
@@ -204,7 +214,7 @@ fun CameraPreview(
                     // 拿不到实际尺寸时退回 targetSize：宁可让用户按下去、由
                     // decodeJpeg 拿真实头像去校验，也不要在这里把快门锁死。
                     // 那种失败至少带着"实际 X 与 pack 的 Y 不一致"的可读信息。
-                    supportedSizes = setOfNotNull(attached ?: targetSize),
+                    supportedSizes = setOfNotNull(attachedSize),
                     hasFlash = camera.cameraInfo.hasFlashUnit(),
                 ),
             )
@@ -226,6 +236,9 @@ fun CameraPreview(
  * 不用 Compose 状态是为了避免 unbind 反过来触发重组。
  */
 private var boundProvider: ProcessCameraProvider? = null
+
+/** 手测时用 `adb logcat -s PocketCcdCamera` 就能看到实际采集尺寸。 */
+private const val TAG = "PocketCcdCamera"
 
 private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
     suspendCancellableCoroutine { continuation ->

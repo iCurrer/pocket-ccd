@@ -2,6 +2,7 @@ package com.pocketccd.prototype.navigation
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.util.Log
 import android.util.Size
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -67,6 +68,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * 防连点。`_capture.isBusy` 的检查与赋值之间隔着一次协程调度，只靠状态判断会有窗口。
      */
     private val capturing = AtomicBoolean(false)
+
+    private companion object {
+        /** 手测时 `adb logcat -s PocketCcdCapture` 能看到每次冲洗的尺寸/耗时/非有限值。 */
+        const val TAG = "PocketCcdCapture"
+    }
 
     init {
         refreshStocks()
@@ -167,6 +173,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (error: Throwable) {
+                Log.e(TAG, "capture failed on ${stock.label}", error)
                 _capture.value = CaptureState.Failed(
                     message = error.message ?: error.javaClass.simpleName,
                     stock = stock,
@@ -204,6 +211,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     "原生内核不可用：${FotufilmNative.loadFailure?.message ?: "Halide 内核未就绪"}"
                 }
                 val result = engine.render(source, output)
+                Log.i(
+                    TAG,
+                    "developed ${stock.label} ${source.width}x${source.height} " +
+                        "in ${result.totalMillis}ms / ${result.strips} strips / " +
+                        "nonFinite=${result.nonFinite}",
+                )
                 Developed(result.totalMillis, result.strips, output)
             }
         } catch (error: Throwable) {
