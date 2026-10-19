@@ -3,7 +3,9 @@ package com.pocketccd.prototype.camera
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.media.ExifInterface
 import android.util.Size
@@ -73,7 +75,8 @@ class CameraHandle internal constructor(
      * 拍一张 JPEG，返回原始字节 + 方向补偿。
      *
      * 走内存回调而不是写文件：12MP 的 JPEG 只有 3–5MB，而多一次落盘再读回
-     * 会在内存最紧张的时刻多占一份。EXIF 方向由 [decodeJpeg] 负责应用。
+     * 会在内存最紧张的时刻多占一份。EXIF 方向与尺寸适配（含中心裁切）由
+     * [decodeJpeg] 负责。
      *
      * **为什么图像永远是横的**：ImageCapture 固定 `targetRotation = ROTATION_0`，
      * 为的是让像素尺寸恒等于 pack 声明的 4096×3072（D-037 要求精确相等）。
@@ -322,44 +325,140 @@ private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
     }
 
 /**
- * JPEG 字节 → 正立 Bitmap。
+ * 解码后、尺寸**精确等于** pack 声明值的一帧。
  *
- * 两件事必须在这里做对：
- * 1. **像素尺寸优先于 EXIF 方向**。pack 的光学参数绑定的是像素尺寸（D-037），
- *    方向只影响观感。所以先看解码后的尺寸是否已经等于 [expected]；相等就直接用，
- *    不理会 EXIF —— 不同机型在这个组合下写不写 orientation 并不一致，跟着 EXIF
- *    转反而会把好好的 4000×3000 转成 3000×4000。
- * 2. **只在尺寸不符时才用 EXIF 补偿**，且绝不缩放。尺寸补救不回来就抛异常，
- *    让上层明确失败，而不是悄悄出一张"看起来对"的图。
+ * [sourceWidth] / [sourceHeight] 是相机实际交来的像素尺寸。与 [bitmap] 不同时
+ * 说明做过中心裁切 —— 这不是差异，而是让同一份 pack 能服务多种机型的唯一办法。
  */
-fun decodeJpeg(bytes: ByteArray, expected: Size?): Bitmap {
-    val options = BitmapFactory.Options().apply {
-        inPreferredConfig = Bitmap.Config.ARGB_8888
-        inScaled = false
+data class DecodedFrame(
+    val bitmap: Bitmap,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
+) {
+    val cropped: Boolean
+        get() = sourceWidth != bitmap.width || sourceHeight != bitmap.height
+
+    /** 诊断行用。没有裁切时返回 null，调用方就不打印。 */
+    fun describeCrop(): String? = if (!cropped) null else {
+        "${sourceWidth}x$sourceHeight → crop ${bitmap.width}x${bitmap.height}"
     }
-    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-        ?: error("JPEG 解码失败（${bytes.size} 字节）")
-
-    val alreadyCorrect = expected == null ||
-        (decoded.width == expected.width && decoded.height == expected.height)
-    if (alreadyCorrect) return decoded
-
-    val orientation = runCatching {
-        ExifInterface(ByteArrayInputStream(bytes))
-            .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-
-    val upright = applyExifOrientation(decoded, orientation)
-    if (upright !== decoded) decoded.recycle()
-
-    // 走到这里 expected 一定非 null：null 的情况在上面 alreadyCorrect 就返回了。
-    if (upright.width != expected.width || upright.height != expected.height) {
-        val actual = "${upright.width}x${upright.height}"
-        upright.recycle()
-        error("采集尺寸 $actual 与 pack 的 ${expected.width}x${expected.height} 不一致")
-    }
-    return upright
 }
+
+/**
+ * JPEG 字节 → 尺寸精确等于 [target] 的 Bitmap。
+ *
+ * 三种情况，共同点是**绝不缩放**：
+ *
+ * 1. **采集尺寸 == target**：直接用，不看 EXIF。CameraX 在 `targetRotation=ROTATION_0`
+ *    下不写方向标记；跟着 EXIF 转反而会把好好的横向图转成竖的。
+ * 2. **采集尺寸是 target 的转置**（竖置）：按 EXIF 转回横置。这是 90° 整转，
+ *    像素总数不变，不是缩放。
+ * 3. **两个方向都 ≥ target**：中心裁切。
+ *
+ * ### 为什么可以裁切，但不能缩放
+ *
+ * pack 里的扩散 / 晕光 / 颗粒半径是「毫米 × 该帧的 pixels-per-mm」（D-037）。
+ *
+ * - 裁切不改变 pixels-per-mm：裁出来的还是同一块传感器、同一颗镜头，
+ *   同样的物理长度依然对应同样的像素数，所以空间参数原封不动成立，代价只是
+ *   取景范围变窄（等同于换了个裁切系数）。
+ * - 缩放会改 pixels-per-mm，等于换了一套光学系统：颗粒变粗或变细、
+ *   晕光半径错位、MTF 曲线整体平移。出来的图"看起来像"，但物理上是假的。
+ *
+ * ### 尺寸不够时
+ *
+ * 直接失败，并在消息里同时给出「设备能给什么」和「这卷要什么」——
+ * 这是唯一能让用户自己判断该换哪卷的信息。静默出一张缩放图比失败糟得多。
+ */
+fun decodeJpeg(bytes: ByteArray, target: Size, stockLabel: String): DecodedFrame {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val rawWidth = bounds.outWidth
+    val rawHeight = bounds.outHeight
+    require(rawWidth > 0 && rawHeight > 0) { "JPEG 无法解析（${bytes.size} 字节）" }
+
+    // 情况 1：精确命中。真机上这是唯一走到的主路径。
+    if (rawWidth == target.width && rawHeight == target.height) {
+        return DecodedFrame(decodeFull(bytes), rawWidth, rawHeight)
+    }
+
+    // 情况 2：竖置。只在两个方向恰好互换时才尝试，避免把 16:9 之类的
+    // 非常规尺寸误当成"转一下就行"。
+    if (rawWidth == target.height && rawHeight == target.width) {
+        val rotated = decodeFull(bytes)
+        val upright = applyExifOrientation(rotated, exifOrientation(bytes))
+        if (upright !== rotated) rotated.recycle()
+        if (upright.width == target.width && upright.height == target.height) {
+            return DecodedFrame(upright, rawWidth, rawHeight)
+        }
+        upright.recycle()
+    }
+
+    // 情况 3：中心裁切。
+    if (rawWidth >= target.width && rawHeight >= target.height) {
+        val cropped = cropCenter(bytes, rawWidth, rawHeight, target)
+            ?: error("JPEG 解码失败（${bytes.size} 字节）")
+        return DecodedFrame(cropped, rawWidth, rawHeight)
+    }
+
+    error(
+        "「$stockLabel」需要 ${target.width}×${target.height}，" +
+            "这台设备的采集尺寸只有 ${rawWidth}×${rawHeight}。" +
+            "请换一卷尺寸更小的胶卷。",
+    )
+}
+
+private fun decodeFull(bytes: ByteArray): Bitmap =
+    BitmapFactory.decodeByteArray(
+        bytes, 0, bytes.size,
+        BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inScaled = false
+        },
+    ) ?: error("JPEG 解码失败（${bytes.size} 字节）")
+
+/**
+ * 从 [bytes] 里抠出居中、尺寸恰为 [target] 的一块。
+ *
+ * 优先只解码目标区域：设备给 8000×6000 时整帧 ARGB 是 192MB，而裁出来只要 48MB。
+ * JPEG 按 MCU 分块编码，解码器可以只处理覆盖这块矩形的那些块。
+ * 失败（渐进式 JPEG 等）再退回"整帧解码后裁"，多占一份源图内存但一定能成。
+ */
+@Suppress("DEPRECATION")
+private fun cropCenter(bytes: ByteArray, sourceWidth: Int, sourceHeight: Int, target: Size): Bitmap? {
+    val left = (sourceWidth - target.width) / 2
+    val top = (sourceHeight - target.height) / 2
+
+    val region = runCatching {
+        // newInstance 在 JPEG 头损坏时返回 null，而不是抛异常。
+        val decoder = BitmapRegionDecoder.newInstance(ByteArrayInputStream(bytes), false)
+            ?: return@runCatching null
+        try {
+            decoder.decodeRegion(
+                Rect(left, top, left + target.width, top + target.height),
+                BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inScaled = false
+                },
+            )
+        } finally {
+            decoder.recycle()
+        }
+    }.getOrNull()
+    if (region != null) return region
+
+    val full = runCatching { decodeFull(bytes) }.getOrNull() ?: return null
+    return try {
+        Bitmap.createBitmap(full, left, top, target.width, target.height)
+    } finally {
+        full.recycle()
+    }
+}
+
+private fun exifOrientation(bytes: ByteArray): Int = runCatching {
+    ExifInterface(ByteArrayInputStream(bytes))
+        .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+}.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
 private fun applyExifOrientation(source: Bitmap, orientation: Int): Bitmap {
     val matrix = Matrix()

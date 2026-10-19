@@ -32,9 +32,10 @@
    │  CameraX ImageCapture，targetRotation 固定 ROTATION_0
    ▼
 JPEG 4096×3072（传感器原始方向）                       约 3–4 MB
-   │  decodeJpeg：像素尺寸必须精确等于 pack 声明值，不符直接抛
+   │  decodeJpeg：尺寸适配到 pack 声明值
+   │    相等 → 直接用；更大 → 中心裁切；更小 → 抛错（绝不缩放）
    ▼
-Bitmap ARGB_8888 4096×3072                             48 MB
+Bitmap ARGB_8888 恰好 4096×3072                        48 MB
    │  LinearColor.decodeInto：sRGB → scene-linear RGB
    ▼
 R / G / B 三个 float 平面（按行带切，不同时驻留）
@@ -63,6 +64,10 @@ files/Pictures/pocket-ccd/{full,thumb}/
    所以 sRGB 编解码必须由 Kotlin 侧完成（`LinearColor`）。
 3. **冲洗之后才旋转**。pack 的空间参数按 4096×3072 烘成像素数，先转成竖图会直接失败；
    旋转放在效果烘焙之后，颗粒与晕光的尺度不受影响。
+4. **尺寸只会被裁，不会被缩**。pack 的空间参数是「毫米 × 该帧 pixels-per-mm」，
+   裁切不改像素密度所以依然成立；缩放会改密度，等于换了一套光学系统（D-037）。
+   多机型适配全靠这一条 —— 一份 pack 服务多种设备的唯一正确做法，
+   详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §2.2。
 
 ### 为什么必须分块（halo 不能省）
 
@@ -280,6 +285,9 @@ docs/                管线、基准、许可、构建细节
   证明支持的尺寸。反过来会把会话锁死在"最接近的更高档"，之后没有任何卷能匹配。
 - **目标机实测**：`PJZ110`（OnePlus 13）后置镜头 CameraX 最大 JPEG 是 **4096×3072**，
   没有 4000×3000。请求 4000×3000 会被 `CLOSEST_HIGHER_THEN_LOWER` 换掉。
+- **pack 基准尺寸要尽量低**：基准越高，能裁出它的机型越少。`4000×3000` 的覆盖面
+  比 `4096×3072` 大得多 —— 后者会把所有正好 4000×3000 的机型直接排除，
+  而前者只在 4096×3072 的机器上裁掉 1.5% 线性视野（详见 docs §2.2）。
 - **方向**用 `CameraCharacteristics.SENSOR_ORIENTATION` 算，不用 CameraX 的
   `sensorRotationDegrees`（后者在 `targetRotation = ROTATION_0` 时返回 0，与实测矛盾）。
 - 未实际执行的构建/测试/真机拍摄，不得标记为"通过"。
@@ -290,12 +298,13 @@ docs/                管线、基准、许可、构建细节
 
 | 现象 | 原因 |
 |---|---|
-| 快门置灰，提示`相机不支持 4096×3072，最大 W×H` | 没有与设备采集尺寸相等的 pack |
+| 快门置灰，提示`「GOLD 200」需要 W×H，这台设备只能给 A×B` | 采集尺寸小于 pack，裁都裁不出来；换小尺寸的 pack |
+| 成片比取景器窄一点 | 发生过中心裁切（设备尺寸大于 pack）；日志里有 `→ crop WxH` |
 | 卷名显示 `EXAMPLE 400` | CI 的 parity 夹具（96×64）被当成了卷；已有 1 MP 地板挡住 |
 | `原生内核不可用：…` | `.so` 没打进 APK，或 ABI 不是 arm64-v8a |
 | 冲洗 2–3 秒没进度、只有状态点 | 设计如此，FOT-009 待做 |
 | 成片侧躺 | `SENSOR_ORIENTATION` 读不到（会打 warn 并跳过补偿） |
-| 冲洗完没有文件 | 看 `PocketCcdCapture` 的 `capture failed`，通常是尺寸校验没通过 |
+| 冲洗完没有文件 | 看 `PocketCcdCapture` 的 `capture failed`，通常是设备采集尺寸小于 pack |
 | 耗时比文档慢 5–7 倍 | 在用 debug 包；换 `assembleBenchmark` |
 
 ---

@@ -114,11 +114,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onCameraBound(handle: CameraHandle) {
         _camera.value = CameraState.Bound(handle.supportedSizes, handle.hasFlash)
-        // 自动落到一个**尺寸精确匹配**的卷上：pack 的像素半径不能换尺寸（D-037），
-        // 所以这不是"选个差不多的"，而是找不到就明确没有。
+        // 自动落到一个**当前采集尺寸能服务**的卷上：精确相等最好，更大则中心裁切，
+        // 更小则拍不了。宁可切卷，也不要偷偷缩放（D-037）。
         val current = _stocks.value.firstOrNull { it.id == _selectedStockId.value }
-        if (current == null || !handle.supportedSizes.matches(current)) {
-            _selectedStockId.value = _stocks.value.firstOrNull { handle.supportedSizes.matches(it) }?.id
+        if (current == null || handle.supportedSizes.servingSizeFor(current) == null) {
+            _selectedStockId.value = _stocks.value
+                .firstOrNull { handle.supportedSizes.servingSizeFor(it) != null }?.id
         }
     }
 
@@ -201,10 +202,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 冲洗本体：解码 → 引擎 → 成品位图。整个函数跑在 [Dispatchers.Default] 上。 */
+    /** 冲洗本体：解码（必要时裁切）→ 引擎 → 成品位图。整个函数跑在 [Dispatchers.Default] 上。 */
     private fun develop(jpeg: ByteArray, stock: FilmStock, rotationDegrees: Int): Developed {
-        val expected = Size(stock.width, stock.height)
-        val source = decodeJpeg(jpeg, expected)
+        val target = Size(stock.width, stock.height)
+        val frame = decodeJpeg(jpeg, target, stock.label)
+        val source = frame.bitmap
         val output = Bitmap.createBitmap(stock.width, stock.height, Bitmap.Config.ARGB_8888)
         return try {
             FilmPack.fromFile(stock.file).use { pack ->
@@ -217,7 +219,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     TAG,
                     "developed ${stock.label} ${source.width}x${source.height} " +
                         "in ${result.totalMillis}ms / ${result.strips} strips / " +
-                        "nonFinite=${result.nonFinite} / rotate=$rotationDegrees°",
+                        "nonFinite=${result.nonFinite} / rotate=$rotationDegrees°" +
+                        frame.describeCrop()?.let { " / $it" }.orEmpty(),
                 )
                 Developed(result.totalMillis, result.strips, output)
             }
@@ -235,8 +238,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val bitmap: Bitmap,
     )
 
-    private fun Set<Size>.matches(stock: FilmStock): Boolean =
-        any { it.width == stock.width && it.height == stock.height }
+    /**
+     * 这份采集尺寸能否服务这卷胶卷。
+     *
+     * - **相等**：直接冲洗，零损失。
+     * - **更大**：中心裁切到 pack 尺寸。裁切不改变 pixels-per-mm，pack 的空间参数
+     *   （扩散/晕光/颗粒半径）依然成立，只是取景范围变窄 —— 这是同一份 pack 能服务
+     *   多种机型的唯一正确办法。
+     * - **更小**：不行。绝不缩放：缩放会改 pixels-per-mm，等于换了光学系统。
+     */
+    private fun Size.canServe(stock: FilmStock): Boolean =
+        width >= stock.width && height >= stock.height
+
+    /** 能服务 [stock] 的最小采集尺寸。挑最小那档：内存与耗时都正比于像素数。 */
+    private fun Set<Size>.servingSizeFor(stock: FilmStock): Size? =
+        filter { it.canServe(stock) }.minByOrNull { it.width.toLong() * it.height }
 
     private fun buildCameraUi(
         stocks: List<FilmStock>,
@@ -247,20 +263,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val supported = (camera as? CameraState.Bound)?.supportedSizes.orEmpty()
         val active = stocks.firstOrNull { it.id == selectedId } ?: stocks.firstOrNull()
         val largest = supported.maxByOrNull { it.width.toLong() * it.height }
-        val matches = active != null && supported.matches(active)
+        val serving = active?.let { supported.servingSizeFor(it) }
 
-        // 只在已经证明"这个尺寸确实被支持"时才把它发给相机。matches 成立意味着
-        // supported 里已经有同尺寸的条目，所以这个值是已验证的，不会再被替换。
-        val programmed = if (matches) active?.let { Size(it.width, it.height) } else null
+        // 请求 pack 的尺寸，让 CameraX 挑最接近的一档：设备有精确档就直接给精确的，
+        // 没有也会给"最接近的更高档"，再由 decodeJpeg 中心裁切。
+        // 只要当前采集尺寸能服务这卷，这个请求就不会把会话带偏到拍不了的尺寸上。
+        // 用 `active?.let` 而不是 `if (active != null)`：后者会被编译器判定为恒真，
+        // 因为 serving 由 active 派生，"能服务"本身就蕴含"有活跃卷"。
+        val programmed = active?.let { stock ->
+            if (serving != null) Size(stock.width, stock.height) else null
+        }
 
         val reason = when {
             stocks.isEmpty() -> "没有可用的胶卷"
             camera is CameraState.Pending -> "正在启动相机"
             camera is CameraState.Unavailable -> camera.reason
             supported.isEmpty() -> "相机没有报告可用的采集尺寸"
-            !matches && active != null && largest != null ->
-                "相机不支持 ${active.sizeLabel}，最大 ${largest.width}×${largest.height}"
-            !matches -> "没有与相机分辨率匹配的胶卷"
+            serving == null && active != null && largest != null ->
+                "「${active.label}」需要 ${active.sizeLabel}，" +
+                    "这台设备只能给 ${largest.width}×${largest.height}"
+            serving == null -> "没有与相机分辨率匹配的胶卷"
             capture.isBusy -> "正在冲洗上一张"
             else -> null
         }

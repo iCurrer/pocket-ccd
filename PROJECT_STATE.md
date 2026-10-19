@@ -90,6 +90,7 @@
 | P-030 | 真机相机绑定与分辨率实测 | `adb logcat -s PocketCcdCamera` → `camera bound: lens=1 target=null attached=4096x3072 flash=true`；预览为真实画面；`dumpsys media.camera` 尺寸全表无 4000×3000；快门因 pack 尺寸不符正确置灰并显示 `相机不支持 4000×3000，最大 4096×3072` | `PASS`（绑定链路口径）；**结论：设备最大 JPEG = 4096×3072，现役 4000×3000 pack 不可拍 → FOT-016** |
 | P-031 | FOT-007 真机端到端（拍照→冲洗→落盘→照片墙） | 换成 CI 重产的 `__4096x3072` pack 后按快门：`film_1792391623930_gold200__4096x3072.jpg`，`4096×3072 / 3,038,375 B`；缩略图 `1440×1080 / 320,410 B`；照片墙出现该张（`GOLD 200 10.19`） | `PASS`（链路）。当时的侧躺问题已由 P-032 修复 |
 | P-032 | FOT-017 成片方向补偿（冲洗后旋转） | `CameraHandle.takeJpeg()` 在快门瞬间用 `SENSOR_ORIENTATION` 算角度（`sensor=90 display=0 -> 90°`），随 `CapturedFrame` 返回；`PhotoStore.save()` 冲洗完成后旋转位图并从旋转后的图生成缩略图；不写 EXIF、不动冲洗尺寸（D-037） | `PASS`（真机 2026-10-19 14:40:57 PORTRA 400）：`full 3072×4096 / 3,164,270 B`、`thumb 1080×1440`，画面正立 |
+| P-033 | FOT-018 多机型尺寸适配（裁切） | `decodeJpeg` 三态：采集尺寸 == pack → 直接用；> pack → 中心裁切（`BitmapRegionDecoder.decodeRegion` 只解目标区域，失败退回整帧后 `createBitmap`）；< pack → 抛错并同时给出设备尺寸与 pack 尺寸。`AppViewModel` 的精确匹配改为 `canServe`（≥）+ `servingSizeFor`（取能服务的最小档）；`programmedSize` 在能服务时下发 pack 尺寸 | `BUILD PASS` / `UNIT TEST PASS`。**裁切分支未真机验证**：PJZ110 采集尺寸精确等于 pack，走不到该路径；需第二台采集尺寸不同的机型。依据的物理事实：裁切不改 pixels-per-mm，D-037 只禁缩放 |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
