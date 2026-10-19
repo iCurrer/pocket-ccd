@@ -12,7 +12,7 @@
 
 ## 1. 一句话状态
 
-规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。当前缺口是**真实相机帧尚未接入**（FOT-007）与色彩口径未补 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)。
+规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。**相机采集链路（FOT-007）已实现并构建通过**：CameraX Preview + ImageCapture → JPEG → 尺寸校验 → `FilmEngine` → 落盘 → 成片页/照片墙，代码侧完成、**真机端到端待手测**。剩余口径缺口是 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)，相机链路见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md)。
 
 ---
 
@@ -86,6 +86,7 @@
 | P-026 | M8 构建侧：packs + AOT + `.so` | CI run `39198895398`；12MP packs；`libfotufilm_android.so` 5,874,424 B；AArch64/JNI 断言 | `DONE` |
 | P-027 | 真机首次安装/启动 | `PJZ110` arm64-v8a/API37；Debug APK 安装、启动、首页/拍摄页截图、下拉进入相机；截图 `docs/screenshots/2026-10-19-home.png`、`docs/screenshots/2026-10-19-camera.png` | `PASS`（UI 已真机跑通） |
 | P-028 | M8 运行时侧：Kotlin 绑定 + 12MP 真机实测 | `fotufilm` 包 5 个文件；真机 `libraryLoaded=true`/`abiVersion=1`/`available=true`/`packCount=4`；3 个 12MP stock 全 `nonFinite=0`；单帧 2.0–3.2 s（内核占 80–85%）；峰值 RSS 373–463 MB；TriX400 输出 R=G=B 精确相等 | `PASS`（方法见 `docs/fotufilm-device-benchmark.md`） |
+| P-029 | FOT-007 相机接入（代码侧） | `camera/CameraPreview.kt`（CameraX Preview+ImageCapture、`targetRotation=ROTATION_0`、用 `attachedSurfaceResolution` 匹配 pack）、`camera/PhotoStore.kt`、`camera/CaptureState.kt`、`fotufilm/FilmStock.kt`；`AppViewModel` → `AndroidViewModel`；成片页/照片墙接真实照片；`assembleDebug` + `testDebugUnitTest` 通过，APK 含 `.so` | `DONE`（构建侧）。**真机端到端未执行**，测试清单见 `docs/fotufilm-camera-capture.md` |
 
 **注意：** 文档类 `DONE` 指交付物存在；P-011 是实际构建通过，但不是 App 功能验证。P-004 的“核查”指查阅官方页面并记录版本/来源，不是对依赖组合的构建验证（构建验证见 P-011）。
 
@@ -108,7 +109,7 @@
 | Release 安装/UI | `NOT_RUN` | 未签名 Release APK 已生成，未安装 |
 | 相机预览/拍摄 | `NOT_STARTED` | 阶段 2；当前明确不做 |
 | M8 原生构建 | `DONE` | CI run `39198895398` 全绿；packs/AOT/`libfotufilm_android.so` 已产出；**真机 12MP 已实测**（2.0–3.2 s / 373–463 MB） |
-| 图像处理/滤镜 | `PARTIAL` | M8 引擎已接上并在真机跑通 12MP（FOT-004/005）；相机采集（FOT-007）与色彩口径（FOT-006）未接 |
+| 图像处理/滤镜 | `PARTIAL` | M8 引擎已在真机跑通 12MP（FOT-004/005）；相机采集链路的**代码**已接通（FOT-007，真机端到端待测）；色彩口径（FOT-006）未接 |
 | MediaStore/Room | `NOT_STARTED` | 阶段 5 |
 | 性能/兼容性 | `NOT_STARTED` | 阶段 6 |
 | 应用 ID/应用名 | `OPEN` | D-020；需产品确认 |
@@ -398,7 +399,7 @@ D:\Android\pocket ccd\
 ## 12. 诚实声明
 
 - 本文件中的 `PASS` 出现在：环境盘点（`TC-ENV-001`）、Debug/Release 构建（`TC-ENV-002`、`TC-P1-018`）、Git/忽略规则（`TC-ENV-003`）、权限检查（`TC-P1-017`）、静态无相机检查（`TC-P1-025`）、导航状态机单测（`TC-P1-026`）、设计令牌静态检查（`TC-P1-027`）、拍摄页静态约束（`TC-P1-028`）、共享转场代码路径（`TC-P1-029`）、配色对比度（`TC-P1-030`）、照片墙/成片/设置静态检查（`TC-P1-031`、`TC-P1-034`、`TC-P1-035`、`TC-P1-036`、`TC-P1-037`）。**首页与拍摄页已在 `PJZ110` 真机运行并截图（P-027）；但没有相机/图像/性能功能被实际验证，照片墙/成片页/设置页也尚未在设备上逐一验收。**
-- 构建通过只证明“空壳能编译打包”；安装/启动/截图已在 `PJZ110` 真机完成（P-027）；Fotufilm 引擎已在真机跑通 12MP（P-028），但**输入是程序纹理而非相机帧**，所以"拍照→冲洗→保存"的端到端链路仍然一次都没跑过；Compose UI 测试、真实照片、47 stock、Release 安装仍未执行。
+- 构建通过只证明“空壳能编译打包”；安装/启动/截图已在 `PJZ110` 真机完成（P-027）；Fotufilm 引擎已在真机跑通 12MP（P-028），但**输入是程序纹理而非相机帧**。"拍照→冲洗→保存"链路的**代码**已写好（P-029），**真机端到端仍未跑过一次**；Compose UI 测试、真实照片、47 stock、Release 安装仍未执行。
 - 官方文档的版本/日期是 2026-10-17 抓取结果；依赖版本可能已更新，升级前需再次核对。
 - `PROPOSED` 决策是建议，不是既成事实；`OPEN` 项需要负责人确认。
 - 未执行的测试在 `TEST_PLAN.md` 中保持 `NOT_RUN` 或 `BLOCKED`，不会因为文档完成而自动变成通过。

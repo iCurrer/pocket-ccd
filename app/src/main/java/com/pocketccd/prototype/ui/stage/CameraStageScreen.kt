@@ -80,7 +80,9 @@ import kotlinx.coroutines.launch
  * out. There is no AnimatedContent between home and camera, so no second layer
  * can flash in during the pull-down.
  *
- * Phase 1: the viewfinder is a static test image; no CameraX/permissions.
+ * The viewfinder is a slot: the route hands in a real CameraX surface when the
+ * permission is granted and the pack size matches, otherwise the static test
+ * frame stays in place. This composable never touches the camera itself.
  */
 @Composable
 fun CameraStageScreen(
@@ -91,6 +93,13 @@ fun CameraStageScreen(
     onOpenSettings: () -> Unit,
     onShutter: () -> Unit,
     modifier: Modifier = Modifier,
+    stockLabel: String? = null,
+    cameraLive: Boolean = false,
+    canShoot: Boolean = true,
+    blockReason: String? = null,
+    onCycleStock: () -> Unit = {},
+    onFlashChange: (Boolean) -> Unit = {},
+    viewfinder: @Composable (Modifier) -> Unit = { CameraViewfinder(modifier = it) },
 ) {
     val progress = remember { Animatable(if (expanded) 1f else 0f) }
     val scope = rememberCoroutineScope()
@@ -166,17 +175,34 @@ fun CameraStageScreen(
                 flashAvailable = flashAvailable,
                 frontCamera = frontCamera,
                 onToggleFlash = {
-                    if (flashAvailable) flashOn = !flashOn
+                    if (flashAvailable) {
+                        flashOn = !flashOn
+                        onFlashChange(flashOn)
+                    }
                 },
                 onToggleCamera = {
                     frontCamera = !frontCamera
-                    if (frontCamera) flashOn = false
+                    if (frontCamera) {
+                        flashOn = false
+                        // 前置没有闪光灯，切过去时要把后摄的闪光灯模式一起关掉，
+                        // 否则切回来时相机仍按上次的 ON 模式闪。
+                        onFlashChange(false)
+                    }
                 },
                 onShutter = {
-                    if (progress.value > 0.7f) onShutter() else onExpand()
+                    when {
+                        progress.value <= 0.7f -> onExpand()
+                        canShoot -> onShutter()
+                    }
                 },
                 onOpenGallery = onOpenGallery,
                 onOpenSettings = onOpenSettings,
+                stockLabel = stockLabel,
+                cameraLive = cameraLive,
+                canShoot = canShoot,
+                blockReason = blockReason,
+                onCycleStock = onCycleStock,
+                viewfinder = viewfinder,
             )
         }
     }
@@ -193,6 +219,12 @@ private fun StageFaceplate(
     onShutter: () -> Unit,
     onOpenGallery: () -> Unit,
     onOpenSettings: () -> Unit,
+    stockLabel: String?,
+    cameraLive: Boolean,
+    canShoot: Boolean,
+    blockReason: String?,
+    onCycleStock: () -> Unit,
+    viewfinder: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val cw = maxWidth
@@ -225,7 +257,7 @@ private fun StageFaceplate(
                 .alpha((1f - progress * 1.4f).coerceIn(0f, 1f)),
         )
 
-        CameraViewfinder(
+        Box(
             modifier = Modifier
                 .size(viewfinderSize)
                 .offset(
@@ -237,7 +269,22 @@ private fun StageFaceplate(
                     scaleX = 0.88f + 0.12f * progress
                     scaleY = 0.88f + 0.12f * progress
                 },
-        )
+        ) {
+            viewfinder(Modifier.fillMaxSize())
+
+            // 卷名叠在取景框内侧底部，像真机上的卷标；点一下换卷。
+            if (stockLabel != null) {
+                StockChip(
+                    label = stockLabel,
+                    // 预览还没起来时（权限未给/正在绑定）用暗色，避免让人以为已经在拍。
+                    live = cameraLive,
+                    onClick = onCycleStock,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp),
+                )
+            }
+        }
 
         Text(
             text = "POCKET CCD",
@@ -286,8 +333,24 @@ private fun StageFaceplate(
                 x = shutterX - shutterSize / 2,
                 y = shutterY - shutterSize / 2,
             ),
+            enabled = canShoot,
             onClick = onShutter,
         )
+
+        // 按不下去时必须有话说。静默失效是这类相机页最难查的问题：
+        // 用户只会觉得"快门坏了"，而真正原因可能是没有 pack、权限没给或分辨率不匹配。
+        if (progress > 0.8f && !canShoot && blockReason != null) {
+            Text(
+                text = blockReason,
+                style = PocketCcdType.MonoMicro,
+                color = PocketCcdColors.RetroCream.copy(alpha = 0.9f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .offset(y = ch * 0.93f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            )
+        }
 
         ToyRoundButton(
             onClick = onToggleCamera,
@@ -339,6 +402,7 @@ private fun StageFaceplate(
 private fun StageShutter(
     size: Dp,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -356,6 +420,8 @@ private fun StageShutter(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                // 不能拍的时候压暗但不隐藏：让人看见快门在哪，也知道它现在按不下去。
+                alpha = if (enabled) 1f else 0.5f
             }
             .shadow(
                 elevation = 16.dp,
@@ -367,6 +433,7 @@ private fun StageShutter(
             .clip(CircleShape)
             .background(PocketCcdColors.RetroInk)
             .clickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
@@ -458,8 +525,47 @@ private fun LensGraphic(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * 卷名条。叠在取景框下沿，点一下换卷。
+ *
+ * [live] 只控制小圆点的颜色：绿=取景器已经出画面，橙=还是静态占位。
+ * 不能用它替代真实状态文案 —— 它是给"扫一眼"用的，不是诊断。
+ */
 @Composable
-private fun CameraViewfinder(
+private fun StockChip(
+    label: String,
+    live: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(PocketCcdRadius.pill))
+            .background(PocketCcdColors.RetroBlack.copy(alpha = 0.55f))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(
+                    if (live) PocketCcdColors.RetroGreen else PocketCcdColors.RetroOrange,
+                ),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = PocketCcdType.MonoMicro,
+            color = PocketCcdColors.RetroCream,
+        )
+    }
+}
+
+/** 没有相机时的静态取景框。保留它，预览起不来时不至于露出黑洞。 */
+@Composable
+internal fun CameraViewfinder(
     modifier: Modifier = Modifier,
 ) {
     ToyScreen(modifier = modifier) {

@@ -65,6 +65,8 @@ private enum class FilterOption(val labelRes: Int) {
 fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    stockCount: Int = 0,
+    onRefreshStocks: () -> Unit = {},
 ) {
     var selectedFilter by remember { mutableStateOf(FilterOption.DAYLIGHT) }
     var showDiagnostics by remember { mutableStateOf(false) }
@@ -110,6 +112,15 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_quality),
                                 subtitle = stringResource(R.string.settings_quality_subtitle),
                                 value = stringResource(R.string.settings_quality_value),
+                            )
+                            Hairline()
+                            // pack 走 adb push 进应用私有目录，点了才重扫 —— 用户往
+                            // 目录里补卷之后不用杀进程重进。
+                            SettingsRow(
+                                title = stringResource(R.string.settings_film_roll),
+                                subtitle = stringResource(R.string.settings_film_roll_hint),
+                                value = stockCount.toString(),
+                                onClick = onRefreshStocks,
                             )
                         }
                     }

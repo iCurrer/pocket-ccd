@@ -1,6 +1,8 @@
 package com.pocketccd.prototype.ui.gallery
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +35,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -203,6 +208,21 @@ private fun PhotoPrintTile(photo: PhotoWallItem) {
                     .clip(RoundedCornerShape(PocketCcdRadius.xs))
                     .background(Brush.linearGradient(photo.colors)),
             ) {
+                // 真照片走缩略图文件；没有图时下面的渐变底仍是占位。
+                // 只解缩略图（长边 1440、约 200KB），列表里解原图会瞬间打满堆。
+                if (photo.imagePath != null) {
+                    val image = remember(photo.imagePath) {
+                        BitmapFactory.decodeFile(photo.imagePath)?.asImageBitmap()
+                    }
+                    if (image != null) {
+                        Image(
+                            bitmap = image,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -238,6 +258,8 @@ data class PhotoWallItem(
     val filter: String,
     val dateLabel: String,
     val colors: List<Color>,
+    /** 缩略图的绝对路径。为空表示这是占位条目（预览/空态）。 */
+    val imagePath: String? = null,
 )
 
 private val PreviewPhotos = listOf(

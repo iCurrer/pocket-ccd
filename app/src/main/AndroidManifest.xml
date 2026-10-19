@@ -1,9 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Phase 1 intentionally declares no permissions: no camera, internet, or storage. -->
+    <!--
+      FOT-007 起申请 CAMERA：预览、拍照都走 CameraX。
+      仍然不申请 INTERNET / 存储权限 —— 成片落在应用自己的外部私有目录
+      （getExternalFilesDir(Pictures)），不写系统相册，因此不需要任何存储权限。
+      没有 READ_MEDIA_IMAGES：照片墙只列本应用自己写的文件。
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- required=false：没有相机的设备（含部分模拟器）仍可安装，运行时降级为静态取景框。 -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
+    <!--
+      largeHeap：一次 12MP 冲洗要同时持有源 ARGB_8888（48MB）、成品（48MB）
+      和分块浮点平面，默认 256MB 的 Java 堆余量太紧。相机/图像类应用开这个
+      是常规做法，且它只抬上限、不预留内存。
+    -->
     <application
         android:allowBackup="false"
+        android:largeHeap="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.PocketCCD">

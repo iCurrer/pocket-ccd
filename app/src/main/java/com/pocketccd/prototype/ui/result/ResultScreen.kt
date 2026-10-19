@@ -1,6 +1,8 @@
 package com.pocketccd.prototype.ui.result
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +37,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pocketccd.prototype.R
+import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.ui.components.ToyCameraBody
 import com.pocketccd.prototype.ui.components.ToyRoundButton
 import com.pocketccd.prototype.ui.theme.PocketCcdColors
@@ -59,8 +65,11 @@ enum class ResultStatus {
 }
 
 /**
- * Toy-camera print page. The image is a synthetic test frame; this surface
- * receives state/callbacks and never touches camera, files, or MediaStore.
+ * Toy-camera print page.
+ *
+ * 这个页面只显示传入的状态，不碰相机、文件和 MediaStore：
+ * [photo] 有值就显示真实成片（缩略图），为空则回到测试帧并标 `DEMO`，
+ * 绝不把占位画面冒充成刚拍的照片。
  */
 @Composable
 fun ResultScreen(
@@ -70,6 +79,9 @@ fun ResultScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     demo: Boolean = false,
+    photo: SavedPhoto? = null,
+    failureMessage: String? = null,
+    stockLabel: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -102,7 +114,7 @@ fun ResultScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    PhotoPrint()
+                    PhotoPrint(photo = photo, stockLabel = stockLabel)
                 }
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
                 ResultStatusRow(
@@ -110,6 +122,27 @@ fun ResultScreen(
                     demo = demo,
                     onRetry = onRetry,
                 )
+                if (failureMessage != null) {
+                    Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
+                    Text(
+                        text = failureMessage,
+                        style = PocketCcdType.MonoMicro,
+                        color = PocketCcdColors.Error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (photo != null) {
+                    Spacer(modifier = Modifier.height(PocketCcdSpacing.xs))
+                    Text(
+                        // 诊断行：冲洗耗时与条带数。都是实测值，不写估值。
+                        text = "${photo.width}×${photo.height} · ${photo.renderMillis}ms · ${photo.strips} strips",
+                        style = PocketCcdType.MonoMicro,
+                        color = PocketCcdColors.TextTertiary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -185,7 +218,7 @@ private fun ResultHeader(
 }
 
 @Composable
-private fun PhotoPrint() {
+private fun PhotoPrint(photo: SavedPhoto?, stockLabel: String?) {
     val paperShape = RoundedCornerShape(PocketCcdRadius.xs)
     Box(
         modifier = Modifier
@@ -215,34 +248,51 @@ private fun PhotoPrint() {
                     .aspectRatio(4f / 3f)
                     .clip(RoundedCornerShape(PocketCcdRadius.xs)),
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                Color(0xFF8FB7AE),
-                                Color(0xFFF2D9A9),
+                // 有真实成片就显示缩略图。加载的是长边 1440 的 thumb，不是 12MP 原图：
+                // 成片页的实际显示尺寸不到 400dp，解原图只是白烧 48MB。
+                val image = remember(photo?.thumbnailFile?.absolutePath) {
+                    photo?.thumbnailFile?.absolutePath
+                        ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
+                }
+                if (image != null) {
+                    Image(
+                        bitmap = image,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF8FB7AE),
+                                    Color(0xFFF2D9A9),
+                                ),
                             ),
-                        ),
-                    )
-                    drawRect(
-                        color = Color(0xFF6C9A83),
-                        topLeft = Offset(0f, size.height * 0.64f),
-                        size = Size(size.width, size.height * 0.36f),
-                    )
-                    drawCircle(
-                        color = Color(0xFFF7D774),
-                        radius = size.width * 0.06f,
-                        center = Offset(size.width * 0.72f, size.height * 0.28f),
+                        )
+                        drawRect(
+                            color = Color(0xFF6C9A83),
+                            topLeft = Offset(0f, size.height * 0.64f),
+                            size = Size(size.width, size.height * 0.36f),
+                        )
+                        drawCircle(
+                            color = Color(0xFFF7D774),
+                            radius = size.width * 0.06f,
+                            center = Offset(size.width * 0.72f, size.height * 0.28f),
+                        )
+                    }
+                    Text(
+                        // 只有这里真的没有照片时才挂 TEST FRAME。这张字是在说
+                        // "画面是假的"，不能出现在真成片上。
+                        text = stringResource(R.string.result_frame_test),
+                        style = PocketCcdType.MonoMicro,
+                        color = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(PocketCcdSpacing.sm),
                     )
                 }
-                Text(
-                    text = stringResource(R.string.result_frame_test),
-                    style = PocketCcdType.MonoMicro,
-                    color = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(PocketCcdSpacing.sm),
-                )
             }
             Spacer(modifier = Modifier.height(PocketCcdSpacing.sm))
             Row(
@@ -255,7 +305,7 @@ private fun PhotoPrint() {
                     color = PocketCcdColors.TextSecondary,
                 )
                 Text(
-                    text = stringResource(R.string.result_filter),
+                    text = stockLabel ?: stringResource(R.string.result_filter),
                     style = PocketCcdType.MonoMicro,
                     color = PocketCcdColors.TextSecondary,
                 )

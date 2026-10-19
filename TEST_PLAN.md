@@ -479,6 +479,7 @@ test-evidence/
 | 真机安装/启动 | `PASS` | 2026-10-19 `PJZ110` 安装/冷启动/截图（`TC-P1-001`、`TC-ENV-004`） |
 | 相机预览/拍摄 | `NOT_RUN` | 阶段 1 不实现；相机采集是 FOT-007 |
 | 图像处理/滤镜 | `PARTIAL` | Fotufilm 引擎已在真机跑通 12MP ×3 stock（FOT-004/005）；`nonFinite=0`；TriX400 输出 R=G=B 精确相等。但**输入是程序纹理，真实相机帧未进过引擎** |
+| 相机采集（FOT-007） | `NOT_RUN` | CameraX 预览 + 快门 + 冲洗 + 落盘的代码已完成、构建通过；**真机端到端未执行**，清单见 `docs/fotufilm-camera-capture.md` |
 | 性能/内存 | `PASS`（引擎侧） | 非 debuggable `benchmark` 构建：单帧 2.0–3.2 s、峰值 RSS 373–463 MB；见 `docs/fotufilm-device-benchmark.md`。冷启动基准、47 stock、包体与发热仍 `NOT_RUN` |
 | 视觉评审 | `PARTIAL` | 首页/拍摄页有真机截图；其余三页无截图；无**冲洗后的成片**样片 |
 

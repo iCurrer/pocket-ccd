@@ -1,0 +1,303 @@
+package com.pocketccd.prototype.camera
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.util.Size
+import android.view.Surface
+import android.view.ViewGroup
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.ByteArrayInputStream
+import java.util.concurrent.Executor
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/**
+ * 一次相机会话。由 [CameraPreview] 在绑定时产生，解绑时作废。
+ *
+ * 存在的意义是把 CameraX 挡在 UI 之外：Compose 层只拿到一个
+ * `suspend () -> ByteArray`，ViewModel 因此不需要认识 CameraX。
+ */
+class CameraHandle internal constructor(
+    private val imageCapture: ImageCapture,
+    private val executor: Executor,
+    /** 该镜头在 ImageCapture 用例下**支持的全部输出尺寸**，用于匹配 pack。 */
+    val supportedSizes: Set<Size>,
+    /** 该镜头是否有闪光灯。前置通常没有。 */
+    val hasFlash: Boolean,
+) {
+    /**
+     * 拍一张 JPEG，返回原始字节（EXIF 未处理）。
+     *
+     * 走内存回调而不是写文件：12MP 的 JPEG 只有 3–5MB，而多一次落盘再读回
+     * 会在内存最紧张的时刻多占一份。EXIF 方向由 [decodeJpeg] 负责应用。
+     */
+    suspend fun takeJpeg(): ByteArray = suspendCancellableCoroutine { continuation ->
+        imageCapture.takePicture(
+            executor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    try {
+                        val buffer = image.planes[0].buffer
+                        val bytes = ByteArray(buffer.remaining())
+                        buffer.get(bytes)
+                        if (continuation.isActive) continuation.resume(bytes)
+                    } catch (error: Throwable) {
+                        if (continuation.isActive) continuation.resumeWithException(error)
+                    } finally {
+                        image.close()
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    if (continuation.isActive) continuation.resumeWithException(exception)
+                }
+            },
+        )
+    }
+
+    fun setFlash(on: Boolean) {
+        imageCapture.flashMode = if (on && hasFlash) {
+            ImageCapture.FLASH_MODE_ON
+        } else {
+            ImageCapture.FLASH_MODE_OFF
+        }
+    }
+}
+
+/**
+ * CameraX 取景器。
+ *
+ * 只做绑定与解绑；闪光灯、快门都在外部通过 [CameraHandle] 驱动，这样相机
+ * 状态不必在两个 Compose 层之间来回同步。
+ *
+ * @param lensFacing `CameraSelector.LENS_FACING_BACK` / `LENS_FACING_FRONT`
+ * @param targetSize 期望的采集尺寸。**必须精确等于 pack 的尺寸**（D-037）：
+ *   这里用 `CLOSEST_HIGHER_THEN_LOWER` 只是给 CameraX 一个排序依据，真正的
+ *   保证来自调用方先用 [CameraHandle.supportedSizes] 确认该尺寸在列表里。
+ *   传 null 表示不约束（还没有可用 pack 时）。
+ */
+@Composable
+fun CameraPreview(
+    lensFacing: Int,
+    targetSize: Size?,
+    modifier: Modifier = Modifier,
+    onReady: (CameraHandle?) -> Unit,
+    onError: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // 回调每次重组都是新 lambda，用 rememberUpdatedState 保证 effect 里拿到最新的，
+    // 又不会因为 lambda 变了就重新绑定相机。
+    val readyState = rememberUpdatedState(onReady)
+    val errorState = rememberUpdatedState(onError)
+
+    val previewView = remember {
+        PreviewView(context).apply {
+            // FIT_CENTER：完整显示 4:3 传感器画面。取景框比 4:3 高，所以上下会留一点
+            // 边 —— 这是刻意的。用 FILL_CENTER 虽然铺满好看，但会裁掉左右，导致
+            // "看到的构图"和"拍到的画面"不一致，而 FOT-009 的要求正是不许预览冒充成片。
+            scaleType = PreviewView.ScaleType.FIT_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
+    }
+
+    AndroidView(factory = { previewView }, modifier = modifier)
+
+    LaunchedEffect(lensFacing, targetSize) {
+        readyState.value(null)
+        runCatching {
+            val provider = context.awaitCameraProvider()
+            boundProvider = provider
+
+            val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+            if (!provider.hasCamera(selector)) {
+                error(
+                    if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
+                        "设备没有前置镜头"
+                    } else {
+                        "设备没有后置镜头"
+                    }
+                )
+            }
+
+            val preview = Preview.Builder().build().apply {
+                surfaceProvider = previewView.surfaceProvider
+            }
+
+            val capture = ImageCapture.Builder()
+                // MAXIMIZE_QUALITY：这个模式不会在内存里长期保留一帧全尺寸缓冲，
+                // 12MP 下比 MINIMIZE_LATENCY 安全得多。代价是快门后多几百毫秒，
+                // 而冲洗本身就要 2–3 秒，这点延迟可以忽略。
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                // 固定 ROTATION_0：让 JPEG 的像素方向永远等于传感器自然方向。
+                // 否则竖屏拍照时 CameraX 会把 4000×3000 转成 3000×4000，
+                // 与 pack 声明的横向尺寸对不上（D-037 要求精确相等）。
+                .setTargetRotation(Surface.ROTATION_0)
+                .apply {
+                    if (targetSize != null) {
+                        setResolutionSelector(
+                            ResolutionSelector.Builder()
+                                .setResolutionStrategy(
+                                    ResolutionStrategy(
+                                        targetSize,
+                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                                    ),
+                                )
+                                .build(),
+                        )
+                    }
+                }
+                .build()
+
+            provider.unbindAll()
+            val camera = provider.bindToLifecycle(
+                lifecycleOwner, selector, preview, capture,
+            )
+
+            // CameraX 没有"列出某用例支持的尺寸"的公开 API（CameraInfo 上不存在
+            // getSupportedResolutions）。这里改用**实际选中的采集尺寸**来判断 ——
+            // 它比支持列表更接近事实：如果 CameraX 把 4000×3000 换成了别的，
+            // 这里立刻就能看出来，而不是等到拍完解码才发现。
+            //
+            // 绑定是异步的，attachedSurfaceResolution 要等 attach 之后才有值。
+            var attached: Size? = null
+            var attempts = 0
+            while (attached == null && attempts < 40) {
+                attached = runCatching { capture.attachedSurfaceResolution }.getOrNull()
+                if (attached == null) {
+                    delay(25)
+                    attempts++
+                }
+            }
+
+            readyState.value(
+                CameraHandle(
+                    imageCapture = capture,
+                    executor = ContextCompat.getMainExecutor(context),
+                    // 拿不到实际尺寸时退回 targetSize：宁可让用户按下去、由
+                    // decodeJpeg 拿真实头像去校验，也不要在这里把快门锁死。
+                    // 那种失败至少带着"实际 X 与 pack 的 Y 不一致"的可读信息。
+                    supportedSizes = setOfNotNull(attached ?: targetSize),
+                    hasFlash = camera.cameraInfo.hasFlashUnit(),
+                ),
+            )
+        }.onFailure { error ->
+            errorState.value(error.message ?: error.javaClass.simpleName)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { boundProvider?.unbindAll() }
+            boundProvider = null
+        }
+    }
+}
+
+/**
+ * 当前绑定的 provider。进程内只有一个相机，用模块级引用给 `onDispose` 解绑即可；
+ * 不用 Compose 状态是为了避免 unbind 反过来触发重组。
+ */
+private var boundProvider: ProcessCameraProvider? = null
+
+private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
+    suspendCancellableCoroutine { continuation ->
+        val future = ProcessCameraProvider.getInstance(this)
+        val executor = ContextCompat.getMainExecutor(this)
+        future.addListener(
+            {
+                runCatching { future.get() }
+                    .onSuccess { if (continuation.isActive) continuation.resume(it) }
+                    .onFailure { if (continuation.isActive) continuation.resumeWithException(it) }
+            },
+            executor,
+        )
+    }
+
+/**
+ * JPEG 字节 → 正立 Bitmap。
+ *
+ * 两件事必须在这里做对：
+ * 1. **像素尺寸优先于 EXIF 方向**。pack 的光学参数绑定的是像素尺寸（D-037），
+ *    方向只影响观感。所以先看解码后的尺寸是否已经等于 [expected]；相等就直接用，
+ *    不理会 EXIF —— 不同机型在这个组合下写不写 orientation 并不一致，跟着 EXIF
+ *    转反而会把好好的 4000×3000 转成 3000×4000。
+ * 2. **只在尺寸不符时才用 EXIF 补偿**，且绝不缩放。尺寸补救不回来就抛异常，
+ *    让上层明确失败，而不是悄悄出一张"看起来对"的图。
+ */
+fun decodeJpeg(bytes: ByteArray, expected: Size?): Bitmap {
+    val options = BitmapFactory.Options().apply {
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+        inScaled = false
+    }
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        ?: error("JPEG 解码失败（${bytes.size} 字节）")
+
+    val alreadyCorrect = expected == null ||
+        (decoded.width == expected.width && decoded.height == expected.height)
+    if (alreadyCorrect) return decoded
+
+    val orientation = runCatching {
+        ExifInterface(ByteArrayInputStream(bytes))
+            .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+    val upright = applyExifOrientation(decoded, orientation)
+    if (upright !== decoded) decoded.recycle()
+
+    // 走到这里 expected 一定非 null：null 的情况在上面 alreadyCorrect 就返回了。
+    if (upright.width != expected.width || upright.height != expected.height) {
+        val actual = "${upright.width}x${upright.height}"
+        upright.recycle()
+        error("采集尺寸 $actual 与 pack 的 ${expected.width}x${expected.height} 不一致")
+    }
+    return upright
+}
+
+private fun applyExifOrientation(source: Bitmap, orientation: Int): Bitmap {
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> {
+            matrix.postRotate(90f)
+            matrix.postScale(-1f, 1f)
+        }
+        ExifInterface.ORIENTATION_TRANSVERSE -> {
+            matrix.postRotate(270f)
+            matrix.postScale(-1f, 1f)
+        }
+        else -> return source
+    }
+    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+}
