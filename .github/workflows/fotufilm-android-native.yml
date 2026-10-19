@@ -350,16 +350,60 @@ jobs:
           chmod +x "$FOTUFILM_PARITY_CLI"
           bash tools/verify-android-aot.sh 2>&1 | tee build/android-aot-parity.log
 
+      # FOT-004：把 5 个 AOT 内核与上游 Android 适配层链成 .so。
+      # 纯交叉编译，不需要设备；NDK 由前面的 Install Android NDK 步骤装好。
+      - name: Build libfotufilm_android.so
+        run: |
+          set -euxo pipefail
+          cmake -S "$GITHUB_WORKSPACE/native" -B build/so-arm64 \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFOTUFILM_ROOT="$GITHUB_WORKSPACE/$FOTUFILM_ROOT" \
+            -DFOTUFILM_KERNELS="$GITHUB_WORKSPACE/$FOTUFILM_ROOT/build/android-kernels" \
+            -DHALIDE_INCLUDE="$HALIDE_ROOT/include"
+          cmake --build build/so-arm64 --parallel
+          test -f build/so-arm64/libfotufilm_android.so
+          ls -lh build/so-arm64/libfotufilm_android.so
+
+      # 三条硬断言。没有它们，"编出个 .so" 和 "能在手机上 loadLibrary" 是两回事。
+      - name: Verify .so architecture and JNI exports
+        run: |
+          set -euxo pipefail
+          SO=build/so-arm64/libfotufilm_android.so
+          LLVM_BIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$LLVM_BIN/llvm-readelf" -h "$SO" | tee build/so-headers.txt
+          grep -q "Machine:.*AArch64" build/so-headers.txt
+          echo "---- NEEDED ----"
+          "$LLVM_BIN/llvm-readelf" -d "$SO" | grep NEEDED || true
+          echo "---- 导出的 JNI 符号 ----"
+          "$LLVM_BIN/llvm-nm" -D --defined-only "$SO" | tee build/so-symbols.txt
+          for symbol in nativeAbiVersion nativeOpenPack nativePackInfo nativeMaxHalo \
+                        nativeProcess nativeProcessStrip nativeReleasePack nativeLastError; do
+            grep -q "$symbol$" build/so-symbols.txt \
+              || { echo "缺少 JNI 导出: $symbol" >&2; exit 1; }
+          done
+          # Halide 运行时若漏链，这里会暴露成未定义符号，而 --no-undefined 本该先拦住它。
+          if "$LLVM_BIN/llvm-nm" -D --undefined-only "$SO" | grep -q " halide_"; then
+            echo "存在未解析的 halide_* 符号：" >&2
+            "$LLVM_BIN/llvm-nm" -D --undefined-only "$SO" | grep " halide_" >&2
+            exit 1
+          fi
+
       - name: Collect artifacts
         if: always()
         run: |
           set -x
-          mkdir -p artifacts/aot artifacts/film
+          mkdir -p artifacts/aot artifacts/film artifacts/lib
           cp -R "$FOTUFILM_ROOT"/build/android-kernels/* artifacts/aot/ || true
           cp "$FOTUFILM_ROOT"/build/android-aot-parity.log artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.fswp artifacts/ || true
           cp "$FOTUFILM_ROOT"/build/android-parity/*.bin artifacts/ || true
           cp "${FOTUFILM_PACK_DIR:-prebuilt-packs}"/*.fswp artifacts/film/ || true
+          cp build/so-arm64/libfotufilm_android.so artifacts/lib/ || true
+          cp build/so-symbols.txt artifacts/lib/ || true
           ls -lR artifacts | head -40
 
       # always()：即使 parity 断言失败，也要把已生成的 pack / kernels 带出来，
@@ -374,6 +418,7 @@ jobs:
           path: |
             artifacts/film/*.fswp
             artifacts/aot/**
+            artifacts/lib/**
             artifacts/android-aot-parity.log
             artifacts/*.bin
 
