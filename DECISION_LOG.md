@@ -1099,7 +1099,50 @@
     **对外分发前必须补上**。
   - 已拍照片仍留在旧 pack 尺寸下：换 pack 不会重冲洗历史照片，`StockLabel` 从文件名解析，
     不受影响。
-- **验证：** `assembleDebug` / `assembleBenchmark` 均在 HEAD 通过；`unzip -l` 可见
-  `assets/gold200__4096x3072.fswp` 等三项与 `lib/arm64-v8a/libfotufilm_android.so`。
-  真机首启落盘待验（`adb logcat -s FilmStockCatalog` 应出现"内置 pack 补齐 3 个"）。
+- **验证（2026-10-20 深夜，全部完成）：**
+  - `assembleDebug` / `assembleBenchmark` 均在 HEAD 通过；`unzip -l` 可见
+    `assets/gold200__4000x3000.fswp` 等三项与 `lib/arm64-v8a/libfotufilm_android.so`。
+  - **pack 已换成 `4000×3000`**：三份头部逐份校验 `FSWP v2 4000x3000`（`mask`
+    0x2043e / 0x2063e / 0x200b6，`lut=33/143748`）。旧的三份 `__4096x3072` 备份在
+    `build/artifacts/packs-4096x3072/`。
+  - **真机首启落盘打通**（`PJZ110`）：`files/film/` 出现 3 份新 pack +
+    `bundled_packs_v1.txt`；**上一轮 `adb push` 的 `__4096x3072` 三份被"同支卷只留一个
+    变体"规则清掉** —— 不删就会出现两个 `GOLD 200`。
+  - **不连电脑即可拍**：装 `app-benchmark.apk`（39 MB，含 assets）→ 冷启动 → 胶卷库 3 卷 →
+    快门可用 → 成片 `3000×4000` 正立、相册 `is_pending=0`。
+  - **裁切分支首次真机验证**（FOT-018）：采集 `4096×3072` → pack `4000×3000`，成片
+    `3000×4000`，中心裁掉 1.5% 线性，空间参数未受影响。
+  - **B-11 关闭**：同机 benchmark 包实测 **3909 ms / 24 strips**（此前 8.4–9.1 s 是 debug 口径）。
+- **遗留：** 合规页原计划"对外分发前必须补"，已于同一晚补上（`ui/settings/LicensesScreen.kt`，
+  入口在设置页 → 关于）。采集尺寸**小于** pack 的失败分支仍无机型可验。
 - **复审触发：** 做多档 pack 时；上架应用商店时；ABI 需要扩到 32 位时。
+
+
+---
+
+## D-049 — 快门超时兜底：5 秒拿不到画面就换会话
+
+- **日期：** 2026-10-20
+- **状态：** `ACCEPTED`
+- **类型：** 健壮性
+- **背景：** 主链路复审的 P0-4。`takeJpeg` 是 `suspendCancellableCoroutine`，等的是
+  CameraX 的 `OnImageCapturedCallback`。真机上这个回调**可能永远不来**：按快门后一秒内
+  切到别的 App、转屏重建 Activity、相机会话被系统或别的客户端抢走。CameraX 既没有取消
+  `takePicture` 的 API，也没有超时。后果是 `capturing` 永久为 true、`_capture` 停在
+  「正在冲洗」、快门永久置灰，**只能杀进程**。这不是理论问题：给别人装包时，"按了快门
+  顺手切个微信"是最常见的动作。
+- **决定：**
+  1. `CameraHandle.takeJpeg()` 包一层 `withTimeoutOrNull(5_000)`，超时抛
+     `CaptureTimeoutException`。
+  2. `AppViewModel.capture` 捕获该异常时 `rebindRequests++`；`AppRoot` 收到即
+     `cameraNonce++`，重绑相机。
+  3. 阈值 **5 秒**，不是 2 秒：12MP `CAPTURE_MODE_MAXIMIZE_QUALITY` 在慢机上单次 JPEG
+     编码偶尔要 1–2 秒，压太紧会把正常拍摄判成失败。
+- **为什么只放 UI 不够、必须重绑：** 超时说明这条会话大概率已经废了。若只把状态放回可拍，
+  用户再按一次快门会立刻撞同一个坑，连撞三次就是"这 App 坏了"。重绑拿到的是一条新会话。
+- **代价：** 极慢的设备上（单次 JPEG > 5 s）会出现"拍成功了却报超时"。当前目标机群
+  实测 < 1 s，接受。
+- **不做的事：** 不重试（自动重拍会让快门语义变模糊 —— 用户按了一次却可能拍两张）。
+- **验证：** 编译通过；真机需按「快门 → 1 秒内切相册 → 切回」复现。`ImageProxy` 在
+  `finally` 里 `close()`，超时后仍归还缓冲。
+- **复审触发：** 引入连拍时；或用户反馈"偶尔弹相机没有响应"。

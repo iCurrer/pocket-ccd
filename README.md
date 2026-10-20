@@ -47,7 +47,7 @@
 | 私有副本 ↔ 系统相册对账（D-047） | **代码完成，待真机** | FOT-020；`GalleryReconcilerTest` 11/11；"相册里删一张"的真机验证还没做 |
 | 真实镜头倍率 + 等效焦距 | **代码完成，待真机** | T9-021；D-044；镜头表尚未在 `PJZ110` 上打印过 |
 | 12MP 引擎性能 | 已实测 | benchmark 包单帧 2.0–3.2 s，峰值 RSS 373–463 MB，`nonFinite=0` |
-| 端到端冲洗耗时 | **超预算** | 成片实测 8.4–9.1 s，预算 2.0–3.2 s，原因未定位（B-11） |
+| 端到端冲洗耗时 | 已实测（benchmark 包） | **3.9 s**（`GOLD 200` / 4000×3000 / 24 strips）：引擎 2.0–3.2 s，其余是解码+裁切+旋转+两次 JPEG 编码。同机 debug 包 7.8 s —— 此前记的 8.4–9.1 s 是 debug 口径，B-11 关闭 |
 | App 内删除照片 | 未开始 | 做的时候必须同时删 MediaStore 条目，否则会制造反向分叉 |
 | Rec.2020 色彩口径 | 未开始 | 当前为线性光 + sRGB 基色（FOT-006） |
 | 冲洗进度条 / 取景框比例 | 未开始 | FOT-009 |
@@ -64,13 +64,13 @@
    │  CameraX ImageCapture，targetRotation 固定 ROTATION_0
    ▼
 JPEG 4096×3072（传感器原始方向）                       约 3–4 MB
-   │  decodeJpeg：尺寸适配到 pack 声明值
-   │    相等 → 直接用；更大 → 中心裁切；更小 → 抛错（绝不缩放）
+   │  decodeJpeg：尺寸适配到 pack 声明值（现在是 4000×3000）
+   │    相等 → 直接用；更大 → 中心裁切（本机就是这条）；更小 → 抛错（绝不缩放）
    ▼
-Bitmap ARGB_8888 恰好 4096×3072                        48 MB
+Bitmap ARGB_8888 恰好 4000×3000                        约 46 MiB
    │  LinearColor.decodeInto：sRGB → scene-linear RGB
    ▼
-R / G / B 三个 float 平面（按行带切，不同时驻留）
+R / G / B 三个 float 平面（按行带切，不同时驻留）      约 137 MiB
    │  nativeProcessStrip × 24 条带，每条带上下各留 halo
    │  ← 参数来自 pack：config + 3×33³ LUT + mask/seed
    ▼
@@ -79,10 +79,10 @@ display-linear RGB float
    ▼
 ARGB 像素 → Bitmap.setPixels
    ▼
-Bitmap 4096×3072                                       48 MB
+Bitmap 4000×3000                                       约 46 MiB
    │  PhotoStore：Matrix.postRotate(90°)，随后立即 recycle 原图
    ▼
-3072×4096 → JPEG q92（约 3 MB）+ 1440 长边缩略图
+3000×4000 → JPEG q92（约 3 MB）+ 1440 长边缩略图
    ▼
 files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本）
    │  publishToGallery：文件流复制，不重新编码位图
@@ -101,8 +101,8 @@ files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本�
 2. **引擎的输入输出都是线性光，不是 sRGB**。Android AOT 的 5 个 kernel 都不是
    `ENCODE_OUT` 变体，上游注释写明 "other variants return display-linear light"，
    所以 sRGB 编解码必须由 Kotlin 侧完成（`LinearColor`）。
-3. **冲洗之后才旋转**。pack 的空间参数按 4096×3072 烘成像素数，先转成竖图会直接失败；
-   旋转放在效果烘焙之后，颗粒与晕光的尺度不受影响。
+3. **冲洗之后才旋转**。pack 的空间参数按它的帧尺寸（现在 4000×3000）烘成像素数，
+   先转成竖图会直接失败；旋转放在效果烘焙之后，颗粒与晕光的尺度不受影响。
 4. **尺寸只会被裁，不会被缩**。pack 的空间参数是「毫米 × 该帧 pixels-per-mm」，
    裁切不改像素密度所以依然成立；缩放会改密度，等于换了一套光学系统（D-037）。
    多机型适配全靠这一条 —— 一份 pack 服务多种设备的唯一正确做法，
@@ -116,7 +116,7 @@ files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本�
 
 ### 为什么必须分块（halo 不能省）
 
-4096×3072 的单精度三平面约 **144 MB**，输入输出各一份就是 288 MB，再加 Halide 自己的
+4000×3000 的单精度三平面约 **137 MiB**，输入输出各一份就是 274 MiB，再加 Halide 自己的
 scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会直接撞 LMK。
 
 所以按 **128 行一条带子**处理。但扩散、晕光、MTF 都是有物理半径的卷积——一条带子
@@ -173,7 +173,7 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 
 | 原型内容 | 为什么不落 |
 |---|---|
-| `6000×4000 · DNG` | 本机只出 JPEG，`4096×3072`；写别的尺寸就是撒谎 |
+| `6000×4000 · DNG` | 本机只出 JPEG，pack 帧尺寸是 `4000×3000`；写别的尺寸就是撒谎 |
 | `¥78` / 到期日 / 品牌故事 / `ISO 400` / C-41 分类（胶卷库） | 价格与保质期无处可查；pack 格式里没有 ISO 与工艺字段，从卷名反推属于猜 |
 | `冲扫中 72%`、`SCANNED BY 光屋 LAB`、订单号与物流 | 本地 8 秒即时冲洗，没有订单、没有进度源（D-042） |
 | 预览上的实时 `sepia/saturate/hue-rotate` | 与 D-036 冲突；预览保持原色，只留一层不碰像素的取景器暗角（D-041） |
@@ -231,7 +231,7 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 
 ```bash
 swift build -c release --product fotufilm
-fotufilm --dump-wasm-pack <out>.fswp --stock gold200 --pack-size 4096x3072
+fotufilm --dump-wasm-pack <out>.fswp --stock gold200 --pack-size 4000x3000
 ```
 
 CI 里由 `.github/workflows/fotufilm-android-native.yml` 的 `packs` job 执行，`pack_size`
@@ -351,22 +351,42 @@ adb shell am force-stop com.pocketccd.prototype
 App 透过 FUSE 列不出内容且**不报错**（表现为 `packCount=0`）。
 
 内置清单 `bundled_packs_v1.txt` 记着"哪些是我们自己复制进去的、各多大"。换一版 pack
-（比如把基准从 `4096×3072` 换成 `4000×3000`）时，已经下线的那几个会被自动清掉；
-`adb push` 进来的不在这本账上，不会被误删。
+（`4096×3072` → `4000×3000` 就是这么换的）时，已经下线的那几个会被自动清掉；
+`adb push` 进来的不在这本账上，不会被误删。另外还有一条去重：某支卷一旦有内置变体，
+同支卷（`__` 前相同）的其它变体也会被删掉 —— 否则旧尺寸的 `gold200__4096x3072` 会和新的
+`gold200__4000x3000` 并存，胶卷库里出现两个 `GOLD 200`。
 
-> **多机型**：现在这一套 pack 是 `4096×3072`，只服务"最大 JPEG ≥ 4096×3072"的机器。
-> 12MP 主流档（`4000×3000` / `4080×3060`）拿这个包**一张也拍不出来**。要给别人装，
-> 先把 pack 重产成 `4000×3000`，完整判断与操作步骤见
+> **多机型**：现在这一套 pack 是 **`4000×3000`**（D-048），服务"最大 JPEG ≥ 12MP"的机器：
+> `4000×3000` / `4080×3060` 精确命中，`4096×3072`（PJZ110）/ `4608×3456` 中心裁切。
+> 8MP 老机（`3264×2448`）和前置/超广角仍然拍不了 —— 那需要另产一套更小的 pack，
+> 绝不能运行时缩放。分档表与后续步骤见
 > [`docs/fotufilm-multi-device-plan.md`](docs/fotufilm-multi-device-plan.md)。
+
+### 把包发给别人
+
+只有一个文件：`app/build/outputs/apk/benchmark/app-benchmark.apk`（约 39 MB，
+release 变体 + debug 签名，非 debuggable）。对方不需要电脑、不需要 adb、不需要 root：
+
+1. 传过去，点开安装（需要允许"安装未知来源应用"）；
+2. 首次启动授予相机权限；
+3. 胶卷库直接有 `GOLD 200` / `PORTRA 400` / `TRI-X 400` 三卷 —— pack 在 assets 里，
+   首启自动释放到应用私有目录。
+
+硬条件只有两条：**arm64-v8a**（minSdk 29 / Android 10 以上基本都满足）、
+**最大 JPEG ≥ 12MP**（不满足时快门置灰，置灰原因会写明设备尺寸与 pack 尺寸）。
+
+> **合规**：pack 是 Fotufilm 胶片档案的衍生资产，按 CC BY-SA 4.0 分发。设置页 →
+> 开源与素材声明里写了署名（Fotufilm / MUAStudio Inc.）、修改声明、以及"文件可取出可替换"
+> 的位置。**这一页不是可选装饰**：把 APK 给了别人，就等于把这些 CC BY-SA 文件分发给了别人。
 
 验证：
 
 ```bash
 adb logcat -s PocketCcdCamera -s PocketCcdCapture      # 字段有节略
 # camera bound: lens=1 target=null attached=4096x3072 effective=4096x3072 sensorOrientation=90 …
-#   ↑ 首绑不约束尺寸（target=null），attached 才是真实值；下一次绑定才会带上 target=4096x3072
+#   ↑ 首绑不约束尺寸（target=null），attached 才是真实值；下一次绑定才会带上 target=4000x3000
 # capture rotation: sensor=90 display=0 -> 90°
-# developed PORTRA 400 4096x3072 in 2xxx ms / 24 strips / nonFinite=0 / rotate=90°
+# developed PORTRA 400 4000x3000 in 2xxx ms / 24 strips / nonFinite=0 / rotate=90° / 4096x3072 → crop 4000x3000
 ```
 
 ---
@@ -428,10 +448,12 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 - **成片写两份，且必须对账**（D-047）。私有 `files/Pictures/pocket-ccd/` 是照片墙的
   唯一数据源，系统 `Pictures/Pocket CCD/` 是给外面看的副本。两份之间没有同步机制时，
   用户在系统相册里删掉一张，照片墙会一直显示它。`reconcileWithGallery()` 在回前台和
-  进照片墙时各对一次账，三条安全阀缺一不可：
-  **①媒体库查询失败时一张都不删；②发布到相册失败的照片不删**（它从没进过相册，
-  拿"相册里没有"当删除证据会删掉唯一一份）；**③刚拍 2 分钟内不删**（写盘与入库有延迟，
-  也兜住"相册内重命名"）。宁可不同步也不能清空照片库。
+  进照片墙时各对一次账，四条安全阀缺一不可：
+  **⓪相册补齐没跑完时不对账**（补传与对账并发会在补传前删光历史照片）；
+  **①媒体库查询失败、或查询成功但 0 行时一张都不删**（索引重建/卷重挂载都会返回空）；
+  **②发布到相册失败的照片不删**（它从没进过相册，拿"相册里没有"当删除证据会删掉唯一一份）；
+  **③刚拍 2 分钟内不删**（写盘与入库有延迟，也兜住"相册内重命名"）。
+  宁可不同步也不能清空照片库 —— 代价是用户真把相册删空时照片墙不会跟着清空。
 - 未实际执行的构建/测试/真机拍摄，不得标记为"通过"。
 
 ---
@@ -444,7 +466,8 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 | 成片比取景器窄一点 | 发生过中心裁切（设备尺寸大于 pack）；日志里有 `→ crop WxH` |
 | 卷名显示 `EXAMPLE 400` | CI 的 parity 夹具（96×64）被当成了卷；已有 1 MP 地板挡住 |
 | `原生内核不可用：…` | `.so` 没打进 APK，或 ABI 不是 arm64-v8a |
-| 冲洗 2–3 秒没进度、只有状态点 | 设计如此，FOT-009 待做 |
+| 冲洗 2–4 秒没进度、只有状态点 | 设计如此，FOT-009 待做 |
+| 提示「相机没有响应（5 秒内未返回画面），已重连相机」 | 快门回调丢了（切后台/转屏/会话被抢）。5 秒兜底后自动重绑，再按一次即可 |
 | 成片侧躺 | `SENSOR_ORIENTATION` 读不到（会打 warn 并跳过补偿） |
 | 冲洗完没有文件 | 看 `PocketCcdCapture` 的 `capture failed`，通常是设备采集尺寸小于 pack |
 | 耗时比文档慢 5–7 倍 | 在用 debug 包；换 `assembleBenchmark` |

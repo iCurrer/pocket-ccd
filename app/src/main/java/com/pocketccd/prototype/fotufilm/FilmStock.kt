@@ -135,6 +135,24 @@ object FilmStockCatalog {
             if (stale.isFile && stale.delete()) Log.i(TAG, "移除已下线的内置 pack：$name")
         }
 
+        // 同一支卷只留一个变体。
+        //
+        // 换基准尺寸时，升级上来的机器目录里还躺着上一版**adb push** 的旧尺寸 pack
+        // （它们不在清单上，所以上一段清不掉）。两支 `gold200` 并存 → 胶卷库里出现
+        // 两个 "GOLD 200"，用户会以为装坏了。
+        //
+        // 只删**同一支卷**（`__` 前的部分相同）的旧变体，且必须已经有内置变体顶上，
+        // 避免把唯一一份删掉。pack 是 CI 可重产的派生物，不是用户数据。
+        val bundledFilms = current.keys.associateBy { filmIdOf(it) }
+        directory.listFiles { file -> file.isFile && file.name.endsWith(EXTENSION, true) }
+            ?.forEach { file ->
+                if (file.name in current) return@forEach
+                val replacement = bundledFilms[filmIdOf(file.name)] ?: return@forEach
+                if (file.delete()) {
+                    Log.i(TAG, "移除被内置卷替代的旧变体：${file.name}（内置 $replacement）")
+                }
+            }
+
         runCatching {
             manifest.writeText(current.entries.joinToString("\n") { "${it.key} ${it.value}" })
         }
@@ -176,6 +194,9 @@ object FilmStockCatalog {
             }.getOrNull()
         }
     }
+
+    /** `gold200__4000x3000.fswp` → `gold200`。一支卷的所有尺寸变体共享它。 */
+    internal fun filmIdOf(fileName: String): String = fileName.substringBefore("__")
 
     /** 从文件名（去掉扩展名）推出展示名。照片墙读回旧文件时也要用同一套规则。 */
     internal fun labelOf(id: String): String {

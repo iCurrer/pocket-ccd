@@ -38,11 +38,24 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+/**
+ * 快门在 [CameraHandle.CAPTURE_TIMEOUT_MS] 内没拿到画面。
+ *
+ * **这不是"相机坏了"，而是"我们不想再等"**。真机上确实会遇到 `takePicture`
+ * 的回调永远不来：按快门后一秒内切到别的 App、转屏重建 Activity、或者相机会话被
+ * 系统抢走。CameraX 没有取消 `takePicture` 的 API，也没有超时 —— 没有这个兜底，
+ * 界面会永远停在"正在冲洗"，`capturing` 标志永不释放，快门永久置灰，只能杀进程。
+ */
+class CaptureTimeoutException(
+    seconds: Int,
+) : RuntimeException("相机没有响应（${seconds} 秒内未返回画面），已重连相机。")
 
 /**
  * 一张刚拍下、尚未冲洗的帧。
@@ -102,31 +115,38 @@ class CameraHandle internal constructor(
      * 方向因此分两步补：这里只算出该转多少度，真正旋转发生在**冲洗完成之后**
      * （`PhotoStore.save`），因为 pack 的空间参数绑定的是像素尺寸，不能在冲洗前转。
      */
-    suspend fun takeJpeg(): CapturedFrame = suspendCancellableCoroutine { continuation ->
-        // 角度必须在按下快门的瞬间取：用户可能拍完就转手机，
-        // 冲洗要 2–3 秒，等到那时再读 display 会拿到错的姿势。
-        val rotation = rotationDegrees()
-        imageCapture.takePicture(
-            executor,
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onCaptureSuccess(image: ImageProxy) {
-                    try {
-                        val buffer = image.planes[0].buffer
-                        val bytes = ByteArray(buffer.remaining())
-                        buffer.get(bytes)
-                        if (continuation.isActive) continuation.resume(CapturedFrame(bytes, rotation))
-                    } catch (error: Throwable) {
-                        if (continuation.isActive) continuation.resumeWithException(error)
-                    } finally {
-                        image.close()
-                    }
-                }
+    suspend fun takeJpeg(): CapturedFrame {
+        val frame = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
+            suspendCancellableCoroutine<CapturedFrame> { continuation ->
+                // 角度必须在按下快门的瞬间取：用户可能拍完就转手机，
+                // 冲洗要 2–3 秒，等到那时再读 display 会拿到错的姿势。
+                val rotation = rotationDegrees()
+                imageCapture.takePicture(
+                    executor,
+                    object : ImageCapture.OnImageCapturedCallback() {
+                        override fun onCaptureSuccess(image: ImageProxy) {
+                            try {
+                                val buffer = image.planes[0].buffer
+                                val bytes = ByteArray(buffer.remaining())
+                                buffer.get(bytes)
+                                if (continuation.isActive) continuation.resume(CapturedFrame(bytes, rotation))
+                            } catch (error: Throwable) {
+                                if (continuation.isActive) continuation.resumeWithException(error)
+                            } finally {
+                                // 超时后 continuation 已取消，但 ImageProxy 仍必须归还，
+                                // 否则缓冲区不释放，下一次拍摄会直接卡住。
+                                image.close()
+                            }
+                        }
 
-                override fun onError(exception: ImageCaptureException) {
-                    if (continuation.isActive) continuation.resumeWithException(exception)
-                }
-            },
-        )
+                        override fun onError(exception: ImageCaptureException) {
+                            if (continuation.isActive) continuation.resumeWithException(exception)
+                        }
+                    },
+                )
+            }
+        }
+        return frame ?: throw CaptureTimeoutException((CAPTURE_TIMEOUT_MS / 1000).toInt())
     }
 
     fun setFlash(on: Boolean) {
@@ -235,6 +255,17 @@ class CameraHandle internal constructor(
         }
         Log.i(TAG, "capture rotation: sensor=$sensor display=${displayRotation()} -> $degrees°")
         return degrees
+    }
+
+    companion object {
+        /**
+         * 快门等画面的上限。
+         *
+         * 取 5 秒而不是 2 秒：12MP `CAPTURE_MODE_MAXIMIZE_QUALITY` 在慢机上单次
+         * JPEG 编码偶尔要 1–2 秒，压太紧会把正常拍摄判成失败。5 秒足够覆盖正常
+         * 路径，也足够短到"卡住"这件事还能被用户感知成一次失败而不是死机。
+         */
+        const val CAPTURE_TIMEOUT_MS = 5_000L
     }
 }
 

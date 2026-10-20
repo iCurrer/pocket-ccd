@@ -79,4 +79,20 @@
     <string name="settings_diagnostics_body">Build %1$s (%2$d)\nCamera: not connected\nStorage: app-owned only</string>
     <string name="settings_close">CLOSE</string>
     <string name="settings_footer">POCKET CCD · DC-01</string>
+
+    <!-- 开源与素材声明（D-048）。pack 是 CC BY-SA 4.0 的衍生资产，内置进 APK 之后
+         这页是分发义务，不是装饰；改措辞请对照 docs/fotufilm-license-inventory.md。 -->
+    <string name="settings_licenses">开源与素材声明</string>
+    <string name="settings_licenses_subtitle">胶片档案 · 第三方组件 · 商标</string>
+    <string name="settings_licenses_value">CC BY-SA 4.0</string>
+    <string name="licenses_title">开源与素材声明</string>
+    <string name="licenses_subtitle">OPEN SOURCE · CREDITS</string>
+    <string name="licenses_section_engine">胶片与渲染引擎</string>
+    <string name="licenses_engine_body">Film simulation engine: Fotufilm\nhttps://fotufilm.com\nCopyright MUAStudio Inc.\n\n引擎代码 Apache-2.0；胶片档案（film profiles）CC BY-SA 4.0。\n\n本应用对引擎做了修改：跨平台移植到 Android（C++/JNI 适配），并把胶片档案按帧尺寸预烘焙成 .fswp 文件。修改后的胶片档案仍以 CC BY-SA 4.0 分发。\n\nPocket CCD 与 Fotufilm、MUAStudio Inc. 无从属关系，也未获其背书。</string>
+    <string name="licenses_section_packs">本机的胶片文件</string>
+    <string name="licenses_packs_body">.fswp 文件位于应用私有目录：\nAndroid/data/com.pocketccd.prototype/files/film/\n\n首次启动由本应用从安装包内置副本释放；也可以随时取出、替换或删除，例如：\nadb pull /sdcard/Android/data/com.pocketccd.prototype/files/film/\n\n这些文件是 CC BY-SA 4.0 授权的资产。本应用不对它们加任何技术限制，不加密、不做完整性校验，同名文件直接覆盖即可生效（设置页点「胶卷」重扫）。</string>
+    <string name="licenses_section_thirdparty">第三方组件</string>
+    <string name="licenses_thirdparty_body">Halide — MIT License（AOT 编译的原生库携带其 runtime）\nAndroidX · CameraX · Jetpack Compose — Apache-2.0\nrawtoaces 相机光谱数据 — Apache-2.0\ncolour-science 氙灯光谱 — BSD-3-Clause</string>
+    <string name="licenses_section_trademark">商标</string>
+    <string name="licenses_trademark_body">Kodak、Fujifilm、Ilford、CineStill、Lomography、instax 等名称是各自所有者的商标，此处仅用于描述胶片风格，不代表任何合作或授权。\n\n渲染出的照片不受 CC BY-SA 的 ShareAlike 约束，可自由使用。</string>
 </resources>

@@ -120,6 +120,16 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         }
     }
 
+    // 快门超时后换一条会话（review P0-4）。超时的那条多半已经废了，
+    // 只把 UI 放出"正在冲洗"而不重绑，用户再按一次快门只会原地再等 5 秒。
+    val rebindTick by viewModel.rebindRequests.collectAsStateWithLifecycle()
+    LaunchedEffect(rebindTick) {
+        if (rebindTick > 0) {
+            previewError = "相机没有响应，正在重连"
+            cameraNonce++
+        }
+    }
+
     // 回到前台时验一次会话：相机可能已被系统或其他 App 拿走。
     // 不探这一次，界面会一直亮着 LIVE，按快门只会得到 "Not bound to a valid Camera"。
     //

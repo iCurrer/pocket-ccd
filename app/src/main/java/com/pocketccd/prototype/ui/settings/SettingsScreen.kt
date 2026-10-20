@@ -66,71 +66,89 @@ fun SettingsScreen(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(p.appBg)
-            .padding(horizontal = spec.metrics.gutterWide),
-    ) {
-        SettingsHeader(onBack = onBack)
-
-        LazyColumn(
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
+                .fillMaxSize()
+                .background(p.appBg)
+                .padding(horizontal = spec.metrics.gutterWide),
         ) {
-            item {
-                SettingsSection(title = "保存与输出") {
-                    SettingsRow(
-                        title = stringResource(R.string.settings_save_location),
-                        subtitle = stringResource(R.string.settings_save_location_value),
-                        value = "相册",
-                    )
-                    Hairline()
-                    SettingsRow(
-                        title = stringResource(R.string.settings_quality),
-                        subtitle = stringResource(R.string.settings_quality_subtitle),
-                        value = stringResource(R.string.settings_quality_value),
-                    )
-                    Hairline()
-                    // pack 走 adb push 进应用私有目录，点了才重扫 —— 用户往目录里
-                    // 补卷之后不用杀进程重进。
-                    SettingsRow(
-                        title = stringResource(R.string.settings_film_roll),
-                        subtitle = stringResource(R.string.settings_film_roll_hint),
-                        value = "$stockCount 卷",
-                        onClick = onRefreshStocks,
-                    )
-                }
-            }
-            item {
-                SettingsSection(title = "关于") {
-                    SettingsRow(
-                        title = stringResource(R.string.settings_version),
-                        value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    )
-                    Hairline()
-                    SettingsRow(
-                        title = stringResource(R.string.settings_privacy),
-                        subtitle = stringResource(R.string.settings_privacy_note),
-                        value = stringResource(R.string.settings_privacy_value),
-                    )
-                }
-            }
-            if (BuildConfig.DEBUG) {
+            SettingsHeader(onBack = onBack)
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
                 item {
-                    SettingsSection(title = "开发者") {
+                    SettingsSection(title = "保存与输出") {
                         SettingsRow(
-                            title = stringResource(R.string.settings_diagnostics),
-                            subtitle = stringResource(R.string.settings_diagnostics_value),
-                            onClick = { showDiagnostics = true },
+                            title = stringResource(R.string.settings_save_location),
+                            subtitle = stringResource(R.string.settings_save_location_value),
+                            value = "相册",
+                        )
+                        Hairline()
+                        SettingsRow(
+                            title = stringResource(R.string.settings_quality),
+                            subtitle = stringResource(R.string.settings_quality_subtitle),
+                            value = stringResource(R.string.settings_quality_value),
+                        )
+                        Hairline()
+                        // 卷随 APK 内置（D-048），首次启动自动落盘；这一行是给
+                        // 手动 adb push 覆盖的场景留的重扫入口，点了才重扫，
+                        // 不用杀进程重进。
+                        SettingsRow(
+                            title = stringResource(R.string.settings_film_roll),
+                            subtitle = stringResource(R.string.settings_film_roll_hint),
+                            value = "$stockCount 卷",
+                            onClick = onRefreshStocks,
                         )
                     }
                 }
+                item {
+                    SettingsSection(title = "关于") {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_version),
+                            value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        )
+                        Hairline()
+                        SettingsRow(
+                            title = stringResource(R.string.settings_privacy),
+                            subtitle = stringResource(R.string.settings_privacy_note),
+                            value = stringResource(R.string.settings_privacy_value),
+                        )
+                        Hairline()
+                        // CC BY-SA 4.0 要求署名与修改声明随分发物走。pack 内置进
+                        // APK 之后，这一页就不是"可选彩蛋"了 —— 对外发包前必须有。
+                        SettingsRow(
+                            title = stringResource(R.string.settings_licenses),
+                            subtitle = stringResource(R.string.settings_licenses_subtitle),
+                            value = stringResource(R.string.settings_licenses_value),
+                            onClick = { showLicenses = true },
+                        )
+                    }
+                }
+                if (BuildConfig.DEBUG) {
+                    item {
+                        SettingsSection(title = "开发者") {
+                            SettingsRow(
+                                title = stringResource(R.string.settings_diagnostics),
+                                subtitle = stringResource(R.string.settings_diagnostics_value),
+                                onClick = { showDiagnostics = true },
+                            )
+                        }
+                    }
+                }
             }
+        }
+
+        // 声明页盖满整屏（含设置页自己的标题栏），返回即关闭。
+        if (showLicenses) {
+            LicensesScreen(onBack = { showLicenses = false })
         }
     }
 
@@ -176,7 +194,11 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsHeader(onBack: () -> Unit) {
+internal fun SettingsHeader(
+    onBack: () -> Unit,
+    title: String = stringResource(R.string.settings_title),
+    subtitle: String = stringResource(R.string.settings_subtitle),
+) {
     val p = LocalFilmTheme.current.palette
     // 与成片页/相册页同一套居中标题结构，三个页面来回切不会有标题跳位。
     Row(
@@ -196,7 +218,7 @@ private fun SettingsHeader(onBack: () -> Unit) {
             modifier = Modifier.weight(4f),
         ) {
             Text(
-                text = stringResource(R.string.settings_title),
+                text = title,
                 style = TextStyle(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
@@ -206,7 +228,7 @@ private fun SettingsHeader(onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(3.dp))
             Text(
-                text = stringResource(R.string.settings_subtitle),
+                text = subtitle,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 8.sp,

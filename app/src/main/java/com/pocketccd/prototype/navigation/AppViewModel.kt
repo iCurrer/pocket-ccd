@@ -10,6 +10,7 @@ import com.pocketccd.prototype.camera.CameraHandle
 import com.pocketccd.prototype.camera.CameraState
 import com.pocketccd.prototype.camera.CameraUiState
 import com.pocketccd.prototype.camera.CaptureState
+import com.pocketccd.prototype.camera.CaptureTimeoutException
 import com.pocketccd.prototype.camera.CapturedFrame
 import com.pocketccd.prototype.camera.PhotoStore
 import com.pocketccd.prototype.camera.SavedPhoto
@@ -55,6 +56,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _stocks = MutableStateFlow<List<FilmStock>>(emptyList())
     private val _selectedStockId = MutableStateFlow<String?>(null)
     private val _camera = MutableStateFlow<CameraState>(CameraState.Pending)
+
+    /**
+     * 请求相机层重绑的信号，自增即一次重绑。
+     *
+     * 只用在一处：快门超时（[com.pocketccd.prototype.camera.CaptureTimeoutException]）。
+     * 超时说明这条会话可能已经废了（转屏重建、被别的客户端抢走），只把 UI 从
+     * "正在冲洗"里放出来还不够 —— 再按一次快门会立刻撞同一个坑。重绑之后
+     * 拿到的是一条新会话，重试才有意义。
+     */
+    private val _rebindRequests = MutableStateFlow(0)
+    val rebindRequests: StateFlow<Int> = _rebindRequests.asStateFlow()
 
     /**
      * 本卷已拍张数。**不是**照片库总数——库里有 35 张，不代表这卷只剩 1 张。
@@ -211,6 +223,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (error: Throwable) {
                 Log.e(TAG, "capture failed on ${stock.label}", error)
+                // 超时不是"数据坏了"，是"这条会话不再回话"。放掉 UI 状态还不够，
+                // 得把相机会话换掉，否则重试只会再撞一次同样的 5 秒。
+                if (error is CaptureTimeoutException) _rebindRequests.update { it + 1 }
                 _capture.value = CaptureState.Failed(
                     message = error.message ?: error.javaClass.simpleName,
                     stock = stock,

@@ -34,13 +34,17 @@ on:
       pack_size:
         description: "WIDTHxHEIGHT. Must equal the capture resolution — spatial params are baked per frame size"
         required: false
-        # 默认值按目标机实测改过，不再是"理想的 12MP"。
-        # PJZ110（OnePlus 13 / OP5D0DL1）后置镜头的 CameraX 最大 JPEG 是 4096x3072，
-        # 没有 4000x3000；请求 4000x3000 会被 CLOSEST_HIGHER_THEN_LOWER 换成 4096x3072，
-        # 而 D-037 要求尺寸精确相等 —— 于是那一套 pack 在真机上一张都拍不出来。
-        # 依据：`adb logcat -s PocketCcdCamera` → attached=4096x3072；
-        #      `dumpsys media.camera` 尺寸全表不含 4000x3000。
-        default: "4096x3072"
+        # 默认值取 4000x3000，是**为分发**选的，不是为开发机。
+        #
+        # 一段历史：PJZ110（OnePlus 13 / OP5D0DL1）后置镜头的 CameraX 最大 JPEG 是
+        # 4096x3072，所以第一版 pack 就按 4096x3072 出（D-037 当时要求尺寸精确相等）。
+        # 但那只服务"最大 JPEG ≥ 12.58MP"的机器：12MP 主流档（4000x3000 / 4080x3060）
+        # 比它**小**，一张也拍不出来 —— 换台手机就废。
+        #
+        # D-037 后来拆清楚了：禁的是**缩放**（改 pixels-per-mm），不禁**裁切**（密度不变）。
+        # 于是基准尺寸往低取，设备更大就中心裁掉多余部分。4000x3000 覆盖面最广，
+        # 代价是 PJZ110 裁 1.5% 线性（肉眼不可见）。见 D-048。
+        default: "4000x3000"
 
 permissions:
   contents: read
@@ -56,11 +60,11 @@ env:
   LLVM_VERSION: "22"
   NDK_VERSION: "28.2.13676358"
   FOTUFILM_ROOT: third_party/fotufilm
-  # 交付用的 pack 尺寸。**必须等于实际拍摄分辨率**：
+  # 交付用的 pack 尺寸。**必须换成另一次导出**：
   # main.swift:1123 写明 "A frame of another size needs another pack" —— 每个空间参数是
   # 毫米长度乘以该帧的 pixels-per-mm，尺寸是导出的一部分，不能事后缩放。
-  # 4096x3072 = 12.58MP（4:3），等于 PJZ110 后置镜头的最大 JPEG；见 inputs.pack_size 的说明。
-  PACK_SIZE: ${{ inputs.pack_size || '4096x3072' }}
+  # 4000x3000 = 12MP（4:3），是覆盖面最广的基准档；设备更大就中心裁切（D-048）。
+  PACK_SIZE: ${{ inputs.pack_size || '4000x3000' }}
   # parity 脚本内部固定请求这个 stock / 尺寸
   PARITY_STOCK: example-negative-400
   PARITY_SIZE: "96x64"
