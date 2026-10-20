@@ -39,8 +39,9 @@ class GalleryReconcilerTest {
 
     @Test
     fun `相册里没有的旧照片判定为已删除`() {
+        // 注意这里给了一个**非空**索引：空索引有专门的安全阀（见下一条）。
         val p = photo()
-        assertEquals(listOf(p.id), stale(listOf(p)))
+        assertEquals(listOf(p.id), stale(listOf(p), names = setOf("someone-else.jpg")))
     }
 
     @Test
@@ -94,7 +95,7 @@ class GalleryReconcilerTest {
         val p = photo()
         assertEquals(
             listOf(p.id),
-            stale(listOf(p), timestamps = setOf(now / 1000L)), // 只对上"现在"，不是这张
+            stale(listOf(p), names = setOf("someone-else.jpg"), timestamps = setOf(now / 1000L)),
         )
     }
 
@@ -112,13 +113,25 @@ class GalleryReconcilerTest {
     }
 
     @Test
-    fun `空相册索引会删掉全部已发布的旧照片`() {
-        // 用户把相册里本应用的照片全删了。这是合法结果——安全阀在 PhotoStore 一侧：
-        // 查询失败返回 null 时整批放弃，不会走到这里。
+    fun `空相册索引一张都不删`() {
+        // 曾经这条断言的是"空索引 → 全删"，并把责任推给 PhotoStore 的 null 分支 ——
+        // 而那个分支根本不覆盖"查询成功但 0 行"。索引重建 / 卷重挂载 / owner 记录丢失
+        // 都会让查询成功返回 0 行，那时唯一一份私有副本会被整库删除。
         val all = listOf(
             photo(id = "a", fileName = "a.jpg"),
             photo(id = "b", fileName = "b.jpg"),
         )
-        assertEquals(listOf("a", "b"), stale(all))
+        assertEquals(emptyList<String>(), stale(all))
+    }
+
+    @Test
+    fun `只有时间戳没有文件名时仍按时间判活`() {
+        // 部分机型的 DISPLAY_NAME 列可能为空串，但 DATE_TAKEN 正常。
+        // 这种情况下索引不算空，命中时间戳的照片要保住。
+        val p = photo()
+        assertEquals(
+            emptyList<String>(),
+            stale(listOf(p), timestamps = setOf(p.capturedAt / 1000L)),
+        )
     }
 }

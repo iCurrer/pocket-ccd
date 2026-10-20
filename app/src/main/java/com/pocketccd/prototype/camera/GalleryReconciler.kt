@@ -48,23 +48,36 @@ internal object GalleryReconciler {
      *    覆盖这两种"照片还在、只是不叫原来那个名字"的情况。
      * 3. 还没到等待期 —— 见 [GRACE_MILLIS]。
      *
-     * 时间戳按**秒**比对：`MediaStore` 的 `DATE_TAKEN` 在部分机型上会被截断到秒，
-     * 毫秒级精确比对会全部失配，等于把所有老照片误判成已删除。
-     *
-     * @param galleryNames 相册现存条目的 `DISPLAY_NAME`
-     * @param galleryTimestampSeconds 相册现存条目的 `DATE_TAKEN`（**秒**）
-     * @return 应当判定为已删除的成片 id
-     */
-    fun staleIds(
-        candidates: List<Candidate>,
-        galleryNames: Set<String>,
-        galleryTimestampSeconds: Set<Long>,
-        now: Long,
-        graceMillis: Long = GRACE_MILLIS,
-    ): List<String> = candidates.filter { photo ->
+ * 时间戳按**秒**比对：`MediaStore` 的 `DATE_TAKEN` 在部分机型上会被截断到秒，
+ * 毫秒级精确比对会全部失配，等于把所有老照片误判成已删除。
+ *
+ * ### 空索引 ≠ 用户删空了相册
+ *
+ * 索引一条都没有时**不下任何判断**，直接返回空列表。这条不是冗余的防御：MediaProvider
+ * 重建索引、卷重挂载、本应用 `owner_package_name` 记录丢失（我们没有读媒体权限，
+ * 可见性完全依赖 owner 记录），都会让查询"成功返回 0 行"。若把 0 行当成"用户删光了"，
+ * 唯一一份私有副本会被整库删除且无法恢复。
+ *
+ * 代价是真实的：用户真把相册里本应用的照片全删了，照片墙不会跟着清空（要么拍一张新的
+ * 打破空索引，要么在 App 内删——那个功能还没做）。**宁可留一张幽灵照片，也不要清库。**
+ *
+ * @param galleryNames 相册现存条目的 `DISPLAY_NAME`
+ * @param galleryTimestampSeconds 相册现存条目的 `DATE_TAKEN`（**秒**）
+ * @return 应当判定为已删除的成片 id
+ */
+fun staleIds(
+    candidates: List<Candidate>,
+    galleryNames: Set<String>,
+    galleryTimestampSeconds: Set<Long>,
+    now: Long,
+    graceMillis: Long = GRACE_MILLIS,
+): List<String> {
+    if (galleryNames.isEmpty() && galleryTimestampSeconds.isEmpty()) return emptyList()
+    return candidates.filter { photo ->
         photo.published &&
             now - photo.capturedAt >= graceMillis &&
             photo.fileName !in galleryNames &&
             (photo.capturedAt / 1000L) !in galleryTimestampSeconds
     }.map { it.id }
+}
 }

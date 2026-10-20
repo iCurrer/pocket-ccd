@@ -43,7 +43,7 @@
 | 成片方向 | 完成 | `capture rotation: sensor=90 display=0 -> 90°` |
 | 胶卷库（`FILMS`，换卷页） | 完成 | T9-016 真机四项：三卷渲染 / 装卷后卷名与左下角标同步 / 顶栏相册入口 / 返回回库，截图 [`2026-10-20-films-library.png`](docs/screenshots/2026-10-20-films-library.png) |
 | 卷计数与换卷口径（D-046） | 完成 | 真机连切三卷：`5/36 → 0/36 → 5/36`；只按时间过滤会串号，必须同时按当前卷过滤 |
-| 成片页 / 照片墙 / 设置页暗色化 | **代码完成，待真机** | T9-018..020；`assembleDebug` + 单测 27/27；无真机截图 |
+| 成片页 / 照片墙 / 设置页暗色化 | **代码完成，待真机** | T9-018..020；`assembleDebug` + 单测 28/28；无真机截图 |
 | 私有副本 ↔ 系统相册对账（D-047） | **代码完成，待真机** | FOT-020；`GalleryReconcilerTest` 11/11；"相册里删一张"的真机验证还没做 |
 | 真实镜头倍率 + 等效焦距 | **代码完成，待真机** | T9-021；D-044；镜头表尚未在 `PJZ110` 上打印过 |
 | 12MP 引擎性能 | 已实测 | benchmark 包单帧 2.0–3.2 s，峰值 RSS 373–463 MB，`nonFinite=0` |
@@ -319,8 +319,8 @@ debug 包是 debuggable 的，ART 不做完整优化，同一段编码循环实�
 export JAVA_HOME="/d/software/Android/Android Studio/jbr"
 
 ./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest      # 导航状态机 16 例 + 相册对账 11 例
-./gradlew assembleBenchmark      # 性能基准用（非 debuggable）
+./gradlew testDebugUnitTest      # 导航状态机 16 例 + 相册对账 12 例
+./gradlew assembleBenchmark      # 性能基准用（非 debuggable），也是发给别人装的包
 ```
 
 国内网络：`settings.gradle.kts` 优先用阿里云 Maven 镜像，Gradle wrapper 走腾讯云。
@@ -329,13 +329,17 @@ export JAVA_HOME="/d/software/Android/Android Studio/jbr"
 ### 让相机能拍照
 
 APK 只解决"能跑"，能拍照还需要**帧尺寸不超过这台设备最大 JPEG 的 pack**（相等最省事；
-设备更大就中心裁掉多余部分）。pack 不进 APK，也不进仓库：帧尺寸是"能服务的最大像素密度"，
-只有**目标机群里有更小的机型**才需要重产一套更小的，设备更大则靠裁切；且它是上游代码与
-CC BY-SA 胶片数据的派生结果，分发口径受限。首次补齐（`prebuilt/` 为空时）见
-[`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md)，然后放进设备私有目录：
+设备更大就中心裁掉多余部分）。pack 的帧尺寸是"这份 pack 服务的最大像素密度"，
+只有**目标机群里有更小的机型**才需要重产一套更小的；设备更大则靠裁切。
+
+**pack 现在内置进 APK 的 assets**，首次启动由 `FilmStockCatalog.provisionBundled()`
+落到 `Android/data/com.pocketccd.prototype/files/film/` —— 别人装上就自动有卷，
+不需要 `adb push`。仍然保留 `adb push` 这条覆盖通路：运行期以 `files/film/` 为唯一
+事实来源，assets 只是初装种子。
 
 ```bash
-adb push prebuilt/fotufilm/packs/*__4096x3072.fswp \
+# 可选：换/补一套 pack（会覆盖同名文件）
+adb push prebuilt/fotufilm/packs/*.fswp \
   /sdcard/Android/data/com.pocketccd.prototype/files/film/
 adb shell am force-stop com.pocketccd.prototype
 ```
@@ -345,6 +349,15 @@ adb shell am force-stop com.pocketccd.prototype
 时，这就是唯一的卷；同时放了几套不同尺寸的，选中顺序按文件名，不按"离设备最近"排序。
 目录由 App 自己 `mkdirs()` —— 用 `adb shell mkdir` 建的目录属主是 `shell`、模式 `drwxrws---`，
 App 透过 FUSE 列不出内容且**不报错**（表现为 `packCount=0`）。
+
+内置清单 `bundled_packs_v1.txt` 记着"哪些是我们自己复制进去的、各多大"。换一版 pack
+（比如把基准从 `4096×3072` 换成 `4000×3000`）时，已经下线的那几个会被自动清掉；
+`adb push` 进来的不在这本账上，不会被误删。
+
+> **多机型**：现在这一套 pack 是 `4096×3072`，只服务"最大 JPEG ≥ 4096×3072"的机器。
+> 12MP 主流档（`4000×3000` / `4080×3060`）拿这个包**一张也拍不出来**。要给别人装，
+> 先把 pack 重产成 `4000×3000`，完整判断与操作步骤见
+> [`docs/fotufilm-multi-device-plan.md`](docs/fotufilm-multi-device-plan.md)。
 
 验证：
 
@@ -379,7 +392,7 @@ app/src/main/java/com/pocketccd/prototype/
                      result/ gallery/ settings/
 
 app/src/test/        AppStateTest（导航状态机 16 例）
-                     GalleryReconcilerTest（对账判定 11 例：该删 / 绝不删）
+                     GalleryReconcilerTest（对账判定 12 例：该删 / 绝不删）
 native/              fotufilm_jni.cpp + CMakeLists.txt（只链接，不处理色彩）
 .github/workflows/   fotufilm-android-native.yml（packs + android-native 两个 job）
 prebuilt/            CI 产物（.gitignore；gradlew clean 不会删）

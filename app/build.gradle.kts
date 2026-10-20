@@ -73,6 +73,19 @@ android {
         jniLibs.directories.add(
             rootProject.layout.projectDirectory.dir("prebuilt/fotufilm/lib").asFile.absolutePath
         )
+
+        // pack 也进 APK（assets 根目录下的 *.fswp），首次启动复制到
+        // `Android/data/<pkg>/files/film/`。
+        //
+        // 为什么必须进 APK：此前 pack 只能 `adb push`，别人装上这个包会在胶卷库里看到
+        // 0 卷、快门永久置灰 —— 等于装了个打不开的相机。assets 是让"装完就能拍"
+        // 成立的唯一自包含方式，且运行期仍以 files/film 为准，用户/开发者可以覆盖。
+        //
+        // 许可：pack 是 film profile 的改编，按 CC BY-SA 4.0 分发，需署名 Fotufilm /
+        // MUAStudio Inc. 并声明是否修改（见 docs/fotufilm-license-inventory.md §2）。
+        assets.srcDir(
+            rootProject.layout.projectDirectory.dir("prebuilt/fotufilm/packs").asFile.absolutePath
+        )
     }
 }
 

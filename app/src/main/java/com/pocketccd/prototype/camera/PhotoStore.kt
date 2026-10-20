@@ -208,15 +208,25 @@ class PhotoStore(context: Context) {
         if (prefs.getBoolean(KEY_BACKFILL_DONE, false)) return 0
 
         var added = 0
+        var failed = 0
         val files = fullDir.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
         for (file in files.orEmpty()) {
-            if (existsInGallery(file.name)) continue
+            val id = parseId(file.name)?.first ?: file.name.removeSuffix(".jpg")
+            if (existsInGallery(file.name)) {
+                // 已经在相册里：明确记成"发布过"，否则下一轮对账会把它当"从没进过相册"。
+                markPublished(id, true)
+                continue
+            }
             val capturedAt = parseId(file.name)?.third ?: file.lastModified()
-            if (publishToGallery(file, file.name, capturedAt) != null) added++
+            val published = publishToGallery(file, file.name, capturedAt)
+            // 补传失败必须记账（D-047 安全阀③）：这张既不在相册、又没有"没发布"的记录，
+            // 下一轮对账就会认定"用户删了它"，而它是唯一一份。
+            markPublished(id, published != null)
+            if (published != null) added++ else failed++
         }
 
         prefs.edit().putBoolean(KEY_BACKFILL_DONE, true).apply()
-        if (added > 0) Log.i(TAG, "相册补齐 $added 张")
+        if (added > 0 || failed > 0) Log.i(TAG, "相册补齐 $added 张，失败 $failed 张")
         return added
     }
 
@@ -246,8 +256,10 @@ class PhotoStore(context: Context) {
      *
      * 判定规则在 [GalleryReconciler.staleIds]（可单测）；这里只做"读索引 + 删文件"。
      *
-     * 三条安全阀，任何一条不满足就整批放弃：
-     * 1. **查询失败/返回空游标 → 整批不删**。MediaStore 抖一下不能变成清空照片库。
+     * 四条安全阀，任何一条不满足就整批放弃：
+     * 0. **相册补齐没跑完 → 不对账**。补传与对账并发时，历史照片会在补传前被删光。
+     * 1. **查询失败、或查询成功但一行都没有 → 整批不删**。MediaStore 抖一下、
+     *    索引重建、owner 记录丢失，都不能变成清空照片库。
      * 2. **等待期内不删**（[GalleryReconciler.GRACE_MILLIS]）：刚写完的照片可能还没索引。
      * 3. **没发布成功的不删**：相册里从来没有过它，不能拿"相册没有"当删除证据。
      *
@@ -258,11 +270,32 @@ class PhotoStore(context: Context) {
             .orEmpty()
         if (files.isEmpty()) return ReconcileReport(removed = 0, kept = 0, queryOk = true)
 
+        // 安全阀⓪：相册补齐还没跑完时**绝不**对账。
+        //
+        // 两条路径没有任何顺序约束：`AppViewModel.init` 在 IO 上异步启动 syncToGallery，
+        // 而 AppRoot 的 lifecycle 观察者挂在已经 RESUMED 的 lifecycle 上，会立刻补发
+        // ON_RESUME → reconcile 同时开跑。这时索引里只有"已补传完的那几张"，其余历史
+        // 照片"名字不在 + 时间不在 + 早过等待期" → 被当成用户已删除，而补传循环随后
+        // 读不到源文件（FileNotFoundException 被吞成 null），标记却照样置位 → 永不恢复。
+        //
+        // 这条只在"从只写私有目录的旧版本升级上来"的第一次启动触发，开发者本机永远不会
+        // 中招，是典型的"只在真实用户那儿响的雷"。
+        if (!prefs.getBoolean(KEY_BACKFILL_DONE, false)) {
+            Log.i(TAG, "对账跳过：相册补齐还没做完")
+            return ReconcileReport(removed = 0, kept = files.size, queryOk = false)
+        }
+
         val index = readGalleryIndex()
             ?: run {
                 Log.w(TAG, "对账跳过：读不到 MediaStore 索引（不删任何照片）")
                 return ReconcileReport(removed = 0, kept = files.size, queryOk = false)
             }
+
+        // 安全阀①：查询"成功"但一行都没有，同样不下判断。见 GalleryReconciler 的类注释。
+        if (index.names.isEmpty() && index.timestamps.isEmpty()) {
+            Log.w(TAG, "对账跳过：相册索引为空（可能是索引重建，不删任何照片）")
+            return ReconcileReport(removed = 0, kept = files.size, queryOk = false)
+        }
 
         val unpublished = prefs.getStringSet(KEY_GALLERY_MISSING, emptySet())
             ?.toHashSet()

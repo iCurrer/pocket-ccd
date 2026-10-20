@@ -39,6 +39,9 @@ object FilmStockCatalog {
     private const val EXTENSION = ".fswp"
     private const val TAG = "FilmStockCatalog"
 
+    /** 内置 pack 的账单：每行 `文件名 字节数`。见 [provisionBundled]。 */
+    private const val BUNDLED_MANIFEST = "bundled_packs_v1.txt"
+
     /**
      * 可拍胶卷的最小帧面积。低于它的 pack 是**引擎夹具**，不是胶卷。
      *
@@ -68,6 +71,76 @@ object FilmStockCatalog {
 
     fun directory(context: Context): File =
         File(context.getExternalFilesDir(null), DIRECTORY_NAME).apply { mkdirs() }
+
+    /**
+     * 把 APK 内置的 pack 落到 [directory]，让"装完就能拍"成立。
+     *
+     * 之前 pack 只能靠 `adb push`，别人装同一个 APK 会在胶卷库里看到 0 卷、快门永久
+     * 置灰。assets 里带一份之后，第一次启动自己补齐；运行期仍以 `files/film/` 为准，
+     * 所以开发者照旧可以 push 覆盖，也可以用更小的 pack 替换。
+     *
+     * **只增不删是错的一半**：pack 尺寸会变（换基准尺寸、去掉某支卷），旧文件留着会在
+     * 胶卷库里多出几支"这台设备拍不了"的卷。所以用 [BUNDLED_MANIFEST] 记账，只清理
+     * **自己复制过、而这一版 APK 里已经没有**的那些；`adb push` 进来的不在这本账上，
+     * 不会被误删。
+     *
+     * 判定"要不要重写"靠清单里的字节数：每次启动都重写 1.2MB 是无谓的 IO，
+     * 而 `assets.open()` 的可用长度在压缩资源上不可靠，落盘后取 `length()` 才准。
+     *
+     * @return 本次实际写入的文件数（0 表示已是最新）。
+     */
+    fun provisionBundled(context: Context, directory: File): Int {
+        val assetNames = runCatching {
+            context.assets.list("")?.filter { it.endsWith(EXTENSION, ignoreCase = true) }.orEmpty()
+        }.getOrElse { error ->
+            Log.w(TAG, "列不出内置 pack：${error.message}")
+            emptyList()
+        }
+        if (assetNames.isEmpty()) return 0
+
+        val manifest = File(directory, BUNDLED_MANIFEST)
+        val previous = HashMap<String, Long>()
+        manifest.takeIf { it.isFile }?.forEachLine { line ->
+            val parts = line.trim().split(' ')
+            val size = parts.getOrNull(1)?.toLongOrNull()
+            if (parts.size == 2 && size != null) previous[parts[0]] = size
+        }
+
+        var copied = 0
+        val current = LinkedHashMap<String, Long>()
+        for (name in assetNames) {
+            val target = File(directory, name)
+            val expected = previous[name]
+            if (target.isFile && expected != null && target.length() == expected) {
+                current[name] = expected
+                continue
+            }
+            runCatching {
+                // 先写临时文件再换名：中途被杀不会留下半个 pack 被 scan 读到。
+                val temp = File(directory, "$name.tmp")
+                context.assets.open(name).use { input ->
+                    temp.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (!temp.renameTo(target)) {
+                    temp.copyTo(target, overwrite = true)
+                    temp.delete()
+                }
+                current[name] = target.length()
+                copied++
+            }.onFailure { Log.w(TAG, "内置 pack 落盘失败：$name", it) }
+        }
+
+        for (name in previous.keys - current.keys) {
+            val stale = File(directory, name)
+            if (stale.isFile && stale.delete()) Log.i(TAG, "移除已下线的内置 pack：$name")
+        }
+
+        runCatching {
+            manifest.writeText(current.entries.joinToString("\n") { "${it.key} ${it.value}" })
+        }
+        if (copied > 0) Log.i(TAG, "内置 pack 补齐 $copied 个，共 ${current.size} 个")
+        return copied
+    }
 
     /**
      * 列出目录里所有**能解析**的 pack。解析失败的直接跳过 —— 一个坏文件

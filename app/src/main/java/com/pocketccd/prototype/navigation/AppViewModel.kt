@@ -116,7 +116,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshStocks() {
         viewModelScope.launch {
-            val stocks = withContext(Dispatchers.IO) { FilmStockCatalog.scan(stockDirectory) }
+            val stocks = withContext(Dispatchers.IO) {
+                // 内置 pack 先落盘再扫描：第一次启动 / 重装后 files/film 是空的，
+                // 不补这一步别人装完只能看到"没有可用的胶卷"。
+                FilmStockCatalog.provisionBundled(getApplication(), stockDirectory)
+                FilmStockCatalog.scan(stockDirectory)
+            }
             _stocks.value = stocks
             if (stocks.none { it.id == _selectedStockId.value }) {
                 _selectedStockId.value = stocks.firstOrNull()?.id

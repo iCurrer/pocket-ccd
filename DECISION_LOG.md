@@ -1035,4 +1035,71 @@
     条目，否则会制造方向相反的同一种分叉。
 - **验证：** 单测 `GalleryReconcilerTest` 11 例覆盖"该删/绝不删"两个方向；
   真机待验（相册删一张 → 切回 App → 照片墙应消失）。
-- **复审触发：** 做 App 内删除时；或用户反馈"回收站还原后照片墙没有"。
+- **修订（2026-10-20，主链路复审）：** 原文的三条安全阀有两个漏洞，外加一条缺失的
+  顺序约束，三条都会**永久**删掉唯一一份照片：
+  1. **新增安全阀⓪：相册补齐没跑完时不对账。** `reconcileWithGallery()` 开头的
+     `KEY_BACKFILL_DONE` 检查。`AppViewModel.init` 在 IO 上异步补传，而 `AppRoot` 的
+     lifecycle 观察者挂在已经 RESUMED 的 lifecycle 上会立刻补发 `ON_RESUME`，
+     两条路径没有任何顺序约束：索引里只有"已补传完的那几张"，其余历史照片
+     "名字不在 + 时间不在 + 早过等待期" → 被当成用户已删除；补传随后读不到源文件，
+     标记却照样置位 → 永不恢复。**只在真实用户从旧版本升级时触发**。
+  2. **安全阀①补上"查询成功但 0 行"。** 原文只挡了游标 `null`，而 MediaProvider 重建
+     索引 / 卷重挂载 / 本应用 `owner_package_name` 记录丢失都会让查询"成功返回 0 行"，
+     那会整库删除。现在 `GalleryReconciler.staleIds` 在索引全空时返回空列表
+     （纯函数、可单测），`PhotoStore` 同时报 `queryOk=false`。
+     **代价写明白**：用户真把相册里本 App 的照片全删了，照片墙不会跟着清空。
+     宁可留一张幽灵照片，也不要清库。
+  3. **安全阀③落到实处：补传路径也要记账。** `syncToGallery()` 逐张
+     `markPublished(id, published != null)`，已经在相册里的记 `true`。原实现只在
+     拍摄路径记账，补传失败的照片既不在相册、也没有"没发布"记录 → 下一轮对账删掉唯一副本。
+  4. 单测里原来那条「空相册索引会删掉全部已发布的旧照片」**断言的是错误行为**，
+     已改写为「空相册索引一张都不删」，并补一条"只有时间戳没有文件名时仍按时间判活"。
+     `GalleryReconcilerTest` 11 → 12 例。
+- **复审触发：** 做 App 内删除时；或用户反馈"回收站还原后照片墙没有"；
+  或再次修改 `reconcileWithGallery` 的判定条件。
+
+---
+
+## D-048 — 分发形态：pack 内置进 APK + 基准尺寸降到 4000×3000
+
+- **日期：** 2026-10-20
+- **状态：** `ACCEPTED`（pack 重产部分待 CI 执行）
+- **类型：** 分发 / 兼容性
+- **背景：**
+  - 此前 pack 只能 `adb push` 到 `Android/data/<pkg>/files/film/`。把同一个 APK 装到
+    别人手机上，胶卷库是 0 卷、快门永久置灰 —— 看起来像"装了个打不开的相机"。
+  - 且已有的三套 pack 都是 `4096×3072`，而 12MP 主流档（`4000×3000` / `4080×3060`）
+    比它**小**，按 D-037「采集尺寸必须 ≥ pack」的判定直接拍不了。
+  - D-037 禁的是缩放、不是裁切，所以"降基准尺寸 + 裁切"是允许的，且是唯一正确解法。
+- **决定：**
+  1. **pack 内置进 APK 的 assets**（`app/build.gradle.kts` 把 `prebuilt/fotufilm/packs`
+     加进 `sourceSets.main.assets`），首次启动由 `FilmStockCatalog.provisionBundled()`
+     复制到 `files/film/`。运行期**仍以 `files/film/` 为唯一事实来源**，`adb push`
+     覆盖通路保留 —— assets 只是初装种子，不是第二套数据源。
+  2. **用 `bundled_packs_v1.txt` 记账**（`文件名 字节数`）：换一版 pack 时清掉"上一版
+     内置过、这一版没有了"的文件，且**只清自己复制过的**，`adb push` 进来的不动。
+     没有这本账，降尺寸后胶卷库里会永远多出三支"这台机器拍不了"的卷。
+  3. **pack 基准尺寸从 `4096×3072` 改为 `4000×3000`**。覆盖面从"≥ 12.58MP"放宽到
+     "≥ 12MP"，代价是 `PJZ110` 这类 12.58MP 机型中心裁掉 1.5% 线性（肉眼不可见）。
+     这是**为分发必须付的税**：只服务一台机器的 pack，换台机器一张都拍不出来。
+  4. **ABI 维持 `arm64-v8a`**。minSdk 29（Android 10）已经挡掉绝大多数 32 位老机，
+     为 `armeabi-v7a` 再跑一遍 Halide AOT 的收益不抵维护成本。真要做时是
+     `generate_halide_android --arm32` + `abiFilters`，不需要动管线。
+- **不做的事：**
+  - **运行时不缩放**（D-037 未变）。采集尺寸 < pack 依旧明确失败，错误消息里同时给
+    设备尺寸与 pack 尺寸。
+  - **不把胶卷库做成"每支卷一行、内部挑尺寸变体"** —— 那是多档 pack 落地后的事，
+    没有第二套 pack 之前实现它没法验证。方案见 `docs/fotufilm-multi-device-plan.md` §4。
+- **后果：**
+  - 别人装 `app-benchmark.apk` 打开即有三支卷，不需要 adb、不需要电脑。
+  - APK 体积 +5.5 MB（3 个 pack）。
+  - **许可义务变成硬性**：pack 是 film profile 的改编，按 CC BY-SA 4.0 分发，必须署名
+    Fotufilm / MUAStudio Inc.、声明是否修改、且不得用技术手段阻止用户取出或替换这些文件
+    （所以 `files/film/` 必须保持可读写）。App 内目前**还没有**"开源与素材声明"页，
+    **对外分发前必须补上**。
+  - 已拍照片仍留在旧 pack 尺寸下：换 pack 不会重冲洗历史照片，`StockLabel` 从文件名解析，
+    不受影响。
+- **验证：** `assembleDebug` / `assembleBenchmark` 均在 HEAD 通过；`unzip -l` 可见
+  `assets/gold200__4096x3072.fswp` 等三项与 `lib/arm64-v8a/libfotufilm_android.so`。
+  真机首启落盘待验（`adb logcat -s FilmStockCatalog` 应出现"内置 pack 补齐 3 个"）。
+- **复审触发：** 做多档 pack 时；上架应用商店时；ABI 需要扩到 32 位时。
