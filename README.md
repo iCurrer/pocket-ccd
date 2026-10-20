@@ -20,23 +20,26 @@
 </p>
 
 左一：取景页（`PJZ110` 真机，`GOLD 200 · 4096×3072`，本卷 `5 / 36 EXP`）。
-左二：点按变焦档位后的 Toast 反馈，倍率取实际生效值，不是按钮上写的值。
+左二：点按变焦后的 Toast。**这张拍于 D-044 之前**，档位还是固定 `1x / 2x`；现在按钮上
+是该机真实光学档位 + 等效焦距。Toast 里那个倍率始终是 `setZoomRatio` 的**实际生效值**，
+不是按钮上写的数字。
 左三：胶卷库。整页唯一一块**反色金属面板**承载"已装卷"，下面是按卷分组的画格列表。
 
 > 拍于 2026-10-19 / 10-20。变焦档位已由固定 `1x / 2x` 改为**该机真实光学档位 + 等效焦距**
-> （一加 13 应为 `0.6× 15mm / 1× 23mm / 3.2× 73mm`，见 D-044）。
+> （一加 13 应为 `0.6× 15mm / 1× 23mm / 3.2× 73mm`，见 D-044）——代码已落地，
+> 真机镜头表待打印，所以上面第二张暂时还是旧档位的样子。
 > 成片页 / 照片墙 / 设置页已重写为暗色，但这三页的真机截图仍待补（T9-018..020）——
 > **没有真机截图的一律不算验证过**。
 
 ---
 
-## 当前状态（2026-10-20 20:50）
+## 当前状态（2026-10-20 21:00）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
 | 取景页（暗色胶片相机） | 完成 | 真机截图；CameraX `attached=4096x3072`，预览是真实画面 |
 | 拍照 → 冲洗 → 落盘 → 系统相册 | 完成 | 真机端到端；`3072×4096 / 3.16 MB`，私有目录 + `Pictures/Pocket CCD/` 各一份 |
-| 取景页交互（点按对焦 / 变焦 / 九宫格 / 闪白） | 完成 | 真机逐项验证，见 [`docs/interaction-spec.md`](docs/interaction-spec.md) |
+| 取景页交互（点按对焦 / 变焦手势 / 九宫格 / 闪白） | 完成 | 真机逐项验证，见 [`docs/interaction-spec.md`](docs/interaction-spec.md)。**档位来源已按 D-044 重写**，档位表本身尚未在真机打印过（见下） |
 | 成片方向 | 完成 | `capture rotation: sensor=90 display=0 -> 90°` |
 | 胶卷库（`FILMS`，换卷页） | 完成 | T9-016 真机四项：三卷渲染 / 装卷后卷名与左下角标同步 / 顶栏相册入口 / 返回回库，截图 [`2026-10-20-films-library.png`](docs/screenshots/2026-10-20-films-library.png) |
 | 卷计数与换卷口径（D-046） | 完成 | 真机连切三卷：`5/36 → 0/36 → 5/36`；只按时间过滤会串号，必须同时按当前卷过滤 |
@@ -108,7 +111,8 @@ files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本�
    系统相册是给外面看的。`Android/data/` 被媒体扫描明确排除，只写它等于
    "拍完只有本 App 看得到"。而两份副本之间没有同步机制时，用户在系统相册里删掉一张、
    照片墙会一直显示它——所以每次回前台和进照片墙都要对一次账（D-047）。
-   详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §10。
+   两份副本的分工见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §10，
+   判活规则与三条安全阀见 [`DECISION_LOG.md`](DECISION_LOG.md) 的 D-047。
 
 ### 为什么必须分块（halo 不能省）
 
@@ -195,8 +199,9 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
   加载——这是 pack 与引擎版本不匹配最早的报警点。
 - 12MP 的 pack 尾部还多 36–42 KB 附加段。顺序读取不受影响（总长校验用 `>=`）。
 
-**一个 pack 只对头部记录的尺寸有效**（D-037）。扩散半径是"毫米 × 该帧 pixels-per-mm"，
-换尺寸等于换了一套光学系统，所以绝不缩放。
+**一个 pack 的空间参数只在头部记录的帧尺寸下成立**（D-037）。扩散半径是
+「毫米 × 该帧 pixels-per-mm」，所以设备采集尺寸可以**比它大**（多出来的中心裁掉，
+密度不变），但绝不能把任何一帧**缩放**成这个尺寸。
 
 ---
 
@@ -230,7 +235,7 @@ fotufilm --dump-wasm-pack <out>.fswp --stock gold200 --pack-size 4096x3072
 ```
 
 CI 里由 `.github/workflows/fotufilm-android-native.yml` 的 `packs` job 执行，`pack_size`
-默认值取自目标机实测（见下文 D-037 一节）。pack 内容纯参数序列化，与平台无关，
+默认值取自目标机实测（见〈硬约束〉里的 D-037）。pack 内容纯参数序列化，与平台无关，
 所以能在 macOS 生成、在 Linux 与手机上下载使用。
 
 ### 2. AOT 内核与 `.so`（Linux）
@@ -323,9 +328,10 @@ export JAVA_HOME="/d/software/Android/Android Studio/jbr"
 
 ### 让相机能拍照
 
-APK 只解决"能跑"，能拍照还需要**与这台设备分辨率精确相等的 pack**。pack 不进 APK，
-也不进仓库：尺寸随设备最大 JPEG 变（换机型就要重产），且它是上游代码与 CC BY-SA 胶片数据的
-派生结果，分发口径受限。首次补齐（`prebuilt/` 为空时）见
+APK 只解决"能跑"，能拍照还需要**帧尺寸不超过这台设备最大 JPEG 的 pack**（相等最省事；
+设备更大就中心裁掉多余部分）。pack 不进 APK，也不进仓库：帧尺寸是"能服务的最大像素密度"，
+只有**目标机群里有更小的机型**才需要重产一套更小的，设备更大则靠裁切；且它是上游代码与
+CC BY-SA 胶片数据的派生结果，分发口径受限。首次补齐（`prebuilt/` 为空时）见
 [`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md)，然后放进设备私有目录：
 
 ```bash
@@ -334,7 +340,9 @@ adb push prebuilt/fotufilm/packs/*__4096x3072.fswp \
 adb shell am force-stop com.pocketccd.prototype
 ```
 
-`FilmStockCatalog` 会扫描该目录，并在相机绑定后自动选中尺寸精确匹配的卷。
+`FilmStockCatalog` 会扫描该目录（文件名排序，跳过 <1 MP 的引擎夹具），并在相机绑定后
+自动选中**第一支设备能服务（采集尺寸 ≥ pack）**的卷。一台机器上只放一套同尺寸的 pack
+时，这就是唯一的卷；同时放了几套不同尺寸的，选中顺序按文件名，不按"离设备最近"排序。
 目录由 App 自己 `mkdirs()` —— 用 `adb shell mkdir` 建的目录属主是 `shell`、模式 `drwxrws---`，
 App 透过 FUSE 列不出内容且**不报错**（表现为 `packCount=0`）。
 
@@ -384,7 +392,11 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 
 ## 硬约束
 
-- **D-037**：pack 尺寸 = 采集尺寸，精确相等，不允许缩放。
+- **D-037（含裁切修订）**：pack 的帧尺寸是**像素密度基准**，不是"必须逐像素相等"。
+  采集尺寸 ≥ pack → 中心裁切；< pack → 明确失败并说明差在哪；**任何情况下都不缩放**。
+  原措辞"采集分辨率必须与 pack 严格相等"已被裁切适配取代（`decodeJpeg` 三态，
+  见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §2.2）——
+  裁切不改 pixels-per-mm，空间参数依然成立；缩放会改，等于换了一套光学系统。
 - **D-036 / D-041**：预览永远是原色。取景器上只有一层**不碰任何像素**的暗角，
   不套 `ColorMatrix` 近似色调——想看这卷拍出来什么样，只能看成片页。
 - **D-044：不做物理镜头绑定**。pack 的扩散/晕光/颗粒半径按「毫米 × 该帧 pixels-per-mm」
@@ -440,7 +452,7 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 | [`TASK_BOARD.md`](TASK_BOARD.md) | 任务、前置、验收、证据 |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | 当前进度、阻塞、下一步 |
 | [`TEST_PLAN.md`](TEST_PLAN.md) | 测试层级与性能协议 |
-| [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) | 相机链路、D-037 的三道闸、方向补偿、手测清单 |
+| [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) | 相机链路、D-037 的落地（首绑不约束 / 裁切而非缩放）、方向补偿、相册写入、手测清单 |
 | [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md) | 真机耗时/内存/正确性数据 |
 | [`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md) | CI 两个 job 的触发与 artifact 说明 |
 | [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md) | 上游与胶片数据的许可口径 |
