@@ -74,7 +74,12 @@ fun FilmCaptureScreen(
     onToggleFlash: () -> Unit,
     onToggleGrid: () -> Unit,
     onOpenGallery: () -> Unit,
-    onCycleStock: () -> Unit,
+    /**
+     * 打开胶卷库（T9-016）。原来的行为是"点一下切到下一卷"，卷多了以后
+     * 要连点好几次才知道切到了哪一卷；改为进库挑选。pill 自带 `ChevronRight`，
+     * 视觉本来就是"进入"，不是"切换"。
+     */
+    onOpenFilms: () -> Unit,
     onNewRoll: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -161,7 +166,7 @@ fun FilmCaptureScreen(
                     active = gridOn,
                 )
             }
-            StockPill(name = stockName, onClick = onCycleStock)
+            StockPill(name = stockName, onClick = onOpenFilms)
             FilmRoundButton(
                 icon = FilmIconKind.Tune,
                 onClick = onOpenSettings,

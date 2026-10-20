@@ -103,4 +103,29 @@ class AppStateTest {
         val state = AppUiState()
         assertEquals(state, reduce(state, AppEvent.NavigateBack))
     }
+
+    @Test
+    fun cameraOpensFilmsAndBackReturnsCamera() {
+        val films = reduce(AppUiState(), AppEvent.OpenFilms)
+        assertEquals(AppDestination.FILMS, films.destination)
+
+        val back = reduce(films, AppEvent.NavigateBack)
+        assertEquals(AppDestination.CAMERA, back.destination)
+    }
+
+    @Test
+    fun filmsIgnoresGalleryAndSettings() {
+        val films = reduce(AppUiState(), AppEvent.OpenFilms)
+        assertEquals(AppDestination.FILMS, reduce(films, AppEvent.OpenGallery).destination)
+        assertEquals(AppDestination.FILMS, reduce(films, AppEvent.OpenSettings).destination)
+    }
+
+    @Test
+    fun openFilmsOnlyFromCamera() {
+        val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
+        assertEquals(AppDestination.GALLERY, reduce(gallery, AppEvent.OpenFilms).destination)
+
+        val result = reduce(AppUiState(), AppEvent.OpenResult)
+        assertEquals(AppDestination.RESULT, reduce(result, AppEvent.OpenFilms).destination)
+    }
 }

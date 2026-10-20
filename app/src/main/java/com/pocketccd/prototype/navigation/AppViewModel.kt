@@ -117,16 +117,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * 装卷。胶卷库（T9-016）点某一卷时走这里。
+     *
+     * 已删除 `nextStock()`：取景页的卷名 chip 改为打开胶卷库（它自带 `ChevronRight`，
+     * 视觉本来就是"进入"）。循环切卷在超过两卷后只能靠记忆数点击次数。
+     */
     fun selectStock(id: String) {
         if (_stocks.value.any { it.id == id }) _selectedStockId.value = id
-    }
-
-    /** 切到下一卷。相机页的卷名 chip 点一下就走这里。 */
-    fun nextStock() {
-        val stocks = _stocks.value
-        if (stocks.isEmpty()) return
-        val index = stocks.indexOfFirst { it.id == _selectedStockId.value }
-        _selectedStockId.value = stocks[(index + 1).mod(stocks.size)].id
     }
 
     /** 换卷：计数器归零，照片库不动。相机页底部的「换卷」磁贴走这里。 */

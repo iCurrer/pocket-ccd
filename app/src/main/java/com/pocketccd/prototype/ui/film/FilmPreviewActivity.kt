@@ -59,7 +59,7 @@ class FilmPreviewActivity : ComponentActivity() {
                     onToggleFlash = { flashOn = !flashOn },
                     onToggleGrid = { gridOn = !gridOn },
                     onOpenGallery = {},
-                    onCycleStock = {},
+                    onOpenFilms = {},
                     onNewRoll = { shots = 0 },
                     onOpenSettings = {},
                     viewfinder = { DemoNightScene(it) },

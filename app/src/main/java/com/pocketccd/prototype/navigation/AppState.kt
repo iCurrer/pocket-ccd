@@ -13,6 +13,12 @@ enum class AppDestination {
     GALLERY,
     RESULT,
     SETTINGS,
+
+    /**
+     * 胶卷库（换卷页，T9-016）。设备上实际有几卷取决于推了几个 pack，
+     * 所以这页的数量永远是运行时读出来的，不写死。
+     */
+    FILMS,
 }
 
 sealed interface AppEvent {
@@ -22,6 +28,7 @@ sealed interface AppEvent {
     data object OpenGallery : AppEvent
     data object OpenSettings : AppEvent
     data object OpenResult : AppEvent
+    data object OpenFilms : AppEvent
     data object NavigateBack : AppEvent
 }
 
@@ -48,7 +55,7 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
             destination = AppDestination.GALLERY,
             galleryOrigin = state.destination,
         )
-        AppDestination.SETTINGS -> state
+        AppDestination.SETTINGS, AppDestination.FILMS -> state
     }
 
     AppEvent.OpenSettings -> when (state.destination) {
@@ -65,6 +72,12 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         else -> state
     }
 
+    // 只从取景页进：换卷是"拍之前"的动作，从相册或成片页进去没有意义。
+    AppEvent.OpenFilms -> when (state.destination) {
+        AppDestination.CAMERA -> state.copy(destination = AppDestination.FILMS)
+        else -> state
+    }
+
     AppEvent.NavigateBack -> when (state.destination) {
         // CAMERA is the root: [BackHandler] stays disabled so the system can
         // finish the activity instead of looping inside the app.
@@ -72,5 +85,7 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         AppDestination.SETTINGS -> state.copy(destination = AppDestination.CAMERA)
         AppDestination.GALLERY -> state.copy(destination = state.galleryOrigin)
         AppDestination.RESULT -> state.copy(destination = state.resultOrigin)
+        // 装卷/不装卷都回取景器：换完卷就该继续拍。
+        AppDestination.FILMS -> state.copy(destination = AppDestination.CAMERA)
     }
 }

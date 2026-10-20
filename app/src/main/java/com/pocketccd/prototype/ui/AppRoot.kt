@@ -54,6 +54,7 @@ import com.pocketccd.prototype.ui.film.FilmCaptureScreen
 import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.ShutterFlash
+import com.pocketccd.prototype.ui.film.films.FilmLibraryScreen
 import com.pocketccd.prototype.ui.gallery.PhotoWallItem
 import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
@@ -201,8 +202,8 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         },
         zoom = zoomRatio,
         lensStops = lensStops,
-        onCycleStock = viewModel::nextStock,
         onNewRoll = viewModel::newRoll,
+        onSelectStock = viewModel::selectStock,
         onRetry = viewModel::retry,
         onRefreshStocks = viewModel::refreshStocks,
         onRefreshRoll = viewModel::refreshRoll,
@@ -223,7 +224,8 @@ fun PocketCcdApp(
     cameraViewfinder: (@Composable (Modifier) -> Unit)? = null,
     onShutter: () -> Unit = {},
     onFlashChange: (Boolean) -> Unit = {},
-    onCycleStock: () -> Unit = {},
+    /** 装卷。胶卷库点某一卷时调用，装完由调用方负责回到取景页。 */
+    onSelectStock: (String) -> Unit = {},
     onNewRoll: () -> Unit = {},
     onRetry: () -> Unit = {},
     onRefreshStocks: () -> Unit = {},
@@ -304,7 +306,7 @@ fun PocketCcdApp(
                         },
                         onToggleGrid = { gridOn = !gridOn },
                         onOpenGallery = { onEvent(AppEvent.OpenGallery) },
-                        onCycleStock = onCycleStock,
+                        onOpenFilms = { onEvent(AppEvent.OpenFilms) },
                         onNewRoll = onNewRoll,
                         onOpenSettings = { onEvent(AppEvent.OpenSettings) },
                         cameraLive = cameraLive,
@@ -363,6 +365,21 @@ fun PocketCcdApp(
                                 stockCount = cameraUi.stocks.size,
                                 onRefreshStocks = onRefreshStocks,
                             )
+
+                            AppDestination.FILMS -> {
+                                // 进库先重扫：用户可能刚用 adb 推了新卷进来。
+                                LaunchedEffect(Unit) { onRefreshStocks() }
+                                FilmLibraryScreen(
+                                    stocks = cameraUi.stocks,
+                                    selectedStockId = stock?.id,
+                                    shotsTaken = rollShots,
+                                    rollCapacity = ROLL_CAPACITY,
+                                    onBack = { onEvent(AppEvent.NavigateBack) },
+                                    onSelect = onSelectStock,
+                                    onNewRoll = onNewRoll,
+                                    onRefresh = onRefreshStocks,
+                                )
+                            }
 
                             AppDestination.CAMERA -> Unit
                         }
