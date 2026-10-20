@@ -7,65 +7,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Stamped/embossed toy-camera labels: rounded sans, tight caps, a little
- * tracking. Avoid monospace "web HUD" typography.
+ * Material 兜底字型。页面自己的字号走 [com.pocketccd.prototype.ui.film.FilmType]
+ * （等宽参数排版 + 香槟金）。这里只保证 M3 内建组件（对话框正文、Snackbar）
+ * 与界面的无衬线字感一致。
  */
-object PocketCcdType {
-    val Brand = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
-        fontSize = 18.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 3.sp,
-    )
-
-    val MonoLabel = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 10.sp,
-        lineHeight = 13.sp,
-        letterSpacing = 1.2.sp,
-    )
-
-    val MonoMicro = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 8.sp,
-        lineHeight = 11.sp,
-        letterSpacing = 0.7.sp,
-    )
-
-    val SettingsTitle = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = (-0.2).sp,
-    )
-
-    val RowTitle = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 15.sp,
-        lineHeight = 20.sp,
-    )
-
-    val RowSubtitle = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-    )
-
-    val SectionLabel = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 1.sp,
-    )
-}
-
 val PocketCcdTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,

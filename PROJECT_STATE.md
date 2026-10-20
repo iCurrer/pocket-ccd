@@ -1,18 +1,19 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-19 22:56（Asia/Shanghai）
-**当前阶段：** M1 进行中（首页/拍摄页静态 UI 已完成代码；其余页面与手势细化未完成）；**M9 暗色胶片 UI 已接管默认入口并接入真实相机**（真机全链路通过；**取景页交互层已落地并逐项验证**：点按对焦 / 真变焦 / 开关+Toast / 90ms 闪白，见 `docs/interaction-spec.md` §2.1.1；成片页/照片墙/设置页仍待暗色化）  
-**规范版本：** `DEVELOPMENT_SPEC.md` V1.0  
-**工作区：** `D:\Android\pocket ccd`  
-**Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）  
-**App 代码：** Compose 空壳 + 导航状态机 + 红色玩具材质 + `CameraStageScreen`（首页/拍摄共用机身）+ 照片墙 + 成片页 + 设置页（`MainActivity` + `AppRoot` + `ToyCameraBody`/`ToyScreen`/`ToyRoundButton`）
-**已执行 App 构建/测试：** `assembleDebug` / `assembleBenchmark` 通过；`AppStateTest` 12/12；已在 `PJZ110` 真机安装/启动、截图、下拉进入拍摄页；**Fotufilm 12MP 已真机实测**（3 个 stock，单帧 2.0–3.2 s，峰值 RSS 373–463 MB）；相机采集（FOT-007）与 Compose UI 测试未执行
+**快照时间：** 2026-10-20 23:50（Asia/Shanghai）
+**当前阶段：** **M9 暗色胶片 UI 已完全接管**：四个页面（取景/成片/照片墙/设置）全部走 `FilmTheme`，旧红色玩具机身代码已删除（T9-022）。相机链路 + 多机型分发收官（D-048），两台真机端到端通过。**取景页交互层已落地并逐项验证**（点按对焦 / 真变焦 / 开关+Toast / 90ms 闪白，见 `docs/interaction-spec.md` §2.1.1）
+**规范版本：** `DEVELOPMENT_SPEC.md` V1.0
+**工作区：** `D:\Android\pocket ccd`
+**Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）
+**App 代码：** Compose + 导航状态机 + `FilmTheme`（近黑 `#0B0C0E` / 香槟金 `#E7B37A`）；`MainActivity` → `ui/AppRoot.kt` → `ui/film`（取景）、`ui/result`、`ui/gallery`、`ui/settings`。`ui/theme` 只剩 M3 兜底（暗色 scheme + 字型 + 圆角），旧 `ui/stage`、`ui/components` 已删
+**已执行 App 构建/测试：** `assembleBenchmark` 通过（40.7 MB，含 3 份 `4000×3000` pack + arm64 内核）；单测 **28/28**（`AppStateTest` 16 + `GalleryReconcilerTest` 12）；真机端到端：`PJZ110` 3909 ms / 华为 `FOA-AL00` 5831 ms（24 strips / 4000×3000），成片 `3000×4000` 正立并进系统相册
+
 
 ---
 
 ## 1. 一句话状态
 
-规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。**相机采集链路（FOT-007）已实现并在真机完成绑定验证**：CameraX Preview + ImageCapture → JPEG → 尺寸校验 → `FilmEngine` → 落盘 → 成片页/照片墙。真机实测 `attached=4096x3072`、预览为真实画面；但 **PJZ110 最大 JPEG 是 4096×3072，没有 4000×3000**，按 D-037（尺寸必须精确相等）现役三卷 pack 在该机上不可拍，**端到端冲洗被 FOT-016 阻塞**（需用 CI `pack_size=4096x3072` 重产）。剩余口径缺口是 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)，相机链路见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md)。
+规范/任务板/决策/测试计划/状态文档已建立，Compose 原型可构建。M8 Fotufilm 原生移植的**构建侧与运行时侧均已收口**：GitHub Actions run `39198895398` 全绿，已产出 12MP FSWP packs、arm64 AOT kernels 和 `libfotufilm_android.so`（5,874,424 B，AArch64 + 9 个 JNI 导出）。**真机已接入并完成 12MP 实测**（`PJZ110`，arm64-v8a / API 37 / 10.9GB RAM / 8 核）：`FotufilmNative` + `FilmPack` + `FilmEngine` 已接上，3 个 12MP stock 全部渲染成功、`nonFinite=0`、单帧 2.0–3.2 s、峰值 RSS 373–463 MB，FOT-004 / FOT-005 标 `DONE`。**相机采集链路（FOT-007）已实现并端到端跑通**：CameraX Preview + ImageCapture → JPEG → 尺寸适配 → `FilmEngine` → 落盘 → 成片页/照片墙。真机实测 `attached=4096x3072`。**尺寸口径已改（FOT-018 / D-037〈修订〉）**：pack 的空间参数是「毫米 × 该帧 pixels-per-mm」，所以**禁缩放、允许中心裁切** —— 采集尺寸 ≥ pack 时裁到 pack 尺寸，< pack 时才明确失败。现役三卷 pack 已于 2026-10-20 重产为 `4000×3000`（FOT-022），`PJZ110` 的 4096×3072 采集裁掉 1.5% 线性。**多机型分发已真机验证**（D-048 / FOT-021）：pack 内置进 APK assets，首启自动释放到 `files/film/`，`PJZ110` 与华为 `FOA-AL00` 不连电脑装上即拍。剩余口径缺口是 Rec.2020（FOT-006）。基准数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)，相机链路见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md)。
 
 ---
 

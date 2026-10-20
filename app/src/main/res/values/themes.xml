@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.PocketCCD" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#D9382E</item>
-        <item name="android:colorAccent">#E8872E</item>
+    <!--
+      windowBackground 必须是 Compose 首帧的底色（FilmPalette.appBg = 0x0B0C0E）。
+
+      这里曾经是旧红色玩具机身的主色 #D9382E。窗口背景在 setContent 之前就已经
+      画出来了，Compose 首帧要等 Activity 创建 + ViewModel 首次扫卷 + 权限判断，
+      冷启动那一两百毫秒露的就是这个值 —— 表现成「启动闪一下红」。
+      换 UI 主题时 Compose 里的颜色改了、这个 XML 值不会跟着变，是最容易漏的一处。
+
+      父主题用深色 Material：Compose 之外的系统控件（权限对话框、文本选择柄、
+      启动预览）会跟着走暗色，不会在近黑界面上闪出白底。
+    -->
+    <style name="Theme.PocketCCD" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0C0E</item>
+        <item name="android:colorAccent">#E7B37A</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
