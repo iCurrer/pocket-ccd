@@ -51,11 +51,11 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
 
     AppEvent.OpenGallery -> when (state.destination) {
         AppDestination.GALLERY -> state
-        AppDestination.CAMERA, AppDestination.RESULT -> state.copy(
+        AppDestination.CAMERA, AppDestination.RESULT, AppDestination.FILMS -> state.copy(
             destination = AppDestination.GALLERY,
             galleryOrigin = state.destination,
         )
-        AppDestination.SETTINGS, AppDestination.FILMS -> state
+        AppDestination.SETTINGS -> state
     }
 
     AppEvent.OpenSettings -> when (state.destination) {

@@ -52,22 +52,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** 本卷起点。UI 只关心"这卷拍了几张"，所以起点本身留在内部。 */
     private val _rollStartedAt = MutableStateFlow(photoStore.rollStartedAt())
 
+    private val _stocks = MutableStateFlow<List<FilmStock>>(emptyList())
+    private val _selectedStockId = MutableStateFlow<String?>(null)
+    private val _camera = MutableStateFlow<CameraState>(CameraState.Pending)
+
     /**
      * 本卷已拍张数。**不是**照片库总数——库里有 35 张，不代表这卷只剩 1 张。
      * 计数器、进度条、满卷判断都以它为准。
+     *
+     * 必须同时按**当前胶卷**过滤：一卷的物理定义是「一支胶卷 + 一次装卷」，
+     * 只按时间过滤的话，切到另一支卷之后计数器会把上一支卷的曝光数算进来
+     * （真机上切到 PORTRA 400 时仍显示 `7 / 36`，而那 7 张是 GOLD 200 拍的）。
      */
     val rollShots: StateFlow<Int> =
-        combine(_roll, _rollStartedAt) { roll, startedAt ->
-            roll.count { it.capturedAt > startedAt }
+        combine(_roll, _rollStartedAt, _selectedStockId) { roll, startedAt, stockId ->
+            roll.count { it.capturedAt > startedAt && (stockId == null || it.stockId == stockId) }
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0,
         )
-
-    private val _stocks = MutableStateFlow<List<FilmStock>>(emptyList())
-    private val _selectedStockId = MutableStateFlow<String?>(null)
-    private val _camera = MutableStateFlow<CameraState>(CameraState.Pending)
 
     val cameraUi: StateFlow<CameraUiState> =
         combine(_stocks, _selectedStockId, _camera, _capture) { stocks, selected, camera, capture ->

@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -13,7 +14,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Nine hand-drawn icons instead of `material-icons-extended`.
+ * Hand-drawn icons instead of `material-icons-extended`.
  *
  * The extended pack is ~2.5 MB and its filled style does not match the thin
  * line icons in the design. Nine paths are cheaper than one dependency, and
@@ -32,6 +33,9 @@ enum class FilmIconKind {
     Close,
     Check,
     ChevronRight,
+
+    /** 相机机身 + 镜头，用于「继续拍摄」。原型取自 mdi:camera-outline。 */
+    Camera,
 }
 
 @Composable
@@ -152,6 +156,31 @@ fun FilmIcon(
                     lineTo(9f * s, 19f * s)
                 }
                 drawPath(path, tint, style = Stroke(width = w))
+            }
+
+            FilmIconKind.Camera -> {
+                // 机身描边 + 顶部取景凸起 + 镜头圆。凸起画成折线而不是矩形，
+                // 因为 14dp 下两条横线挨在一起会被抗锯齿抹成一根粗线。
+                drawRoundRect(
+                    color = tint,
+                    topLeft = o(3f, 7f),
+                    size = Size(18f * s, 13f * s),
+                    cornerRadius = CornerRadius(2.4f * s, 2.4f * s),
+                    style = Stroke(width = w),
+                )
+                val bump = Path().apply {
+                    moveTo(8.6f * s, 7f * s)
+                    lineTo(9.5f * s, 4.4f * s)
+                    lineTo(14.5f * s, 4.4f * s)
+                    lineTo(15.4f * s, 7f * s)
+                }
+                drawPath(bump, tint, style = Stroke(width = w))
+                drawCircle(
+                    color = tint,
+                    radius = 3.5f * s,
+                    center = o(12f, 13.5f),
+                    style = Stroke(width = w),
+                )
             }
         }
     }

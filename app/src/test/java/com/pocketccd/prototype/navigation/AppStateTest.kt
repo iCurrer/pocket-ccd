@@ -114,9 +114,19 @@ class AppStateTest {
     }
 
     @Test
-    fun filmsIgnoresGalleryAndSettings() {
+    fun filmsOpensGalleryAndBackReturnsToFilms() {
+        // 库里顶栏右侧就是相册入口（原型 films.html 的 image-multiple 按钮），
+        // 所以这里必须能进相册；返回要回到库，而不是掉回取景器。
         val films = reduce(AppUiState(), AppEvent.OpenFilms)
-        assertEquals(AppDestination.FILMS, reduce(films, AppEvent.OpenGallery).destination)
+        val gallery = reduce(films, AppEvent.OpenGallery)
+        assertEquals(AppDestination.GALLERY, gallery.destination)
+
+        assertEquals(AppDestination.FILMS, reduce(gallery, AppEvent.NavigateBack).destination)
+    }
+
+    @Test
+    fun filmsIgnoresSettings() {
+        val films = reduce(AppUiState(), AppEvent.OpenFilms)
         assertEquals(AppDestination.FILMS, reduce(films, AppEvent.OpenSettings).destination)
     }
 

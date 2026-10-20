@@ -55,6 +55,7 @@ import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.ShutterFlash
 import com.pocketccd.prototype.ui.film.films.FilmLibraryScreen
+import com.pocketccd.prototype.ui.film.films.StockUsage
 import com.pocketccd.prototype.ui.gallery.PhotoWallItem
 import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
@@ -242,6 +243,19 @@ fun PocketCcdApp(
     val shooting = destination == AppDestination.CAMERA
     val stock = cameraUi.activeStock
 
+    // 胶卷库每行的画格用「该卷最新一张真实成片」。按 stockId 归组，
+    // 没有成片的卷不会出现在这张表里 —— 库里退回画胶卷筒，而不是编一张示意图。
+    val stockUsage = remember(roll) {
+        roll.groupBy { it.stockId }.mapValues { (_, photos) ->
+            val latest = photos.maxByOrNull { it.capturedAt }
+            StockUsage(
+                shots = photos.size,
+                latestThumbnail = latest?.thumbnailFile?.takeIf { it.isFile },
+                lastCapturedAt = latest?.capturedAt,
+            )
+        }
+    }
+
     // Flash and grid live here, not inside the screen: they survive the
     // viewfinder being covered by the result page.
     var flashOn by remember { mutableStateOf(false) }
@@ -378,6 +392,8 @@ fun PocketCcdApp(
                                     onSelect = onSelectStock,
                                     onNewRoll = onNewRoll,
                                     onRefresh = onRefreshStocks,
+                                    onOpenGallery = { onEvent(AppEvent.OpenGallery) },
+                                    usage = stockUsage,
                                 )
                             }
 
