@@ -387,6 +387,10 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
   而前者只在 4096×3072 的机器上裁掉 1.5% 线性视野（详见 docs §2.2）。
 - **方向**用 `CameraCharacteristics.SENSOR_ORIENTATION` 算，不用 CameraX 的
   `sensorRotationDegrees`（后者在 `targetRotation = ROTATION_0` 时返回 0，与实测矛盾）。
+- **成片写两份，且必须对账**（D-047）。私有 `files/Pictures/pocket-ccd/` 是照片墙的
+  唯一数据源，系统 `Pictures/Pocket CCD/` 是给外面看的副本。两份之间没有同步机制时，
+  用户在系统相册里删掉一张，照片墙会一直显示它。`reconcileWithGallery()` 在回前台和
+  进照片墙时各对一次账；**媒体库查询失败时一张都不删**，宁可不同步也不能清空照片库。
 - 未实际执行的构建/测试/真机拍摄，不得标记为"通过"。
 
 ---
