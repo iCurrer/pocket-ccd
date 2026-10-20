@@ -39,6 +39,18 @@ data class SavedPhoto(
 )
 
 /**
+ * 一次相册对账的结果。
+ *
+ * `queryOk == false` 表示 MediaStore 索引读不到，本轮**什么都没删**——这种情况
+ * 要能区分出来，否则"照片还在"和"对账失败"在日志里长得一样。
+ */
+data class ReconcileReport(
+    val removed: Int,
+    val kept: Int,
+    val queryOk: Boolean,
+)
+
+/**
  * 成片落盘：**写两份**。
  *
  * 1. **应用私有目录**（`Android/data/<pkg>/files/Pictures/pocket-ccd/`）是权威副本，
@@ -96,6 +108,8 @@ class PhotoStore(context: Context) {
             // 相册副本从**已经落盘的文件**复制，不重新编码位图：12MP 再压一次要多花
             // 约 300ms 和一份 48MB 临时位图，而字节内容完全一样。
             val galleryUri = publishToGallery(full, "$id.jpg", capturedAt)
+            // 记账：这张到底进没进过相册。对账时"相册里没有"才敢当删除证据。
+            markPublished(id, galleryUri != null)
 
             // 缩略图长边 1440：够成片页铺满、够照片墙网格，内存只有原图的 1/7。
             // 从**旋转之后**的图生成，否则会出现"大图正、小图躺"。
@@ -224,6 +238,127 @@ class PhotoStore(context: Context) {
     }.getOrDefault(false)
 
     /**
+     * 和系统相册对账：**用户在系统相册里删掉的成片，私有副本也一起删掉**。
+     *
+     * 为什么需要它：成片写两份（D-019）——私有目录是照片墙的数据源，系统相册是给
+     * 外面看的。用户在相册里删掉一张，私有副本不会自己消失，照片墙就永远显示
+     * 那张"已经删掉的照片"。这是两份副本分叉的唯一现实出口。
+     *
+     * 判定规则在 [GalleryReconciler.staleIds]（可单测）；这里只做"读索引 + 删文件"。
+     *
+     * 三条安全阀，任何一条不满足就整批放弃：
+     * 1. **查询失败/返回空游标 → 整批不删**。MediaStore 抖一下不能变成清空照片库。
+     * 2. **等待期内不删**（[GalleryReconciler.GRACE_MILLIS]）：刚写完的照片可能还没索引。
+     * 3. **没发布成功的不删**：相册里从来没有过它，不能拿"相册没有"当删除证据。
+     *
+     * @return 本次删掉的张数；`queryOk == false` 表示相册读不到、本轮什么都没做。
+     */
+    fun reconcileWithGallery(now: Long = System.currentTimeMillis()): ReconcileReport {
+        val files = fullDir.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
+            .orEmpty()
+        if (files.isEmpty()) return ReconcileReport(removed = 0, kept = 0, queryOk = true)
+
+        val index = readGalleryIndex()
+            ?: run {
+                Log.w(TAG, "对账跳过：读不到 MediaStore 索引（不删任何照片）")
+                return ReconcileReport(removed = 0, kept = files.size, queryOk = false)
+            }
+
+        val unpublished = prefs.getStringSet(KEY_GALLERY_MISSING, emptySet())
+            ?.toHashSet()
+            .orEmpty()
+
+        val candidates = files.mapNotNull { file ->
+            val parsed = parseId(file.name) ?: return@mapNotNull null
+            GalleryReconciler.Candidate(
+                id = parsed.first,
+                fileName = file.name,
+                capturedAt = parsed.third,
+                published = parsed.first !in unpublished,
+            )
+        }
+
+        val stale = GalleryReconciler.staleIds(
+            candidates = candidates,
+            galleryNames = index.names,
+            galleryTimestampSeconds = index.timestamps,
+            now = now,
+        )
+
+        var removed = 0
+        for (id in stale) {
+            val name = "$id.jpg"
+            val full = File(fullDir, name)
+            val thumb = File(thumbDir, name)
+            // 以全尺寸副本的删除结果为准：`list()` 只看 full，thumb 残留只是垃圾不致命。
+            if (full.delete()) {
+                thumb.delete()
+                removed++
+            } else {
+                Log.w(TAG, "对账：删除失败 $name")
+            }
+        }
+
+        if (removed > 0) {
+            Log.i(TAG, "对账：相册里已删除 $removed 张，私有副本同步移除")
+        }
+        return ReconcileReport(removed = removed, kept = candidates.size - removed, queryOk = true)
+    }
+
+    /**
+     * 读相册索引：现存条目的文件名 + 拍摄时间（秒）。
+     *
+     * **不加任何 selection**，靠分区存储的可见性规则拿"本应用自己的媒体条目"：
+     * 我们没有申请读媒体权限，系统只会返回本应用插入的那些，不会扫到用户的相册。
+     * 不加 `RELATIVE_PATH` 过滤是故意的——用户可能把照片移到别的相册，路径一变
+     * 就查不到，会被误判成删除。
+     *
+     * @return 查询失败返回 null（调用方据此整批放弃）。
+     */
+    private fun readGalleryIndex(): GalleryIndex? = runCatching {
+        val names = HashSet<String>()
+        val timestamps = HashSet<Long>()
+
+        val cursor = resolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.DATE_TAKEN,
+            ),
+            null,
+            null,
+            null,
+        ) ?: error("MediaStore 查询返回 null 游标")
+
+        cursor.use {
+            val nameColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+            val dateColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
+            while (it.moveToNext()) {
+                it.getString(nameColumn)?.let(names::add)
+                val taken = it.getLong(dateColumn)
+                // 秒级归一：部分机型把 DATE_TAKEN 截断到秒，毫秒比对会全部失配。
+                if (taken > 0L) timestamps.add(taken / 1000L)
+            }
+        }
+
+        GalleryIndex(names, timestamps)
+    }.getOrNull()
+
+    private data class GalleryIndex(
+        val names: Set<String>,
+        val timestamps: Set<Long>,
+    )
+
+    /** 记录一张成片的相册发布结果。见 [ReconcileReport] 的第三条安全阀。 */
+    private fun markPublished(id: String, published: Boolean) {
+        val current = prefs.getStringSet(KEY_GALLERY_MISSING, emptySet())?.toHashSet()
+            ?: HashSet()
+        val changed = if (published) current.remove(id) else current.add(id)
+        // SharedPreferences 返回的 Set 不允许原地改，必须复制后整份写回。
+        if (changed) prefs.edit().putStringSet(KEY_GALLERY_MISSING, current).apply()
+    }
+
+    /**
      * 本卷的起始时间戳（毫秒）。
      *
      * 「一卷 36 张」要成立，计数就必须有起点——否则计数器显示的是整个照片库的
@@ -312,6 +447,14 @@ class PhotoStore(context: Context) {
 
         /** 本卷起点。0 表示还没初始化过，首次读取时落成"现在"。 */
         private const val KEY_ROLL_STARTED_AT = "roll_started_at_v1"
+
+        /**
+         * 没能写进系统相册的成片 id。
+         *
+         * 对账要判断"相册里没有 = 用户删了"，而这些照片从来没进过相册，
+         * 混进去就会被当成已删除、把唯一一份删掉。
+         */
+        private const val KEY_GALLERY_MISSING = "gallery_missing_ids_v1"
 
         private const val TAG = "PocketCcdGallery"
     }

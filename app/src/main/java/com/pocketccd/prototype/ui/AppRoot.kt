@@ -122,10 +122,14 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
 
     // 回到前台时验一次会话：相机可能已被系统或其他 App 拿走。
     // 不探这一次，界面会一直亮着 LIVE，按快门只会得到 "Not bound to a valid Camera"。
+    //
+    // 顺便和系统相册对一次账：用户最典型的路径就是「切去相册删几张，再切回来」，
+    // 不在这里收，照片墙会一直显示已经删掉的照片。
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.reconcileGallery()
                 val bound = handle
                 if (bound != null && !bound.isAttached()) {
                     previewError = "相机连接已断开，正在重连"
@@ -135,6 +139,12 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 进照片墙之前再对一次：从相册切回来但没经过 ON_RESUME 的路径（比如分屏、
+    // 从成片页返回）也能拿到最新结果。
+    LaunchedEffect(destination) {
+        if (destination == AppDestination.GALLERY) viewModel.reconcileGallery()
     }
 
     PocketCcdApp(

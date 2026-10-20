@@ -90,6 +90,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val capturing = AtomicBoolean(false)
 
+    /** 对账防重入。回前台与进照片墙两条路径可能同时触发。 */
+    private val reconciling = AtomicBoolean(false)
+
     private companion object {
         /** 手测时 `adb logcat -s PocketCcdCapture` 能看到每次冲洗的尺寸/耗时/非有限值。 */
         const val TAG = "PocketCcdCapture"
@@ -225,6 +228,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshRoll() {
         viewModelScope.launch {
             _roll.value = withContext(Dispatchers.IO) { photoStore.list() }
+        }
+    }
+
+    /**
+     * 和系统相册对账：用户在**系统相册**里删掉的成片，照片墙也要跟着消失。
+     *
+     * 触发点有两处：回到前台（用户多半是切去相册删完再切回来）、进照片墙之前。
+     * 两处都会调，所以用 [reconciling] 防重入——一次对账要遍历 MediaStore 索引，
+     * 重叠执行没有意义。
+     *
+     * 只在真的删掉了东西时才刷新列表：不然每次回前台都会把整个照片墙重读一遍。
+     */
+    fun reconcileGallery() {
+        if (!reconciling.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val report = withContext(Dispatchers.IO) { photoStore.reconcileWithGallery() }
+                if (report.removed > 0) {
+                    _roll.value = withContext(Dispatchers.IO) { photoStore.list() }
+                }
+            } finally {
+                reconciling.set(false)
+            }
         }
     }
 
