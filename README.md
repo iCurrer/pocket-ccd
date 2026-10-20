@@ -30,7 +30,7 @@
 
 ---
 
-## 当前状态（2026-10-19 23:30）
+## 当前状态（2026-10-20 20:50）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
@@ -38,16 +38,19 @@
 | 拍照 → 冲洗 → 落盘 → 系统相册 | 完成 | 真机端到端；`3072×4096 / 3.16 MB`，私有目录 + `Pictures/Pocket CCD/` 各一份 |
 | 取景页交互（点按对焦 / 变焦 / 九宫格 / 闪白） | 完成 | 真机逐项验证，见 [`docs/interaction-spec.md`](docs/interaction-spec.md) |
 | 成片方向 | 完成 | `capture rotation: sensor=90 display=0 -> 90°` |
-| 成片页 / 照片墙 / 设置页暗色化 | **代码完成，待真机** | T9-018..020；`assembleDebug` + `AppStateTest` 12/12；无真机截图 |
+| 胶卷库（`FILMS`，换卷页） | 完成 | T9-016 真机四项：三卷渲染 / 装卷后卷名与左下角标同步 / 顶栏相册入口 / 返回回库，截图 [`2026-10-20-films-library.png`](docs/screenshots/2026-10-20-films-library.png) |
+| 卷计数与换卷口径（D-046） | 完成 | 真机连切三卷：`5/36 → 0/36 → 5/36`；只按时间过滤会串号，必须同时按当前卷过滤 |
+| 成片页 / 照片墙 / 设置页暗色化 | **代码完成，待真机** | T9-018..020；`assembleDebug` + 单测 27/27；无真机截图 |
+| 私有副本 ↔ 系统相册对账（D-047） | **代码完成，待真机** | FOT-020；`GalleryReconcilerTest` 11/11；"相册里删一张"的真机验证还没做 |
 | 真实镜头倍率 + 等效焦距 | **代码完成，待真机** | T9-021；D-044；镜头表尚未在 `PJZ110` 上打印过 |
 | 12MP 引擎性能 | 已实测 | benchmark 包单帧 2.0–3.2 s，峰值 RSS 373–463 MB，`nonFinite=0` |
 | 端到端冲洗耗时 | **超预算** | 成片实测 8.4–9.1 s，预算 2.0–3.2 s，原因未定位（B-11） |
-| 胶卷库（`FILMS`，换卷页） | **代码完成，待真机** | T9-016；`AppStateTest` 15/15；卷数按实际 pack 渲染，无价格/到期日 |
+| App 内删除照片 | 未开始 | 做的时候必须同时删 MediaStore 条目，否则会制造反向分叉 |
 | Rec.2020 色彩口径 | 未开始 | 当前为线性光 + sRGB 基色（FOT-006） |
 | 冲洗进度条 / 取景框比例 | 未开始 | FOT-009 |
 
 > 构建通过不等于已验证。未在真机执行过的项一律标 `NOT_RUN` / `BLOCKED`。
-> 上面两行"待真机"就是字面意思：代码编译过、单测过，但**没人在手机上看过**。
+> 上面几行"待真机"就是字面意思：代码编译过、单测过，但**没人在手机上看过**。
 
 ---
 
@@ -82,6 +85,10 @@ files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本�
    │  publishToGallery：文件流复制，不重新编码位图
    ▼
 系统相册 Pictures/Pocket CCD/            ← 分享 / 查看 / 备份都走这里
+   │  reconcileWithGallery：回前台 / 进照片墙时各对一次账（D-047）
+   │  相册里没有它了 → 私有副本一并删掉，照片墙跟着消失
+   ▼
+照片墙看到的 = 仍在相册里的那些
 ```
 
 五件容易被误解的事：
@@ -97,8 +104,10 @@ files/Pictures/pocket-ccd/{full,thumb}/   ← 照片墙数据源（权威副本�
    裁切不改像素密度所以依然成立；缩放会改密度，等于换了一套光学系统（D-037）。
    多机型适配全靠这一条 —— 一份 pack 服务多种设备的唯一正确做法，
    详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §2.2。
-5. **成片写两份**。私有目录是权威副本（照片墙只读这里），系统相册是给外面看的。
-   `Android/data/` 被媒体扫描明确排除，只写它等于"拍完只有本 App 看得到"。
+5. **成片写两份，写两份就必须对账**。私有目录是权威副本（照片墙只读这里），
+   系统相册是给外面看的。`Android/data/` 被媒体扫描明确排除，只写它等于
+   "拍完只有本 App 看得到"。而两份副本之间没有同步机制时，用户在系统相册里删掉一张、
+   照片墙会一直显示它——所以每次回前台和进照片墙都要对一次账（D-047）。
    详见 [`docs/fotufilm-camera-capture.md`](docs/fotufilm-camera-capture.md) §10。
 
 ### 为什么必须分块（halo 不能省）
@@ -129,7 +138,7 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 | `CAMERA` | 全屏取景器（根） | 已接管默认入口 |
 | `RESULT` | 成片页：大图 + 真实 EXIF 参数网格 + `FRAME n / 36` | 暗色版代码完成，待真机 |
 | `GALLERY` | 照片墙：按胶卷分组的 3 列缩略图 | 暗色版代码完成，待真机 |
-| `FILMS` | 胶卷库：已装卷大卡 + 全部卷列表 + 装卷（T9-016） | 代码完成，待真机 |
+| `FILMS` | 胶卷库：已装卷大卡 + 全部卷列表 + 装卷（T9-016） | 真机验收通过 |
 | `SETTINGS` | 设置页（原型没有此页，按同一套令牌自绘） | 暗色版代码完成，待真机 |
 
 取景页的卷名 pill 点进去就是 `FILMS`——它本来就带 `ChevronRight`，
@@ -146,8 +155,10 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 - **`3.2×` 的含义是"73mm 那颗镜头的倍率"，不是"当前帧一定来自它"**。没有公开 API 能查询
   当前成像的物理镜头，系统 HAL 自己决定。要自证只能读成片 EXIF 的 `FocalLength`
   （主摄约 6mm、长焦约 16mm），成片页把它当真实参数展示。
-- **卷计数是真的**（D-040）：`PhotoStore.rollStartedAt()` 记录本卷起点，`capturedAt` 晚于它的
-  才计入，满 36 张禁快门。**绝不能用照片库总数冒充本卷张数**——那是两回事。
+- **卷计数是真的**（D-040 / D-046）：`PhotoStore.rollStartedAt()` 记录本卷起点，
+  `capturedAt` 晚于它的**且属于当前这支胶卷**的才计入，满 36 张禁快门。
+  **绝不能用照片库总数冒充本卷张数**——那是两回事；只按时间过滤也不行，
+  换卷后计数器会继承上一支卷的曝光数，还会白吃新卷的格数。
 - **对焦标签三态**：`AF` / `AF LOCK` / `AF FAIL`。原型永远写 `AF LOCK`，这里按
   `startFocusAndMetering` 的真实回调切换。
 
@@ -303,7 +314,7 @@ debug 包是 debuggable 的，ART 不做完整优化，同一段编码循环实�
 export JAVA_HOME="/d/software/Android/Android Studio/jbr"
 
 ./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest      # 状态机 12 例
+./gradlew testDebugUnitTest      # 导航状态机 16 例 + 相册对账 11 例
 ./gradlew assembleBenchmark      # 性能基准用（非 debuggable）
 ```
 
@@ -344,7 +355,8 @@ adb logcat -s PocketCcdCamera -s PocketCcdCapture      # 字段有节略
 ```
 app/src/main/java/com/pocketccd/prototype/
 ├── camera/          CameraPreview（CameraX，只交出 CameraHandle）
-│                    PhotoStore（全尺寸 + 缩略图，临时文件 rename；卷起点）
+│                    PhotoStore（全尺寸 + 缩略图，临时文件 rename；卷起点；相册对账）
+│                    GalleryReconciler（判活逻辑，纯函数、零 Android 依赖，可单测）
 │                    LensInfo（物理镜头倍率 + 等效焦距）
 │                    PhotoExif（读成片 JPEG 的焦距/光圈/快门/ISO）
 │                    CaptureState / CapturedFrame
@@ -358,7 +370,8 @@ app/src/main/java/com/pocketccd/prototype/
                      film/films/（胶卷库：已装卷大卡 + 全部卷列表）
                      result/ gallery/ settings/
 
-app/src/test/        AppStateTest（导航状态机 12 例）
+app/src/test/        AppStateTest（导航状态机 16 例）
+                     GalleryReconcilerTest（对账判定 11 例：该删 / 绝不删）
 native/              fotufilm_jni.cpp + CMakeLists.txt（只链接，不处理色彩）
 .github/workflows/   fotufilm-android-native.yml（packs + android-native 两个 job）
 prebuilt/            CI 产物（.gitignore；gradlew clean 不会删）
@@ -390,7 +403,10 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 - **成片写两份，且必须对账**（D-047）。私有 `files/Pictures/pocket-ccd/` 是照片墙的
   唯一数据源，系统 `Pictures/Pocket CCD/` 是给外面看的副本。两份之间没有同步机制时，
   用户在系统相册里删掉一张，照片墙会一直显示它。`reconcileWithGallery()` 在回前台和
-  进照片墙时各对一次账；**媒体库查询失败时一张都不删**，宁可不同步也不能清空照片库。
+  进照片墙时各对一次账，三条安全阀缺一不可：
+  **①媒体库查询失败时一张都不删；②发布到相册失败的照片不删**（它从没进过相册，
+  拿"相册里没有"当删除证据会删掉唯一一份）；**③刚拍 2 分钟内不删**（写盘与入库有延迟，
+  也兜住"相册内重命名"）。宁可不同步也不能清空照片库。
 - 未实际执行的构建/测试/真机拍摄，不得标记为"通过"。
 
 ---
@@ -409,6 +425,8 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 | 耗时比文档慢 5–7 倍 | 在用 debug 包；换 `assembleBenchmark` |
 | 按快门没反应，但 `LIVE` 还亮着 | 相机会话被系统或别的 App 抢走，`takePicture` 抛 `Not bound to a valid Camera`。CameraX 没有 `isBound`，探针是 `attachedSurfaceResolution` 是否抛异常；探到就自增 nonce 重绑 |
 | 装完新包界面还是旧的 | `adb install -r` 之后没 `am force-stop`，`am start` 把内存里的旧进程拉回前台。必须 install → force-stop → `am start -W`（确认 `COLD`）→ 截图 |
+| 在系统相册删了照片，照片墙还在 | 对账没跑，或跑了但整批放弃。看 `adb logcat -s PocketCcdGallery`：出现`对账跳过：读不到 MediaStore 索引（不删任何照片）`＝查询失败，按设计一张都不删；有`对账：相册里已删除 N 张`才算真跑过。刚拍 2 分钟内的不删 |
+| 相册里还原一张照片，照片墙不长回来 | 已知不对称（D-047）：私有副本已经删了，只对账删、不对账补 |
 | 截图里按钮点了没反应 | adb 截图是 1440×3168，看图时被缩放显示；量出来的坐标要换算回原分辨率再 `input tap` |
 
 ---
