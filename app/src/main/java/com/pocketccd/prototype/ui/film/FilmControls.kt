@@ -224,7 +224,7 @@ fun FilmActionTile(
         androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
         androidx.compose.material3.Text(
             text = label,
-            color = spec.palette.inkFaint,
+            color = spec.palette.textTertiary,
             fontSize = spec.type.label,
         )
     }

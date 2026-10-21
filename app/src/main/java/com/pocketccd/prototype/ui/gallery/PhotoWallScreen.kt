@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.ui.film.FilmIcon
 import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
+import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
 import java.util.Calendar
@@ -116,7 +117,8 @@ fun PhotoWallScreen(
 
 @Composable
 private fun WallTopBar(total: Int, onBack: () -> Unit) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -136,7 +138,7 @@ private fun WallTopBar(total: Int, onBack: () -> Unit) {
             Text(
                 text = "胶片相册",
                 style = TextStyle(
-                    fontSize = 13.sp,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.04.em,
                     color = p.textPrimary,
@@ -145,7 +147,7 @@ private fun WallTopBar(total: Int, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = "ARCHIVE · 2026",
-                style = MonoCaption.copy(color = p.inkFaint),
+                style = MonoCaption.copy(color = p.textTertiary),
             )
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -153,7 +155,7 @@ private fun WallTopBar(total: Int, onBack: () -> Unit) {
         Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
             Text(
                 text = total.toString().padStart(2, '0'),
-                style = MonoCaption.copy(color = p.inkMuted),
+                style = MonoCaption.copy(color = p.textTertiary),
             )
         }
     }
@@ -162,7 +164,8 @@ private fun WallTopBar(total: Int, onBack: () -> Unit) {
 /** 组头：卷名 + 张数 + 日期区间，上沿一条细线把组隔开。 */
 @Composable
 private fun GroupHeader(group: PhotoGroup) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     Column(modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)) {
         Box(
             modifier = Modifier
@@ -179,7 +182,7 @@ private fun GroupHeader(group: PhotoGroup) {
                 Text(
                     text = group.label,
                     style = TextStyle(
-                        fontSize = 13.sp,
+                        fontSize = spec.type.optionTitle,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 0.02.em,
                         color = p.textPrimary,
@@ -188,12 +191,12 @@ private fun GroupHeader(group: PhotoGroup) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = group.rangeLabel(),
-                    style = MonoCaption.copy(color = p.inkGhost),
+                    style = MonoCaption.copy(color = p.textTertiary),
                 )
             }
             Text(
                 text = "${group.photos.size} 张",
-                style = MonoCaption.copy(color = p.inkFaint),
+                style = MonoCaption.copy(color = p.textTertiary),
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
@@ -261,7 +264,8 @@ private fun PhotoTile(item: PhotoWallItem) {
 
 @Composable
 private fun EmptyArchive(modifier: Modifier = Modifier) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -290,7 +294,7 @@ private fun EmptyArchive(modifier: Modifier = Modifier) {
             Text(
                 text = "还没有底片",
                 style = TextStyle(
-                    fontSize = 13.sp,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.Medium,
                     color = p.textPrimary,
                 ),
@@ -298,7 +302,7 @@ private fun EmptyArchive(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "按下快门，第一卷从这里开始",
-                style = MonoCaption.copy(color = p.inkFaint),
+                style = MonoCaption.copy(color = p.textTertiary),
                 textAlign = TextAlign.Center,
             )
         }
@@ -308,7 +312,8 @@ private fun EmptyArchive(modifier: Modifier = Modifier) {
 /** 空态里的小胶片图标。复用取景页那套手绘几何，不再引第二套资源。 */
 @Composable
 private fun FilmRoundButtonIcon() {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     FilmIcon(
         kind = FilmIconKind.Filmstrip,
         tint = p.inkMuted,
@@ -369,7 +374,7 @@ private fun formatDay(epochMillis: Long): String {
 
 private val MonoCaption = TextStyle(
     fontFamily = FontFamily.Monospace,
-    fontSize = 8.sp,
+    fontSize = FilmDarkSpec.type.label,
     letterSpacing = 0.14.em,
 )
 

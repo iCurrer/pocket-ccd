@@ -163,7 +163,7 @@ fun SettingsScreen(
             title = {
                 Text(
                     text = stringResource(R.string.settings_diagnostics_title),
-                    style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(fontSize = spec.type.optionTitle, fontWeight = FontWeight.Medium),
                 )
             },
             text = {
@@ -175,8 +175,8 @@ fun SettingsScreen(
                     ),
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        lineHeight = 17.sp,
+                        fontSize = spec.type.body,
+                        lineHeight = 19.sp,
                     ),
                 )
             },
@@ -184,7 +184,7 @@ fun SettingsScreen(
                 TextButton(onClick = { showDiagnostics = false }) {
                     Text(
                         text = stringResource(R.string.settings_close),
-                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                        style = TextStyle(fontSize = spec.type.body, fontWeight = FontWeight.Medium),
                         color = p.accent,
                     )
                 }
@@ -199,7 +199,8 @@ internal fun SettingsHeader(
     title: String = stringResource(R.string.settings_title),
     subtitle: String = stringResource(R.string.settings_subtitle),
 ) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     // 与成片页/相册页同一套居中标题结构，三个页面来回切不会有标题跳位。
     Row(
         modifier = Modifier
@@ -220,7 +221,7 @@ internal fun SettingsHeader(
             Text(
                 text = title,
                 style = TextStyle(
-                    fontSize = 13.sp,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.04.em,
                     color = p.textPrimary,
@@ -231,9 +232,9 @@ internal fun SettingsHeader(
                 text = subtitle,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 8.sp,
+                    fontSize = spec.type.label,
                     letterSpacing = 0.14.em,
-                    color = p.inkFaint,
+                    color = p.textTertiary,
                 ),
             )
         }
@@ -256,9 +257,9 @@ private fun SettingsSection(
             text = title,
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp,
+                fontSize = spec.type.label,
                 letterSpacing = 0.16.em,
-                color = p.inkGhost,
+                color = p.textTertiary,
             ),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
@@ -281,7 +282,8 @@ private fun SettingsRow(
     value: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -300,7 +302,7 @@ private fun SettingsRow(
             Text(
                 text = title,
                 style = TextStyle(
-                    fontSize = 13.sp,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.Normal,
                     color = p.textPrimary,
                 ),
@@ -311,10 +313,10 @@ private fun SettingsRow(
                     text = subtitle,
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 8.sp,
-                        lineHeight = 12.sp,
-                        letterSpacing = 0.06.em,
-                        color = p.inkGhost,
+                        fontSize = spec.type.body,
+                        lineHeight = 19.sp,
+                        letterSpacing = 0.04.em,
+                        color = p.textSecondary,
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -327,9 +329,9 @@ private fun SettingsRow(
                 text = value,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
+                    fontSize = spec.type.value,
                     letterSpacing = 0.06.em,
-                    color = p.inkMuted,
+                    color = p.textSecondary,
                 ),
             )
         }

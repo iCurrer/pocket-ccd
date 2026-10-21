@@ -50,6 +50,7 @@ import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.camera.readPhotoExif
 import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
+import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
 import java.util.Calendar
@@ -183,7 +184,8 @@ private fun ResultTopBar(
     onBackToCamera: () -> Unit,
     onOpenPhotoWall: () -> Unit,
 ) {
-    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     // 左右两侧都是 48dp 热区，标题因此天然居中，不需要再算偏移。
     Row(
         modifier = Modifier
@@ -210,7 +212,7 @@ private fun ResultTopBar(
                 },
                 style = TextStyle(
                     fontFamily = FontFamily.Default,
-                    fontSize = 13.sp,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.04.em,
                     color = p.textPrimary,
@@ -219,7 +221,7 @@ private fun ResultTopBar(
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = stockLabel ?: "POCKET CCD",
-                style = MonoSmall.copy(color = p.inkFaint),
+                style = MonoSmall.copy(color = p.textTertiary),
             )
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -340,7 +342,7 @@ private fun DevelopingFrame(stockLabel: String?) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stockLabel ?: "POCKET CCD",
-                style = MonoSmall.copy(color = p.inkGhost),
+                style = MonoSmall.copy(color = p.textTertiary),
             )
         }
     }
@@ -359,7 +361,7 @@ private fun MissingFrameNote(text: String) {
     ) {
         Text(
             text = text,
-            style = MonoSmall.copy(color = p.inkFaint),
+            style = MonoSmall.copy(color = p.textSecondary),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -407,13 +409,13 @@ private fun FrameCaption(
                 // 没有真实序号就不画片号，不拿 01 充数。
                 "POCKET CCD"
             },
-            style = MonoSmall.copy(color = p.inkGhost),
+            style = MonoSmall.copy(color = p.textTertiary),
         )
         Text(
             // 原型右侧是 `KODAK 135 · DNG + JPG`。我们只出 JPEG，也不存在"135"这个卷型，
             // 所以留能对得上的部分；条带数属于引擎内部指标，放在状态行右侧。
             text = "JPEG · 4:3",
-            style = MonoSmall.copy(color = p.inkGhost),
+            style = MonoSmall.copy(color = p.textTertiary),
         )
     }
 }
@@ -464,7 +466,7 @@ private fun ParameterGrid(
 private fun ParamCell(label: String, value: String, modifier: Modifier = Modifier) {
     val p = LocalFilmTheme.current.palette
     Column(modifier = modifier) {
-        Text(text = label, style = MonoLabel.copy(color = p.inkGhost))
+        Text(text = label, style = MonoLabel.copy(color = p.textTertiary))
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = value,
@@ -502,13 +504,13 @@ private fun StatusRow(status: ResultStatus, stage: Stage, photo: SavedPhoto?) {
                 .background(dotColor),
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, style = MonoSmall.copy(color = p.inkMuted))
+        Text(text = label, style = MonoSmall.copy(color = p.textTertiary))
         Spacer(modifier = Modifier.weight(1f))
         // 诊断行：冲洗耗时与条带数，都是实测值。
         if (photo != null) {
             Text(
                 text = "${photo.renderMillis}ms · ${photo.strips} strips",
-                style = MonoSmall.copy(color = p.inkGhost),
+                style = MonoSmall.copy(color = p.textTertiary),
             )
         }
     }
@@ -569,28 +571,30 @@ private fun formatDateBlock(epochMillis: Long): String {
     return "%02d.%02d\n%02d:%02d".format(month, day, hour, minute)
 }
 
+// 下面四个是模块私有的等宽样式：顶层 val 取不到 CompositionLocal，
+// 直接引用唯一一套 FilmDarkSpec。将来真要做第二套皮肤时改成 @Composable 函数。
 private val MonoSmall = TextStyle(
     fontFamily = FontFamily.Monospace,
-    fontSize = 8.5.sp,
+    fontSize = FilmDarkSpec.type.label,
     letterSpacing = 0.08.em,
 )
 
 private val MonoTag = TextStyle(
     fontFamily = FontFamily.Monospace,
-    fontSize = 7.5.sp,
+    fontSize = FilmDarkSpec.type.label,
     letterSpacing = 0.16.em,
 )
 
 private val MonoLabel = TextStyle(
     fontFamily = FontFamily.Monospace,
-    fontSize = 9.sp,
+    fontSize = FilmDarkSpec.type.label,
     letterSpacing = 0.12.em,
 )
 
 private val MonoValue = TextStyle(
     fontFamily = FontFamily.Monospace,
-    fontSize = 9.5.sp,
-    lineHeight = 12.sp,
+    fontSize = FilmDarkSpec.type.value,
+    lineHeight = 18.sp,
     letterSpacing = 0.04.em,
 )
 

@@ -104,9 +104,9 @@ private fun LicenseBlock(title: String, body: String) {
             text = title,
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp,
+                fontSize = spec.type.label,
                 letterSpacing = 0.16.em,
-                color = p.inkGhost,
+                color = p.textTertiary,
             ),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
@@ -122,10 +122,10 @@ private fun LicenseBlock(title: String, body: String) {
                 text = body,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    lineHeight = 17.sp,
+                    fontSize = spec.type.body,
+                    lineHeight = 20.sp,
                     letterSpacing = 0.02.em,
-                    color = p.inkStrong,
+                    color = p.textSecondary,
                 ),
                 // 地址与路径不能省略号截断 —— 截断了就等于没给。
                 overflow = TextOverflow.Visible,

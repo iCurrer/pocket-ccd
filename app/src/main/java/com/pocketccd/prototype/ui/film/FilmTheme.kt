@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -24,6 +25,16 @@ data class FilmPalette(
     val sheetBg: Color,
     val viewfinderBg: Color,
     val textPrimary: Color,
+    /**
+     * 说明文字（≥13sp）。白 60%，在 [appBg] 上约 7.2:1。
+     * 不要用于取景器内文字 —— 那里压着真实画面，见 [FilmPalette.ink]。
+     */
+    val textSecondary: Color,
+    /**
+     * 标签 / 单位（≥11sp）。白 50%，约 5.3:1。
+     * 不要用于取景器内文字，也不要落在胶卷库的浅色金属面板上（白字浅底等于消失）。
+     */
+    val textTertiary: Color,
     val accent: Color,
     val onAccent: Color,
     /** Camera-overlay text. Reads on top of arbitrary imagery, so always white. */
@@ -67,14 +78,33 @@ data class FilmMetrics(
     val reticle: Dp = 58.dp,
 )
 
+/**
+ * 字阶。**字号下限 11sp**，只有 [microPrint] 可以低于它，且只用于装饰性印刷仿真。
+ *
+ * 这条规则是 2026-10-21 的密度整改定下的（见
+ * `docs/reviews/2026-10-21-ui-density-change-spec.md`）：此前 25 处裸 `fontSize`
+ * 把设置项说明、EXIF 参数、文件大小压到 6.5–9.5sp，且恰好配了最淡的颜色
+ * （`inkGhost` 白 25% 在近黑底上只有 2.17:1，连 WCAG 的 3:1 都不到）。
+ * 不要再写裸字号，加一条单测盯着（`NoBareFontSizeTest`）。
+ */
 @Immutable
 data class FilmType(
-    val sheetTitle: androidx.compose.ui.unit.TextUnit = 16.sp,
-    val optionTitle: androidx.compose.ui.unit.TextUnit = 13.sp,
-    val body: androidx.compose.ui.unit.TextUnit = 12.sp,
-    val mono: androidx.compose.ui.unit.TextUnit = 10.sp,
-    val monoSmall: androidx.compose.ui.unit.TextUnit = 9.sp,
-    val label: androidx.compose.ui.unit.TextUnit = 10.sp,
+    /** 页面标题。 */
+    val sheetTitle: TextUnit = 16.sp,
+    /** 行标题 / 强调信息。 */
+    val optionTitle: TextUnit = 15.sp,
+    /** 参数值、设置项右侧值、计数。 */
+    val value: TextUnit = 14.sp,
+    /** 说明文案。 */
+    val body: TextUnit = 13.sp,
+    /** 等宽标签。 */
+    val mono: TextUnit = 11.sp,
+    /** 等宽小标签。不得低于 11sp。 */
+    val monoSmall: TextUnit = 11.sp,
+    /** 通用标签 / 单位。 */
+    val label: TextUnit = 11.sp,
+    /** 只允许用于胶卷筒 / 包装上的仿真印刷字，**不得承载信息**。 */
+    val microPrint: TextUnit = 9.sp,
 )
 
 @Immutable
@@ -92,6 +122,8 @@ val FilmDarkSpec = FilmThemeSpec(
         sheetBg = Color(0xFF14161A),
         viewfinderBg = Color(0xFF061021),
         textPrimary = Color(0xFFEDEFF2),
+        textSecondary = Color(0xFFFFFFFF).copy(alpha = 0.60f),
+        textTertiary = Color(0xFFFFFFFF).copy(alpha = 0.50f),
         accent = Color(0xFFE7B37A),
         onAccent = Color(0xFF141414),
         ink = Color(0xFFFFFFFF).copy(alpha = 0.75f),

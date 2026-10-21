@@ -127,7 +127,7 @@ fun FocusRing(
             },
             modifier = Modifier.offset { IntOffset(0, labelOffset.roundToInt()) },
             color = tint,
-            fontSize = 7.sp,
+            fontSize = spec.type.label,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 0.1.em,
         )
@@ -242,7 +242,7 @@ fun ViewfinderZoom(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = stop.ratioLabel,
-                            color = if (active) Color(0xFF151515) else spec.palette.inkMuted,
+                            color = if (active) Color(0xFF151515) else spec.palette.ink,
                             fontSize = spec.type.monoSmall,
                             fontFamily = FontFamily.Monospace,
                         )
@@ -254,9 +254,9 @@ fun ViewfinderZoom(
                                 color = if (active) {
                                     Color(0xFF151515).copy(alpha = 0.62f)
                                 } else {
-                                    spec.palette.inkGhost
+                                    spec.palette.ink
                                 },
-                                fontSize = 6.5.sp,
+                                fontSize = spec.type.label,
                                 fontFamily = FontFamily.Monospace,
                             )
                         }

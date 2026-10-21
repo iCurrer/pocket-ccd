@@ -147,14 +147,14 @@ fun FilmLibraryScreen(
                     Text(
                         text = "全部胶卷",
                         color = p.inkStrong,
-                        fontSize = 13.sp,
+                        fontSize = spec.type.optionTitle,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.02.em,
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = "${stocks.size} 款",
-                        color = p.inkGhost,
+                        color = p.textTertiary,
                         fontSize = spec.type.monoSmall,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -208,14 +208,14 @@ private fun LibraryHeader(
             Text(
                 text = "胶卷库",
                 color = p.inkStrong,
-                fontSize = 15.sp,
+                fontSize = spec.type.sheetTitle,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.08.em,
             )
             Text(
                 text = if (stockCount > 0) "FILM STOCK" else "NO STOCK",
-                color = p.inkGhost,
-                fontSize = 8.sp,
+                color = p.textTertiary,
+                fontSize = spec.type.label,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.24.em,
             )
@@ -297,7 +297,7 @@ private fun LoadedPanel(
             Text(
                 text = "LOADED · 已装卷",
                 color = Metal.inkMono,
-                fontSize = 8.sp,
+                fontSize = spec.type.label,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.22.em,
             )
@@ -317,9 +317,9 @@ private fun LoadedPanel(
                 Text(
                     text = stock?.label ?: "没有可用的胶卷",
                     color = Metal.inkStrong,
-                    fontSize = 17.sp,
+                    fontSize = spec.type.sheetTitle,
                     fontWeight = FontWeight.SemiBold,
-                    lineHeight = 21.sp,
+                    lineHeight = 20.sp,
                     letterSpacing = (-0.01).em,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -330,7 +330,7 @@ private fun LoadedPanel(
                     // 原型这里是「暖调肤色 · C-41 · 36 张」——工艺和卖点我们无从得知。
                     text = stock?.file?.name ?: "—",
                     color = Metal.inkBody,
-                    fontSize = 10.sp,
+                    fontSize = spec.type.label,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -358,26 +358,26 @@ private fun LoadedPanel(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
         ) {
-            Text(text = "剩余", color = Metal.inkBody, fontSize = 10.sp)
+            Text(text = "剩余", color = Metal.inkBody, fontSize = spec.type.label)
             Spacer(Modifier.width(5.dp))
             Text(
                 text = "$remaining",
                 color = if (full) Color(0xFFB84A3A) else Metal.inkStrong.copy(alpha = 0.85f),
-                fontSize = 15.sp,
+                fontSize = spec.type.optionTitle,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.width(3.dp))
             Text(
                 text = "张",
                 color = Metal.inkBody,
-                fontSize = 10.sp,
+                fontSize = spec.type.label,
                 modifier = Modifier.padding(bottom = 2.dp),
             )
             Spacer(Modifier.weight(1f))
             Text(
                 text = "%02d / %02d".format(shots, rollCapacity),
                 color = Metal.inkFaint,
-                fontSize = 9.sp,
+                fontSize = spec.type.label,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.10.em,
             )
@@ -426,6 +426,7 @@ private fun LoadedPanel(
 
 @Composable
 private fun StatusBadge(full: Boolean) {
+    val spec = LocalFilmTheme.current
     val shape = RoundedCornerShape(999.dp)
     val dot = if (full) Color(0xFFB84A3A) else Color(0xFFE7B37A)
     Row(
@@ -445,7 +446,7 @@ private fun StatusBadge(full: Boolean) {
         Text(
             text = if (full) "FULL" else "READY",
             color = dot,
-            fontSize = 8.sp,
+            fontSize = spec.type.label,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 0.14.em,
         )
@@ -459,11 +460,12 @@ private fun MetalPill(
     dark: Color,
     textColor: Color,
 ) {
+    val spec = LocalFilmTheme.current
     val shape = RoundedCornerShape(999.dp)
     Text(
         text = text,
         color = textColor,
-        fontSize = 8.sp,
+        fontSize = spec.type.label,
         fontFamily = FontFamily.Monospace,
         letterSpacing = 0.08.em,
         maxLines = 1,
@@ -511,6 +513,7 @@ private fun PanelButton(
     icon: FilmIconKind? = null,
     enabled: Boolean = true,
 ) {
+    val spec = LocalFilmTheme.current
     val shape = RoundedCornerShape(12.dp)
     val fill = when {
         !enabled -> Color.Black.copy(alpha = 0.25f)
@@ -540,7 +543,7 @@ private fun PanelButton(
         Text(
             text = label,
             color = textColor,
-            fontSize = 11.sp,
+            fontSize = spec.type.label,
             fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
         )
     }
@@ -562,6 +565,7 @@ private fun FilmCanister(
     capacity: Int,
     modifier: Modifier = Modifier,
 ) {
+    val spec = LocalFilmTheme.current
     val bodyW = 58.dp
     val bodyH = 84.dp
     val capH = 7.dp
@@ -655,7 +659,8 @@ private fun FilmCanister(
             Text(
                 text = parts.firstOrNull()?.uppercase() ?: "—",
                 color = Color(0xFF2B2419),
-                fontSize = 8.sp,
+                // micro-print: 仿真印刷标签，装饰，不承载信息
+                fontSize = spec.type.microPrint,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.02).em,
                 maxLines = 1,
@@ -669,7 +674,8 @@ private fun FilmCanister(
                     "$capacity",
                 ).joinToString(" · "),
                 color = Color(0xFF2B2419).copy(alpha = 0.70f),
-                fontSize = 7.sp,
+                // micro-print: 仿真印刷标签，装饰，不承载信息
+                fontSize = spec.type.microPrint,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.06.em,
                 maxLines = 1,
@@ -721,9 +727,9 @@ private fun StockCard(
                     Text(
                         text = stock.label,
                         color = p.inkStrong,
-                        fontSize = 12.5.sp,
+                        fontSize = spec.type.optionTitle,
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = 16.sp,
+                        lineHeight = 20.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -732,16 +738,16 @@ private fun StockCard(
                     Text(
                         // 原型这里是「¥78」。我们不经手销售，但"这卷拍过几张"是真数据。
                         text = usage?.shots?.takeIf { it > 0 }?.let { "$it 张" } ?: "—",
-                        color = p.inkMuted,
-                        fontSize = 9.sp,
+                        color = p.textTertiary,
+                        fontSize = spec.type.label,
                         fontFamily = FontFamily.Monospace,
                     )
                 }
                 Spacer(Modifier.height(5.dp))
                 Text(
                     text = stock.file.name,
-                    color = p.inkFaint,
-                    fontSize = 9.sp,
+                    color = p.textTertiary,
+                    fontSize = spec.type.label,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.04.em,
                     maxLines = 1,
@@ -756,9 +762,9 @@ private fun StockCard(
                         usage.lastCapturedAt != null -> "上次拍摄 ${monthDay(usage.lastCapturedAt)}"
                         else -> "本机共 ${usage.shots} 张"
                     },
-                    color = p.inkMuted,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
+                    color = p.textSecondary,
+                    fontSize = spec.type.body,
+                    lineHeight = 19.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -776,8 +782,8 @@ private fun StockCard(
             ) {
                 Text(
                     text = fileSizeLabel(stock.file.length()),
-                    color = p.inkGhost,
-                    fontSize = 8.sp,
+                    color = p.textTertiary,
+                    fontSize = spec.type.label,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.10.em,
                 )
@@ -789,11 +795,12 @@ private fun StockCard(
 
 @Composable
 private fun BorderPill(text: String, color: com.pocketccd.prototype.ui.film.FilmPalette) {
+    val spec = LocalFilmTheme.current
     val shape = RoundedCornerShape(999.dp)
     Text(
         text = text,
-        color = color.inkMuted,
-        fontSize = 8.sp,
+        color = color.textTertiary,
+        fontSize = spec.type.label,
         fontFamily = FontFamily.Monospace,
         maxLines = 1,
         modifier = Modifier
@@ -812,7 +819,7 @@ private fun LoadPill(loaded: Boolean) {
     Text(
         text = if (loaded) "已装卷" else "装卷",
         color = if (loaded) p.accent else Color(0xFFEDEFF2),
-        fontSize = 9.sp,
+        fontSize = spec.type.label,
         modifier = Modifier
             .clip(shape)
             .background(
@@ -885,8 +892,8 @@ private fun FilmFrame(stock: FilmStock, usage: StockUsage?) {
         if (thumb == null) {
             Text(
                 text = "未拍过",
-                color = Color.White.copy(alpha = 0.28f),
-                fontSize = 7.sp,
+                color = p.textTertiary,
+                fontSize = spec.type.label,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -951,7 +958,7 @@ private fun EmptyLibrary(onRefresh: () -> Unit) {
             // 这页空着唯一的原因是 pack 没推进去，所以直接把该做的事写出来，
             // 而不是留一句"暂无数据"。
             text = "把 .fswp 推到应用私有目录 film/ 之后\n点下面的按钮重新扫描",
-            color = p.inkFaint,
+            color = p.textSecondary,
             fontSize = spec.type.body,
             lineHeight = 18.sp,
             textAlign = TextAlign.Center,
@@ -979,7 +986,7 @@ private fun DarkButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = label, color = p.inkStrong, fontSize = 13.sp)
+        Text(text = label, color = p.inkStrong, fontSize = spec.type.optionTitle)
     }
 }
 

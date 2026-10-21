@@ -298,7 +298,7 @@ fun FilmCaptureScreen(
                 )
                 Text(
                     text = stockMeta,
-                    color = p.inkFaint,
+                    color = p.textTertiary,
                     fontSize = spec.type.monoSmall,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.18.em,
@@ -306,7 +306,7 @@ fun FilmCaptureScreen(
             }
             Text(
                 text = "$shotsTaken / $rollCapacity EXP",
-                color = p.inkFaint,
+                color = p.textTertiary,
                 fontSize = spec.type.monoSmall,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.16.em,
@@ -357,7 +357,7 @@ fun FilmCaptureScreen(
             ) {
                 Text(
                     text = blockReason ?: "AUTO · 4:3 · JPEG",
-                    color = if (blockReason != null) p.error else p.inkGhost,
+                    color = if (blockReason != null) p.error else p.textTertiary,
                     fontSize = spec.type.monoSmall,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.14.em,
@@ -366,7 +366,7 @@ fun FilmCaptureScreen(
                     // 右边原来写"已拍 N 张"，和上方的 N/36 是同一个数字，重复且没有信息。
                     // 换成剩余张数：扫一眼就知道这卷还能拍几下。
                     text = "余 ${(rollCapacity - shotsTaken).coerceAtLeast(0)} 张",
-                    color = p.inkGhost,
+                    color = p.textTertiary,
                     fontSize = spec.type.monoSmall,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.14.em,
@@ -486,7 +486,7 @@ private fun ViewfinderPlaceholder(permissionGranted: Boolean, blockReason: Strin
             Text(
                 text = if (permissionGranted) "正在准备取景器" else "需要相机权限",
                 color = spec.palette.inkStrong,
-                fontSize = 13.sp,
+                fontSize = spec.type.optionTitle,
             )
             Spacer(Modifier.height(6.dp))
             Text(
@@ -495,8 +495,10 @@ private fun ViewfinderPlaceholder(permissionGranted: Boolean, blockReason: Strin
                     blockReason != null -> blockReason
                     else -> "等待相机绑定"
                 },
-                color = spec.palette.inkFaint,
-                fontSize = 11.sp,
+                // 占位态没有画面，底下是纯色 #070C11，可以用 textSecondary（7.2:1）；
+                // 不要用 inkFaint(3.15:1)，那是压真实画面时才不得已的选择。
+                color = spec.palette.textSecondary,
+                fontSize = spec.type.body,
             )
         }
     }
