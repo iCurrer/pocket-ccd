@@ -65,10 +65,10 @@
     <string name="settings_filter_flash">闪光</string>
     <string name="settings_filter_night">夜景</string>
     <string name="settings_quality">照片质量</string>
-    <string name="settings_quality_subtitle">JPEG · 当前为原型固定值</string>
+    <string name="settings_quality_subtitle">光栅 JPEG</string>
     <string name="settings_quality_value">高 · 92</string>
     <string name="settings_film_roll">胶卷</string>
-    <string name="settings_film_roll_hint">files/film · 点击重新扫描</string>
+    <string name="settings_film_roll_hint">点击重新扫描</string>
     <string name="settings_version">版本</string>
     <string name="settings_privacy">隐私</string>
     <string name="settings_privacy_note">照片只保存在本机，不上传</string>

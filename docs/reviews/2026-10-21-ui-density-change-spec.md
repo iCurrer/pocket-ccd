@@ -238,15 +238,18 @@ textTertiary = Color(0xFFFFFFFF).copy(alpha = 0.50f),
       `val sheetTitle: TextUnit = 16.sp`，根本不含 `fontSize =`，那条命令永远空过）：
 
       ```bash
-      grep -rn "\.sp" app/src/main/java/com/pocketccd/prototype/ui --include=*.kt \
-        | grep -v "FilmTheme.kt" | grep -v "ui/theme/"
+      grep -rn "fontSize\s*=\s*[0-9.]" app/src/main/java/com/pocketccd/prototype/ui \
+        --include=*.kt | grep -v "ui/theme/"
       # 期望：无输出
       ```
 
-      `ui/theme/` 是 M3 兜底字型（`PocketCcdTypography`），不在本单范围；
-      `microPrint` 走令牌所以不命中。
+      **别用 `grep "\.sp"`** —— `Arrangement.spacedBy` 和 `lineHeight = 20.sp`
+      都会命中，会把验收变成噪音。`ui/theme/` 是 M3 兜底字型（`PocketCcdTypography`），
+      不在本单范围；`microPrint` 走令牌所以不命中（上面 `NoBareFontSizeTest` 同一条规则）。
 - [ ] `grep -rn "color = .*inkGhost\|color = .*inkFaint" app/src/main/java` 在 `Text(` 上 0 命中（图标 tint 不算）
-- [ ] 全屏检索不到：`ms · `、`strips`、`.fswp`、`1.8 MB`、`AUTO ·`、`余 ` 这些字符串。
+- [ ] **UI 层**检索不到：`ms · `、`strips`、`.fswp`、`1.8 MB`、`AUTO ·`、`余 `。检索范围限定
+      `app/src/main/java/com/pocketccd/prototype/ui/` —— `strips` 在 `PhotoStore` /
+      `FilmEngine` 里是真实字段，数据层继续用，只是不上屏。
       **`files/film` 是唯一例外**：它必须留在 `licenses_*` 字符串里（CC BY-SA 4.0 要求披露素材位置与
       可替换性，FOT-024）。检索时排除 `res/values/strings.xml` 的 `licenses_` 前缀条目，
       否则就是在用"删内部路径"的理由删掉合规声明。

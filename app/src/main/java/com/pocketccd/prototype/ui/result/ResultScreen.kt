@@ -399,9 +399,10 @@ private fun FrameCaption(
     val hasIndex = photo != null && frameIndex > 0 && rollCapacity > 0
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 只留真实片号。右侧原来写 `JPEG · 4:3` —— 两项都是固定值，用户改不了，
+        // 也就没有信息量。
         Text(
             text = if (hasIndex) {
                 "FRAME ${"%02d".format(frameIndex)} / $rollCapacity"
@@ -409,12 +410,6 @@ private fun FrameCaption(
                 // 没有真实序号就不画片号，不拿 01 充数。
                 "POCKET CCD"
             },
-            style = MonoSmall.copy(color = p.textTertiary),
-        )
-        Text(
-            // 原型右侧是 `KODAK 135 · DNG + JPG`。我们只出 JPEG，也不存在"135"这个卷型，
-            // 所以留能对得上的部分；条带数属于引擎内部指标，放在状态行右侧。
-            text = "JPEG · 4:3",
             style = MonoSmall.copy(color = p.textTertiary),
         )
     }
@@ -506,13 +501,6 @@ private fun StatusRow(status: ResultStatus, stage: Stage, photo: SavedPhoto?) {
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = label, style = MonoSmall.copy(color = p.textTertiary))
         Spacer(modifier = Modifier.weight(1f))
-        // 诊断行：冲洗耗时与条带数，都是实测值。
-        if (photo != null) {
-            Text(
-                text = "${photo.renderMillis}ms · ${photo.strips} strips",
-                style = MonoSmall.copy(color = p.textTertiary),
-            )
-        }
     }
 }
 

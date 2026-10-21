@@ -95,15 +95,32 @@
 
 设计稿混排 `Noto Sans SC` + 等宽 mono。Android 上：
 
-| 用途 | 设计稿 | Compose | 说明 |
-|---|---|---|---|
-| 品牌/标题 | 15px SemiBold | 16sp `FontWeight.Medium` | |
-| 选项标题 | 12px Medium | 13sp Medium | |
-| 胶卷名 | 10px mono | 10sp `FontFamily.Monospace` + `letterSpacing 0.16em` | |
-| 参数 chip | 9px mono | 10sp Mono + `0.12em` | 9sp 在 640dpi 真机上偏小，抬到 10sp |
-| 缩略图标签 | 9px | 10sp | |
-| 参数脚注 | 8px mono | 9sp Mono + `0.14em` | 装饰性，可读性优先级最低 |
-| 面板描述 | 9px | 10sp | |
+| 用途 | 设计稿 | Compose 令牌 | 值 | 说明 |
+|---|---|---|---|---|
+| 页面标题 | 15px SemiBold | `sheetTitle` | 16sp | |
+| 行标题 / 强调信息 | 12px Medium | `optionTitle` | 15sp | 原 13sp |
+| 参数值 / 设置项右侧值 / 计数 | — | `value` | 14sp | 2026-10-21 新增 |
+| 说明文案 | 12px | `body` | 13sp | 原 12sp |
+| 等宽标签 | 10px mono | `mono` | 11sp | 原 10sp |
+| 等宽小标签 | 9px mono | `monoSmall` | 11sp | 原 9sp |
+| 通用标签 / 单位 | 9px | `label` | 11sp | 原 10sp |
+| 胶卷筒仿真印刷 | 8px | `microPrint` | 9sp | **装饰，不承载信息** |
+
+**字号下限 11sp；`microPrint`（9sp）仅限装饰性印刷仿真。**
+
+设计稿自己的主力字号是 9px（占 41 处的 21 处），折到 360dp 屏上只有 8.2dp——
+拉丁字母和数字在这个尺寸是"质感"，换成中文就是"纹理"。所以令牌整体比设计稿大一档，
+并且**不再允许裸 `fontSize`**：`FilmType` 的 KDoc 写死了下限，`NoBareFontSizeTest`
+每次跑单测都会检查 `ui/` 下有没有漏网的 `fontSize = 8.sp`。
+
+文字的**颜色**同样有下限：承载信息的文字最低 `textTertiary`（白 50%，5.3:1），
+说明文字用 `textSecondary`（白 60%，7.2:1）。`inkGhost`（白 25%，2.17:1）只允许
+出现在图标 tint 与分隔线上。两处例外见下：
+
+- **胶卷库「已装卷」的浅色金属面板**是全页唯一反色区，文字用页面私有的 `Metal.ink*`
+  （深色）。白色系令牌落在这块浅底上等于消失。
+- **取景器内压在真实画面上的文字**（`AF LOCK`、倍率）不适用合成计算，用 `ink`(75%)
+  或更高，不用 `textTertiary`。
 
 **中文字体不引资源**：系统 `FontFamily.SansSerif` 在各家 ROM 上是思源/苹方/小米兰亭，视觉差异在可接受范围。引入 Noto Sans SC 字重文件约 +4MB，等上线前若有包体余量再评估。
 

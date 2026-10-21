@@ -324,17 +324,6 @@ private fun LoadedPanel(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    // 真实参数：帧尺寸来自 pack 头部，文件名是磁盘上那个文件。
-                    // 原型这里是「暖调肤色 · C-41 · 36 张」——工艺和卖点我们无从得知。
-                    text = stock?.file?.name ?: "—",
-                    color = Metal.inkBody,
-                    fontSize = spec.type.label,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetalPill(
@@ -745,16 +734,6 @@ private fun StockCard(
                 }
                 Spacer(Modifier.height(5.dp))
                 Text(
-                    text = stock.file.name,
-                    color = p.textTertiary,
-                    fontSize = spec.type.label,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.04.em,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
                     // 原型这里是一句品牌文案（"柔和肤色与细腻颗粒…"），是编的。
                     // 换成本机真实记录：这卷上次拍是什么时候。没拍过就直说没拍过。
                     text = when {
@@ -769,24 +748,16 @@ private fun StockCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(9.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BorderPill(text = stock.sizeLabel, color = p)
-                    BorderPill(text = "$rollCapacity 张", color = p)
-                }
+                // 只留张数。帧尺寸是内部参数（而且裁切后与 pack 尺寸未必一致，
+                // 写出来反而误导）；两个 pill 在 11sp 下也会横向溢出。
+                BorderPill(text = "$rollCapacity 张", color = p)
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
             ) {
-                Text(
-                    text = fileSizeLabel(stock.file.length()),
-                    color = p.textTertiary,
-                    fontSize = spec.type.label,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.10.em,
-                )
                 LoadPill(loaded = loaded)
             }
         }
@@ -957,7 +928,7 @@ private fun EmptyLibrary(onRefresh: () -> Unit) {
         Text(
             // 这页空着唯一的原因是 pack 没推进去，所以直接把该做的事写出来，
             // 而不是留一句"暂无数据"。
-            text = "把 .fswp 推到应用私有目录 film/ 之后\n点下面的按钮重新扫描",
+            text = "还没有可用的胶卷\n点下面的按钮重新扫描",
             color = p.textSecondary,
             fontSize = spec.type.body,
             lineHeight = 18.sp,
@@ -988,13 +959,6 @@ private fun DarkButton(
     ) {
         Text(text = label, color = p.inkStrong, fontSize = spec.type.optionTitle)
     }
-}
-
-/** 真实文件体积。pack 约 2–4 MB，用 MB 更好读；小于 1 MB 才退回 KB。 */
-private fun fileSizeLabel(bytes: Long): String = when {
-    bytes <= 0L -> "—"
-    bytes >= 1_000_000L -> "%.1f MB".format(bytes / 1_000_000.0)
-    else -> "%d KB".format(bytes / 1024)
 }
 
 /** `10.19`。只取月日：卷是按卷分组的，年份在库里没有信息量。 */
