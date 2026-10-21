@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Size
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -164,7 +163,6 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         capture = capture,
         roll = roll,
         rollShots = rollShots,
-        cameraLive = handle != null,
         previewError = previewError,
         permissionGranted = hasPermission,
         cameraViewfinder = if (cameraBound) {
@@ -239,7 +237,6 @@ fun PocketCcdApp(
     capture: CaptureState = CaptureState.Idle,
     roll: List<SavedPhoto> = emptyList(),
     rollShots: Int = 0,
-    cameraLive: Boolean = false,
     previewError: String? = null,
     permissionGranted: Boolean = true,
     cameraViewfinder: (@Composable (Modifier) -> Unit)? = null,
@@ -315,11 +312,9 @@ fun PocketCcdApp(
                     val rollFull = rollShots >= ROLL_CAPACITY
                     FilmCaptureScreen(
                         stockName = stock?.label ?: "无胶卷",
-                        stockMeta = stock?.let { "${it.label} · ${it.sizeLabel}" } ?: "未找到胶卷",
                         shotsTaken = rollShots,
                         rollCapacity = ROLL_CAPACITY,
                         libraryCount = roll.size,
-                        megapixels = megapixelLabel(cameraUi.programmedSize),
                         flashOn = flashOn,
                         gridOn = gridOn,
                         // 一卷拍满就真的停：容量若只是装饰，计数器就成了摆设（D-002）。
@@ -343,7 +338,6 @@ fun PocketCcdApp(
                         onOpenFilms = { onEvent(AppEvent.OpenFilms) },
                         onNewRoll = onNewRoll,
                         onOpenSettings = { onEvent(AppEvent.OpenSettings) },
-                        cameraLive = cameraLive,
                         permissionGranted = permissionGranted,
                         viewfinder = cameraViewfinder,
                         onTapToFocus = onTapToFocus,
@@ -436,13 +430,6 @@ fun PocketCcdApp(
  * UI. Flagged `PROPOSED` until the user signs off on the product rule.
  */
 private const val ROLL_CAPACITY = 36
-
-/** 真实采集尺寸，而不是设计稿写死的 `12`。 */
-private fun megapixelLabel(size: Size?): String {
-    if (size == null) return "—"
-    val mp = size.width.toLong() * size.height / 1_000_000.0
-    return "%.1fMP".format(mp)
-}
 
 private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==

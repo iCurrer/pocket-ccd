@@ -56,16 +56,16 @@ import kotlin.math.abs
  *   without Camera2 Interop, so printing them would be inventing data.
  * - No `DNG` and no `3:2`. This app writes JPEG and captures 4:3.
  *
- * The chips that remain (`12.6MP`, `4:3`, JPEG) are computed from real state.
+ * 2026-10-21 密度整改后，取景页只保留卷名、卷内计数与进度。`LIVE` / `12.6MP` /
+ * `4:3` 三个 chip 与底部的 `AUTO · 4:3 · JPEG`、`余 N 张` 全部删除：它们是真值，
+ * 但用户此刻不用它们做任何决定（真实 ≠ 该上屏，见 D-050）。参数留在成片页。
  */
 @Composable
 fun FilmCaptureScreen(
     stockName: String,
-    stockMeta: String,
     /** 本卷已拍张数（自换卷起计），不是照片库总数。 */
     shotsTaken: Int,
     rollCapacity: Int,
-    megapixels: String,
     flashOn: Boolean,
     gridOn: Boolean,
     canShoot: Boolean,
@@ -85,8 +85,6 @@ fun FilmCaptureScreen(
     modifier: Modifier = Modifier,
     /** 照片库总数，只用于「相册」磁贴上的角标。 */
     libraryCount: Int = 0,
-    /** True once CameraX has actually bound; drives the LIVE chip. */
-    cameraLive: Boolean = false,
     permissionGranted: Boolean = true,
     /** Null when the camera is not available yet (no permission / no pack). */
     viewfinder: (@Composable (Modifier) -> Unit)? = null,
@@ -255,27 +253,6 @@ fun FilmCaptureScreen(
 
                 FocusRing(point = focusPoint, lock = focusLock)
 
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    // Real state, not decoration: LIVE only when CameraX bound.
-                    FilmChip(if (cameraLive) "LIVE" else "STANDBY")
-                    FilmChip(megapixels)
-                    FilmChip("4:3")
-                }
-
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                ) {
-                    // 不要在这里强压高度。chip 自身上下各 4dp 内边距，写死 17dp 会把
-                    // 文字压成一条缝，真机上渲染出来只剩「…」（v4 截图实测）。
-                    FilmChip(text = stockShortLabel(stockName))
-                }
             }
         }
 
@@ -283,27 +260,19 @@ fun FilmCaptureScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(p.accent),
-                )
+            // 只在拍不了的时候出现（没有胶卷 / 本卷拍满 / 相机没绑上 / 预览出错）。
+            // 一切正常时这块是空的 —— 那正是取景页该有的样子。
+            if (blockReason != null) {
                 Text(
-                    text = stockMeta,
-                    color = p.textTertiary,
+                    text = blockReason,
+                    color = p.error,
                     fontSize = spec.type.monoSmall,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.18.em,
                 )
             }
+            Spacer(Modifier.weight(1f))
             Text(
                 text = "$shotsTaken / $rollCapacity EXP",
                 color = p.textTertiary,
@@ -349,29 +318,6 @@ fun FilmCaptureScreen(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = blockReason ?: "AUTO · 4:3 · JPEG",
-                    color = if (blockReason != null) p.error else p.textTertiary,
-                    fontSize = spec.type.monoSmall,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.14.em,
-                )
-                Text(
-                    // 右边原来写"已拍 N 张"，和上方的 N/36 是同一个数字，重复且没有信息。
-                    // 换成剩余张数：扫一眼就知道这卷还能拍几下。
-                    text = "余 ${(rollCapacity - shotsTaken).coerceAtLeast(0)} 张",
-                    color = p.textTertiary,
-                    fontSize = spec.type.monoSmall,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.14.em,
-                )
-            }
 
             Spacer(Modifier.height(8.dp))
 
@@ -458,15 +404,6 @@ private fun StockPill(name: String, onClick: () -> Unit) {
     }
 }
 
-/** `KODAK PORTRA 400` -> `P400` for the in-finder chip. Keeps the chip narrow. */
-private fun stockShortLabel(name: String): String {
-    val tokens = name.split(' ', '/', '-').filter { it.isNotBlank() }
-    if (tokens.isEmpty()) return name.take(6)
-    if (tokens.size == 1) return tokens.first().take(6).uppercase()
-    val initial = tokens.first().first().uppercase()
-    val number = tokens.last().filter { it.isDigit() }
-    return if (number.isNotEmpty()) "$initial$number" else tokens.last().take(5).uppercase()
-}
 
 /**
  * What sits in the finder when there is no preview: permission not granted, or

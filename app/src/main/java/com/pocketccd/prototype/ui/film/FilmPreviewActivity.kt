@@ -47,10 +47,8 @@ class FilmPreviewActivity : ComponentActivity() {
 
                 FilmCaptureScreen(
                     stockName = "KODAK PORTRA 400",
-                    stockMeta = "KODAK PORTRA 400 · C-41",
                     shotsTaken = shots,
                     rollCapacity = 36,
-                    megapixels = "12.6MP",
                     flashOn = flashOn,
                     gridOn = gridOn,
                     canShoot = true,

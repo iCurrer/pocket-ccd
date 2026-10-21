@@ -193,41 +193,4 @@ fun ViewfinderReticle(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Parameter chip. Content must be a **real** value — see D-040: the design's
- * `1/125`, `f/2.8`, `ISO 400` and `DNG` are decorative and cannot be backed by
- * CameraX, so they are not reproduced here.
- */
-@Composable
-fun FilmChip(
-    text: String,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-) {
-    val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(spec.metrics.chipRadius)
-    val clickModifier = if (onClick != null) {
-        // Visual stays 17dp tall; the touch target is widened by the caller.
-        Modifier.clickable(onClick = onClick)
-    } else {
-        Modifier
-    }
 
-    Box(
-        modifier = modifier
-            .then(clickModifier)
-            .clip(shape)
-            .background(spec.palette.chipFill)
-            .border(spec.metrics.hairline, spec.palette.hairline, shape)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = text,
-            color = spec.palette.ink,
-            fontSize = spec.type.monoSmall,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 0.12.em,
-            maxLines = 1,
-        )
-    }
-}
