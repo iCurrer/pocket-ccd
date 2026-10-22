@@ -50,6 +50,20 @@ data class FilmPalette(
     val error: Color,
     /** Four-stop brushed metal for the viewfinder bezel (160deg, per spec §2.2). */
     val bezelMetal: List<Color>,
+    /**
+     * 机身底盖的四停竖直渐变（顶受光 → 底沉下去）。D-051。
+     *
+     * 比 [bezelMetal] 更暗、更中性：bezel 是围着画面的窄条，需要一点亮度才看得出
+     * 是金属；底盖是一大片，同样亮度就成了灰色塑料板。
+     */
+    val panelMetal: List<Color>,
+    /**
+     * 凹槽 / 内嵌键的底。
+     *
+     * 必须比 [panelMetal] 最暗一停还要暗 —— 凹进去的地方收不到光。用面板色画凹槽，
+     * 看着像贴了张圆纸片，这是拟物最容易翻车的一步。
+     */
+    val wellFill: Color,
     /** Sweep gradient for the shutter ring. */
     val shutterRing: List<Color>,
     val shutterFace: List<Color>,
@@ -69,6 +83,15 @@ data class FilmMetrics(
     val bezel: Dp = 3.dp,
     val chipRadius: Dp = 3.dp,
     val shutter: Dp = 78.dp,
+    /** 内嵌副键的视觉直径。热区仍是 [touchTarget]。 */
+    val panelKey: Dp = 34.dp,
+    /**
+     * 快门凹槽比快门本体外扩多少（单边）。
+     *
+     * 5dp 是下限：真机 3x 下 3dp 只剩 9 个物理像素，凹槽和快门环会糊成一道边，
+     * 「按在坑里」的错觉就没了。
+     */
+    val panelWell: Dp = 5.dp,
     val thumbnail: Dp = 50.dp,
     val sheetRadius: Dp = 26.dp,
     val hairline: Dp = 1.dp,
@@ -142,6 +165,16 @@ val FilmDarkSpec = FilmThemeSpec(
             Color(0xFF2D3136),
             Color(0xFF141619),
         ),
+        // 底盖渐变比 bezel 整套压暗约 40%：同色值铺满 360×140dp 会读成灰色塑料。
+        // 第一停仍是面板最亮处（顶边转角），最后一停接近 #0D0F11。
+        panelMetal = listOf(
+            Color(0xFF2E3237),
+            Color(0xFF1C2024),
+            Color(0xFF14171A),
+            Color(0xFF0D0F11),
+        ),
+        // 凹槽底：比面板最暗一停更暗，才像"收不到光"。
+        wellFill = Color(0xFF07080A),
         // Deeper darks than the design's literal values: at 3x display density the
         // ring is only ~13 physical px wide, and the original #8D939A/#767D84 were
         // too close to the face colour to survive downscaling — the shutter read as

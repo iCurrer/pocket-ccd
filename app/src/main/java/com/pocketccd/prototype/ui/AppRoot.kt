@@ -43,6 +43,7 @@ import com.pocketccd.prototype.camera.CameraHandle
 import com.pocketccd.prototype.camera.CameraPreview
 import com.pocketccd.prototype.camera.CameraUiState
 import com.pocketccd.prototype.camera.CaptureState
+import com.pocketccd.prototype.camera.ExposureProfile
 import com.pocketccd.prototype.camera.LensStop
 import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.navigation.AppDestination
@@ -86,6 +87,10 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
     var cameraNonce by remember { mutableIntStateOf(0) }
     // 该机的真实光学档位（D-044）。空列表 = 探不到，取景页会退回数码档。
     var lensStops by remember { mutableStateOf<List<LensStop>>(emptyList()) }
+    // EV 补偿（D-052）。null = 该机不支持，取景页不画这个控件。
+    // 和 zoom 一样留在这层：相机重绑会把硬件 EV 打回 0，界面若自己记着 +1 就假了。
+    var exposureProfile by remember { mutableStateOf<ExposureProfile?>(null) }
+    var evIndex by remember { mutableIntStateOf(0) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -182,6 +187,13 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                             lensStops = bound.lensStops
                             // 新会话的变焦是 1x，把界面记住的那一档补回去。
                             if (zoomRatio > 1f) bound.requestZoom(zoomRatio)
+                            // EV 同理：重绑后硬件回到 0，把用户设过的档位补回去，
+                            // 否则去趟相册回来曝光就变了而界面还显示着 +1。
+                            val profile = bound.exposureProfile()
+                            exposureProfile = profile
+                            if (profile != null && evIndex != profile.index) {
+                                evIndex = bound.requestExposure(evIndex) ?: profile.index
+                            }
                         }
                     },
                     onError = { message ->
@@ -221,6 +233,19 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         },
         zoom = zoomRatio,
         lensStops = lensStops,
+        exposureProfile = exposureProfile,
+        evIndex = evIndex,
+        onEvChange = { requested ->
+            if (requested == evIndex) {
+                evIndex
+            } else {
+                val bound = handle
+                // 和变焦一样以实际生效值为准：机型只给 ±1 时请求 +2 会停在 +1。
+                val applied = bound?.requestExposure(requested) ?: requested
+                evIndex = applied
+                applied
+            }
+        },
         onNewRoll = viewModel::newRoll,
         onSelectStock = viewModel::selectStock,
         onRetry = viewModel::retry,
@@ -254,6 +279,11 @@ fun PocketCcdApp(
     zoom: Float = 1f,
     /** 该机真实光学档位（D-044）。空 = 探不到，退回数码档。 */
     lensStops: List<LensStop> = emptyList(),
+    /** EV 补偿的真实范围（D-052）。null = 该机不支持，取景页不画这个控件。 */
+    exposureProfile: ExposureProfile? = null,
+    /** 当前 EV 档位 index（不是 EV 值）。 */
+    evIndex: Int = 0,
+    onEvChange: (Int) -> Int = { it },
 ) {
     val view = LocalView.current
     val destination = state.destination
@@ -301,10 +331,13 @@ fun PocketCcdApp(
             BackHandler(enabled = !shooting) {
                 onEvent(AppEvent.NavigateBack)
             }
+            // 这一层**不**吃 safeDrawing：取景页的机身底盖要一直铺到屏幕下沿，
+            // 手势条那块也得是金属，否则板子在导航栏上方断掉，露出 appBg 的一条黑边，
+            // 拟物当场破功。避让交给 FilmCaptureScreen 自己（statusBarsPadding +
+            // navigationBars 高度）。其它三页是普通列表，由下面 AnimatedContent 统一吃
+            // safeDrawing，行为不变。
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 if (destination == AppDestination.CAMERA || destination == AppDestination.RESULT) {
                     // 成片页期间它继续挂载（被 ResultScreen 完全遮住），这样刚按下的
@@ -314,7 +347,6 @@ fun PocketCcdApp(
                         stockName = stock?.label ?: "无胶卷",
                         shotsTaken = rollShots,
                         rollCapacity = ROLL_CAPACITY,
-                        libraryCount = roll.size,
                         flashOn = flashOn,
                         gridOn = gridOn,
                         // 一卷拍满就真的停：容量若只是装饰，计数器就成了摆设（D-002）。
@@ -344,13 +376,18 @@ fun PocketCcdApp(
                         onZoomChange = onZoomChange,
                         zoom = zoom,
                         lensStops = lensStops,
+                        exposureProfile = exposureProfile,
+                        evIndex = evIndex,
+                        onEvChange = onEvChange,
                     )
                 }
 
                 if (destination != AppDestination.CAMERA) {
                     AnimatedContent(
                         targetState = destination,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing),
                         transitionSpec = {
                             fadeIn(tween(200)) togetherWith fadeOut(tween(160))
                         },

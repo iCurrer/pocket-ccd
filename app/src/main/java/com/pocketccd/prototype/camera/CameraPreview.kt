@@ -71,6 +71,27 @@ data class CapturedFrame(
 )
 
 /**
+ * EV 补偿的真实范围（D-052）。
+ *
+ * 单位不统一是 CameraX 的 API 逼出来的：`setExposureCompensationIndex` 只收**整数
+ * index**，而刻度上画的是 **EV**，两者差一个 `stepEv`（真机普遍 1/3，也有 1/6）。
+ * 换算收在这里，界面不要自己乘 —— 一旦两处各算一次，某天换了 step 就只错一半。
+ *
+ * [minIndex] .. [maxIndex] 是**硬件报告的范围**，不是我们编的 `-2..+2`。
+ */
+data class ExposureProfile(
+    val minIndex: Int,
+    val maxIndex: Int,
+    val stepEv: Float,
+    /** 绑定时相机报告的当前 index。 */
+    val index: Int,
+) {
+    fun evOf(index: Int): Float = index * stepEv
+    val minEv: Float get() = evOf(minIndex)
+    val maxEv: Float get() = evOf(maxIndex)
+}
+
+/**
  * 一次相机会话。由 [CameraPreview] 在绑定时产生，解绑时作废。
  *
  * 存在的意义是把 CameraX 挡在 UI 之外：Compose 层只拿到一个
@@ -231,6 +252,50 @@ class CameraHandle internal constructor(
     /** 该镜头当前的最大变焦比。读不到就当 1x（不变焦）。 */
     fun maxZoomRatio(): Float =
         cameraInfo.zoomState.value?.maxZoomRatio?.coerceAtLeast(1f) ?: 1f
+
+    /**
+     * 曝光补偿的真实范围与步长；不支持时返回 null。
+     *
+     * **null 必须让界面把控件整个藏掉**，不能画一条拖不动的刻度：用户会以为是
+     * 自己没拖对，而不是"这台机器没有这个功能"。这和 D-044 对变焦档位的处理是同一条规矩。
+     *
+     * `exposureState` 是同步读的（不是 LiveData），但相机解绑后再读可能抛异常，
+     * 所以整段 `runCatching`。
+     */
+    fun exposureProfile(): ExposureProfile? = runCatching {
+        val state = cameraInfo.exposureState
+        if (!state.isExposureCompensationSupported) return@runCatching null
+        val step = state.exposureCompensationStep.toFloat()
+        val range = state.exposureCompensationRange
+        // step <= 0 或上下限相同 = 这台机器其实没给范围，画刻度就是画假的。
+        if (step <= 0f || range.lower >= range.upper) return@runCatching null
+        ExposureProfile(
+            minIndex = range.lower,
+            maxIndex = range.upper,
+            stepEv = step,
+            index = state.exposureCompensationIndex,
+        )
+    }.getOrNull()
+
+    /**
+     * 设置 EV 补偿，参数是**档位 index**（`EV = index × stepEv`，见 [ExposureProfile]）。
+     *
+     * 返回实际生效的 index（已按硬件范围 clamp）；相机不在了返回 null。
+     *
+     * 为什么返回 clamp 后的值而不等相机回读：`setExposureCompensationIndex` 是异步的，
+     * 立刻回读拿到的是旧值。界面按返回值先把指针挪到位，相机那边随后跟上 ——
+     * 拖动时指针不能"卡一下再跳"。
+     */
+    fun requestExposure(index: Int): Int? {
+        val profile = exposureProfile() ?: return null
+        val applied = index.coerceIn(profile.minIndex, profile.maxIndex)
+        runCatching { cameraControl.setExposureCompensationIndex(applied) }
+            .onSuccess {
+                Log.i(TAG, "ev -> index $applied (${"%.2f".format(profile.evOf(applied))} EV)")
+            }
+            .onFailure { Log.w(TAG, "ev 设置失败: ${it.message}") }
+        return applied
+    }
 
     /**
      * 成品需要顺时针旋转的度数。

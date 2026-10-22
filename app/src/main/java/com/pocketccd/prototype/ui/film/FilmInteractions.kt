@@ -6,21 +6,33 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,12 +40,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.pocketccd.prototype.camera.ExposureProfile
 import com.pocketccd.prototype.camera.LensStop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -266,3 +280,243 @@ fun ViewfinderZoom(
         }
     }
 }
+
+/**
+ * EV 补偿：一颗圆键 + 一条向左展开的短刻度尺（D-052）。
+ *
+ * 为什么不做在点按对焦的方框上：对焦框是**瞬态**的（2.2s 淡出），EV 是**持续**
+ * 状态，两者生命周期不同；而且拖动刻度时手指要一直按着，压在画面中心的对焦框上
+ * 会同时改变测光点，等于两个参数互相打架。
+ *
+ * 为什么键在取景器右缘、尺子往左长：它和变焦档位是同一列（同一只拇指），
+ * 且往左长不会顶出屏幕。尺子只是**展开的 EV 环**——真实相机上它就是一圈刻度。
+ *
+ * 刻度范围取硬件报告的真实范围（[ExposureProfile]），不是写死的 ±2。
+ * 机型只给 ±1 就只画 ±1，给 13 档就画 13 档。
+ */
+@Composable
+fun ViewfinderEv(
+    profile: ExposureProfile,
+    evIndex: Int,
+    onEvChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // 松手后 4 秒自动收：尺子会压住画面右下角，用户改完就该让开。
+    // key 用 evIndex，拖动过程中每换一档都重新计时，不会拖到一半被收走。
+    LaunchedEffect(expanded, evIndex) {
+        if (expanded) {
+            delay(4000)
+            expanded = false
+        }
+    }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(110)) + expandHorizontally(expandFrom = Alignment.End, animationSpec = tween(160)),
+            exit = fadeOut(tween(120)),
+        ) {
+            FilmEvRuler(
+                profile = profile,
+                evIndex = evIndex,
+                onEvChange = onEvChange,
+            )
+        }
+        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.size(8.dp))
+        FilmEvKey(
+            profile = profile,
+            evIndex = evIndex,
+            active = expanded,
+            onClick = { expanded = !expanded },
+        )
+    }
+}
+
+/** 40dp 视觉 / 48dp 热区，和变焦档位同一套尺寸。 */
+@Composable
+private fun FilmEvKey(
+    profile: ExposureProfile,
+    evIndex: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val spec = LocalFilmTheme.current
+    val ev = profile.evOf(evIndex)
+    val neutral = abs(ev) < profile.stepEv / 2f
+    // EV 不为 0 时键面转白：和变焦的激活态一致，也让"我改过曝光"在取景时一眼可见。
+    val lit = active || !neutral
+    val fill = if (lit) Color.White.copy(alpha = 0.92f) else spec.palette.chipFill
+    val ink = if (lit) Color(0xFF151515) else spec.palette.ink
+
+    Box(
+        modifier = androidx.compose.ui.Modifier.size(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = androidx.compose.ui.Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(fill)
+                .border(1.dp, if (lit) fill else spec.palette.hairline, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                // 0 档显示 `±`，非 0 显示实际值：读数本身就是"现在偏了多少"，
+                // 不需要再加一个小圆点之类的状态符号。
+                text = if (neutral) "±" else formatEv(ev),
+                color = ink,
+                fontSize = spec.type.monoSmall,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+    }
+}
+
+/**
+ * 刻度尺本体。宽 232dp，13 档左右就够用了；档位更多时每格变窄，但仍是 1 档一停。
+ */
+@Composable
+private fun FilmEvRuler(
+    profile: ExposureProfile,
+    evIndex: Int,
+    onEvChange: (Int) -> Unit,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val span = (profile.maxIndex - profile.minIndex).coerceAtLeast(1)
+    val pad = 14.dp
+    // 拖动时 pointerInput 的 lambda 只创建一次，捕获的 evIndex 会一直是按下那一刻的值。
+    // 用 rememberUpdatedState 读最新值，才能做到"档位没变就不回调"。
+    val currentIndex by rememberUpdatedState(evIndex)
+
+    fun indexAtX(x: Float, width: Float, padPx: Float): Int {
+        val usable = (width - padPx * 2f).coerceAtLeast(1f)
+        val frac = ((x - padPx) / usable).coerceIn(0f, 1f)
+        return profile.minIndex + (frac * span).roundToInt()
+    }
+
+    // 每帧都发一次 setExposureCompensationIndex 会把 3A 收敛反复打断（拖动 1 秒能发
+    // 60 次），所以只在整数档位真的变了才往下传。
+    fun emit(x: Float, width: Float, padPx: Float) {
+        val next = indexAtX(x, width, padPx)
+        if (next != currentIndex) onEvChange(next)
+    }
+
+    Column(
+        modifier = androidx.compose.ui.Modifier
+            .width(232.dp)
+            // 参考图里的深色件都没有描边：描边一加就变成"卡片"，而它应该是
+            // "取景器里压着的一块暗色"。所以只留底色 + 圆角（D-053）。
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            .background(p.chipFill)
+            .padding(vertical = 8.dp, horizontal = 0.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // 读数窗（D-053）：参考图里的数值是嵌进机身的深色 LCD 胶囊，不是浮在画面上的
+        // 一行字。这里同样做"凹陷"——纯黑 0.58 + 顶部一条更深的线 + 5dp 圆角。
+        // 深色 + 内阴影是"装进去"的唯一信号，浅色圆角条会读成通知气泡。
+        Box(
+            modifier = androidx.compose.ui.Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
+                .background(Color.Black.copy(alpha = 0.58f))
+                .drawBehind {
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.55f),
+                        start = Offset(0f, 0.5.dp.toPx()),
+                        end = Offset(size.width, 0.5.dp.toPx()),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                }
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = formatEv(profile.evOf(evIndex)),
+                color = p.ink,
+                fontSize = spec.type.mono,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.12.em,
+            )
+        }
+        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.size(5.dp))
+        Canvas(
+            modifier = androidx.compose.ui.Modifier
+                .fillMaxWidth()
+                .height(22.dp)
+                .pointerInput(profile.minIndex, profile.maxIndex) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            emit(offset.x, size.width.toFloat(), pad.toPx())
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            emit(change.position.x, size.width.toFloat(), pad.toPx())
+                        },
+                    )
+                }
+                .pointerInput(profile.minIndex, profile.maxIndex) {
+                    detectTapGestures { offset ->
+                        emit(offset.x, size.width.toFloat(), pad.toPx())
+                    }
+                },
+        ) {
+            val padPx = pad.toPx()
+            val usable = (size.width - padPx * 2f).coerceAtLeast(1f)
+            val midY = size.height / 2f
+            val zeroX = padPx + usable * (0f - profile.minIndex) / span
+
+            // 基线
+            drawLine(
+                color = Color.White.copy(alpha = 0.20f),
+                start = Offset(padPx, midY),
+                end = Offset(size.width - padPx, midY),
+                strokeWidth = 1.dp.toPx(),
+            )
+            // 逐档刻线。0 档最长，整格次之，1/3 格最短 —— 这条层次是肉眼读出
+            // "现在在第几档"的唯一依据，全靠长短。
+            for (i in 0..span) {
+                val index = profile.minIndex + i
+                val x = padPx + usable * i / span
+                val isZero = index == 0
+                val height = when {
+                    isZero -> 13.dp.toPx()
+                    index % 3 == 0 -> 8.dp.toPx()
+                    else -> 5.dp.toPx()
+                }
+                drawLine(
+                    color = Color.White.copy(alpha = if (isZero) 0.55f else 0.28f),
+                    start = Offset(x, midY - height / 2f),
+                    end = Offset(x, midY + height / 2f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+            // 0 档的专属标记：一条更亮的竖线，保证在任何背景上都找得到中性位。
+            drawLine(
+                color = Color.White.copy(alpha = 0.75f),
+                start = Offset(zeroX, midY - 9.dp.toPx()),
+                end = Offset(zeroX, midY + 9.dp.toPx()),
+                strokeWidth = 1.dp.toPx(),
+            )
+            // 金色指针：唯一有颜色的元素，位置就是当前 index。
+            val pointerX = padPx + usable * (evIndex - profile.minIndex) / span
+            drawLine(
+                color = p.accent,
+                start = Offset(pointerX, midY - 11.dp.toPx()),
+                end = Offset(pointerX, midY + 11.dp.toPx()),
+                strokeWidth = 2.dp.toPx(),
+            )
+            drawCircle(color = p.accent, radius = 2.dp.toPx(), center = Offset(pointerX, midY))
+        }
+    }
+}
+
+/**
+ * EV 读数。`%+.1f` 在步长 1/3 时得到 `+0.3 / +0.7 / +1.0`，
+ * 这些是 index×step 的**精确**结果，不是四舍五入凑出来的好看数字。
+ */
+private fun formatEv(ev: Float): String =
+    if (abs(ev) < 0.001f) "0.0" else "%+.1f".format(ev)
