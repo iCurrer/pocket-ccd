@@ -311,7 +311,7 @@ private fun FilterChip(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val shape = CircleShape
-    val labelColor = if (selected) p.onAccent else p.textSecondary
+    val labelColor = if (selected) p.accent else p.textSecondary
 
     Box(
         modifier = Modifier
@@ -325,12 +325,9 @@ private fun FilterChip(
             modifier = Modifier
                 .height(CHIP_HEIGHT)
                 .clip(shape)
-                .background(if (selected) p.accent else p.chipFill)
-                .border(
-                    spec.metrics.hairline,
-                    if (selected) p.accent else p.hairline,
-                    shape,
-                )
+                // 2026-10-23：选中态从"金色实底 + 深色字"改成"金 14% 底 + 金字"。
+                // 实底金在近黑页上是整屏最亮的一块，会把视线从照片上抢走。
+                .background(if (selected) p.accent.copy(alpha = 0.14f) else p.controlFill)
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -350,7 +347,7 @@ private fun FilterChip(
                 Text(
                     text = count.toString(),
                     style = MonoCaption.copy(
-                        color = if (selected) p.onAccent.copy(alpha = 0.65f) else p.textTertiary,
+                        color = if (selected) p.accent.copy(alpha = 0.70f) else p.textTertiary,
                     ),
                 )
             }
@@ -420,7 +417,7 @@ private fun PhotoTile(
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    val shape = RoundedCornerShape(9.dp)
+    val shape = RoundedCornerShape(8.dp)
     val cacheKey = item.imagePath ?: item.fullImagePath
     val fallbackPath = item.fullImagePath
 

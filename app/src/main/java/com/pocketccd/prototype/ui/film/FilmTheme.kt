@@ -75,30 +75,27 @@ data class FilmMetrics(
     val gutter: Dp = 12.dp,
     val gutterWide: Dp = 16.dp,
     val gutterWidest: Dp = 24.dp,
-    val topBarHeight: Dp = 48.dp,
+    val topBarHeight: Dp = 56.dp,
     val controlSize: Dp = 36.dp,
     /** Spec §2.4: visual size may be small, the touch target may not. */
     val touchTarget: Dp = 48.dp,
-    val viewfinderRadius: Dp = 20.dp,
-    val bezel: Dp = 3.dp,
+    val viewfinderRadius: Dp = 16.dp,
+    val bezel: Dp = 0.dp,
     val chipRadius: Dp = 3.dp,
-    val shutter: Dp = 78.dp,
+    /** 视觉直径（含滚花环）。凹槽尺寸 = shutter + panelWell×2。 */
+    val shutter: Dp = 72.dp,
     /** 内嵌副键的视觉直径。热区仍是 [touchTarget]。 */
     val panelKey: Dp = 34.dp,
-    /**
-     * 快门凹槽比快门本体外扩多少（单边）。
-     *
-     * 5dp 是下限：真机 3x 下 3dp 只剩 9 个物理像素，凹槽和快门环会糊成一道边，
-     * 「按在坑里」的错觉就没了。
-     */
-    val panelWell: Dp = 5.dp,
+    /** 快门凹槽比快门本体外扩多少（单边）。8dp 让凹槽读成"坑"而不是描边。 */
+    val panelWell: Dp = 8.dp,
     val thumbnail: Dp = 50.dp,
     val sheetRadius: Dp = 26.dp,
     val hairline: Dp = 1.dp,
-    val cornerArm: Dp = 20.dp,
-    val cornerInsetX: Dp = 20.dp,
-    val cornerInsetY: Dp = 56.dp,
-    val reticle: Dp = 58.dp,
+    /** 角标臂长 / 内缩。2026-10-23：变细变短，像取景器刻线而不是 UI 括号。 */
+    val cornerArm: Dp = 18.dp,
+    val cornerInsetX: Dp = 18.dp,
+    val cornerInsetY: Dp = 18.dp,
+    val reticle: Dp = 24.dp,
 )
 
 /**
@@ -126,6 +123,8 @@ data class FilmType(
     val monoSmall: TextUnit = 11.sp,
     /** 通用标签 / 单位。 */
     val label: TextUnit = 11.sp,
+    /** 取景器右缘档位轨（变焦 / EV）的数字。比 label 大一档，站得住。 */
+    val rail: TextUnit = 13.sp,
     /** 只允许用于胶卷筒 / 包装上的仿真印刷字，**不得承载信息**。 */
     val microPrint: TextUnit = 9.sp,
 )
@@ -141,59 +140,56 @@ data class FilmThemeSpec(
 val FilmDarkSpec = FilmThemeSpec(
     palette = FilmPalette(
         appBg = Color(0xFF0B0C0E),
-        windowBg = Color(0xFF050506),
-        sheetBg = Color(0xFF14161A),
+        windowBg = Color(0xFF030304),
+        sheetBg = Color(0xFF121417),
         viewfinderBg = Color(0xFF061021),
         textPrimary = Color(0xFFEDEFF2),
-        textSecondary = Color(0xFFFFFFFF).copy(alpha = 0.60f),
-        textTertiary = Color(0xFFFFFFFF).copy(alpha = 0.50f),
+        textSecondary = Color(0xFFFFFFFF).copy(alpha = 0.64f),
+        textTertiary = Color(0xFFFFFFFF).copy(alpha = 0.46f),
         accent = Color(0xFFE7B37A),
-        onAccent = Color(0xFF141414),
-        ink = Color(0xFFFFFFFF).copy(alpha = 0.75f),
-        inkStrong = Color(0xFFFFFFFF).copy(alpha = 0.90f),
-        inkMuted = Color(0xFFFFFFFF).copy(alpha = 0.45f),
-        inkFaint = Color(0xFFFFFFFF).copy(alpha = 0.35f),
-        inkGhost = Color(0xFFFFFFFF).copy(alpha = 0.25f),
-        hairline = Color(0xFFFFFFFF).copy(alpha = 0.10f),
-        hairlineStrong = Color(0xFFFFFFFF).copy(alpha = 0.15f),
-        controlFill = Color(0xFFFFFFFF).copy(alpha = 0.04f),
-        chipFill = Color(0xFF000000).copy(alpha = 0.32f),
+        onAccent = Color(0xFF161310),
+        ink = Color(0xFFFFFFFF).copy(alpha = 0.78f),
+        inkStrong = Color(0xFFFFFFFF).copy(alpha = 0.92f),
+        inkMuted = Color(0xFFFFFFFF).copy(alpha = 0.50f),
+        inkFaint = Color(0xFFFFFFFF).copy(alpha = 0.34f),
+        inkGhost = Color(0xFFFFFFFF).copy(alpha = 0.22f),
+        hairline = Color(0xFFFFFFFF).copy(alpha = 0.07f),
+        hairlineStrong = Color(0xFFFFFFFF).copy(alpha = 0.14f),
+        controlFill = Color(0xFFFFFFFF).copy(alpha = 0.05f),
+        chipFill = Color(0xFF000000).copy(alpha = 0.28f),
         error = Color(0xFFB84A3A),
         bezelMetal = listOf(
-            Color(0xFF4B4F55),
-            Color(0xFF1B1D20),
-            Color(0xFF2D3136),
+            Color(0xFF2A2D31),
             Color(0xFF141619),
+            Color(0xFF1E2124),
+            Color(0xFF0E1012),
         ),
-        // 底盖渐变比 bezel 整套压暗约 40%：同色值铺满 360×140dp 会读成灰色塑料。
-        // 第一停仍是面板最亮处（顶边转角），最后一停接近 #0D0F11。
+        // 2026-10-23：底盖不再是"浅一档的灰板"，而是与机身同族、只在顶部受光。
+        // 第一停比旧版暗 30%：大片同色值一铺开，亮度差 5% 就足以被读成塑料。
         panelMetal = listOf(
-            Color(0xFF2E3237),
-            Color(0xFF1C2024),
-            Color(0xFF14171A),
-            Color(0xFF0D0F11),
+            Color(0xFF1A1D20),
+            Color(0xFF15171A),
+            Color(0xFF101214),
+            Color(0xFF0C0D0F),
         ),
-        // 凹槽底：比面板最暗一停更暗，才像"收不到光"。
-        wellFill = Color(0xFF07080A),
-        // Deeper darks than the design's literal values: at 3x display density the
-        // ring is only ~13 physical px wide, and the original #8D939A/#767D84 were
-        // too close to the face colour to survive downscaling — the shutter read as
-        // one white blob on the first real-device screenshot.
+        wellFill = Color(0xFF08090A),
+        // 快门环收敛成香槟金 + 暖灰的扫掠：金属感靠一圈更细的齿和面光，
+        // 不靠高对比黑白条（旧版在真机 3x 下读成一圈脏边）。
         shutterRing = listOf(
-            Color(0xFFF4F6F8),
-            Color(0xFF5E656C),
-            Color(0xFFE9EDF0),
-            Color(0xFF474E55),
-            Color(0xFFE2E6E9),
+            Color(0xFFC9A87C),
+            Color(0xFF4A433B),
+            Color(0xFFE7B37A),
+            Color(0xFF2E2A25),
+            Color(0xFFB08E63),
         ),
         shutterFace = listOf(
-            Color(0xFFFFFFFF),
-            Color(0xFFE2E6E9),
-            Color(0xFFC2C7CD),
+            Color(0xFFF2EEE6),
+            Color(0xFFE4DED2),
+            Color(0xFFC9C2B4),
         ),
         shutterDot = listOf(
-            Color(0xFFE8705F),
-            Color(0xFFB5382C),
+            Color(0xFFD95C4A),
+            Color(0xFFA83226),
         ),
     ),
 )

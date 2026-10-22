@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -152,23 +153,22 @@ private fun DrawScope.drawShutterWell(spec: FilmThemeSpec) {
     )
 }
 
-/** 快门本体（金属环 + 白面 + 红点），画在自己的 78dp 方框里。 */
+/** 快门本体（金属环 + 暖白面 + 红点），画在自己的 72dp 方框里。 */
 private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
     val rad = size.minDimension / 2f
-    // Ring width is what sells "metal"; 4dp vanished at 3x density.
     val ringWidth = 6.dp.toPx()
     val faceR = rad - ringWidth
     val c = Offset(size.width / 2f, size.height / 2f)
 
+    // 香槟金 + 暖灰扫掠。比旧版黑白高对比安静得多：真机 3x 下高对比会读成"脏边"。
     drawCircle(
         brush = Brush.sweepGradient(spec.palette.shutterRing, center = c),
         radius = rad,
     )
 
-    // 滚花（knurling，D-053）。真实相机的快门环和拨盘边缘都有一圈细齿 ——
-    // 这是"能用手拧"和"一个光面圆"的全部区别，比再加一层渐变有效得多。
-    // 72 齿：周长约 π×72dp，3x 屏下齿距约 9 个物理像素，再密就糊成灰边。
-    val teeth = 72
+    // 滚花（D-053/2026-10-23 修订）：90 齿、明暗差只有 10%/4%。
+    // 旧版 72 齿 + 18%/22% 在真机截图上像一圈"齿轮"，不是"手握的滚花"。
+    val teeth = 90
     val toothInner = faceR + 1.dp.toPx()
     val toothOuter = rad - 0.5.dp.toPx()
     for (i in 0 until teeth) {
@@ -176,11 +176,10 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
         val cos = cos(angle)
         val sin = sin(angle)
         drawLine(
-            // 明暗交替：齿的一侧受光、另一侧背光。单色齿只会读成一圈脏边。
             color = if (i % 2 == 0) {
-                Color.White.copy(alpha = 0.18f)
+                Color.White.copy(alpha = 0.10f)
             } else {
-                Color.Black.copy(alpha = 0.22f)
+                Color.Black.copy(alpha = 0.05f)
             },
             start = Offset(c.x + cos * toothInner, c.y + sin * toothInner),
             end = Offset(c.x + cos * toothOuter, c.y + sin * toothOuter),
@@ -188,41 +187,49 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
         )
     }
 
+    // 环外缘一圈极细的金色：全屏唯一"贵"的材质暗示，只在快门环上出现一次。
     drawCircle(
-        color = Color(0x40000000),
-        radius = rad,
+        color = spec.palette.accent.copy(alpha = 0.30f),
+        radius = rad - 0.5.dp.toPx(),
         style = Stroke(width = 1.dp.toPx()),
     )
     drawCircle(
         brush = Brush.radialGradient(
             colors = spec.palette.shutterFace,
-            center = Offset(size.width * 0.34f, size.height * 0.28f),
+            center = Offset(size.width * 0.36f, size.height * 0.30f),
             radius = faceR * 1.45f,
         ),
         radius = faceR,
     )
-    // Concave rim: the face sits *below* the ring, so its edge darkens.
-    // Keep the band narrow — at 0.70 it covered most of the face and
-    // the whole button read grey instead of white.
+    // 面比环低一档：边缘一圈很窄的暗边，避免整颗按钮读成一个亮圆盘。
     drawCircle(
         brush = Brush.radialGradient(
             0.0f to Color.Transparent,
-            0.86f to Color.Transparent,
+            0.88f to Color.Transparent,
             1.0f to Color(0x33000000),
             center = c,
             radius = faceR,
         ),
         radius = faceR,
     )
-    // 红点直接落在白色面上。原先这里有一圈 accent 色 12% 的晕
-    // （radius 11dp），在白底上混成粉色光晕，看着像"按钮已被按下"。
+    // 顶部 1px 接光：光从上方来，圆面在 12 点方向最亮。
+    drawArc(
+        color = Color.White.copy(alpha = 0.45f),
+        startAngle = 200f,
+        sweepAngle = 140f,
+        useCenter = false,
+        topLeft = Offset(c.x - faceR + 2.dp.toPx(), c.y - faceR + 2.dp.toPx()),
+        size = Size((faceR - 2.dp.toPx()) * 2f, (faceR - 2.dp.toPx()) * 2f),
+        style = Stroke(1.dp.toPx()),
+    )
+    // 红点缩小到 4dp：它是"录制/快门"符号，不是按钮上的装饰灯。
     drawCircle(
         brush = Brush.radialGradient(
             colors = spec.palette.shutterDot,
-            center = Offset(size.width * 0.47f, size.height * 0.45f),
-            radius = 9.dp.toPx(),
+            center = Offset(size.width * 0.47f, size.height * 0.46f),
+            radius = 7.dp.toPx(),
         ),
-        radius = 6.dp.toPx(),
+        radius = 4.dp.toPx(),
         center = c,
     )
 }
@@ -262,13 +269,14 @@ fun FilmRoundButton(
         label = "round-button-press",
     )
 
-    val fill = if (active) spec.palette.accent else spec.palette.controlFill
-    val stroke = if (active) spec.palette.accent else spec.palette.hairline
     val tint = when {
         !enabled -> spec.palette.inkFaint
-        active -> spec.palette.onAccent
+        active -> spec.palette.accent
         else -> spec.palette.inkMuted
     }
+    // 2026-10-23：取消圆框 + 描边。取景页顶部三个"描边圆钮"在真机截图上
+    // 是整屏最像模板组件的元素；改成无底的幽灵图标，active 只给一圈 12% 金底。
+    val activeFill = if (active) spec.palette.accent.copy(alpha = 0.12f) else Color.Transparent
 
     Box(
         modifier = modifier
@@ -286,14 +294,13 @@ fun FilmRoundButton(
     ) {
         Box(
             modifier = Modifier
-                .size(spec.metrics.controlSize)
+                .size(40.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                 }
                 .clip(CircleShape)
-                .background(fill)
-                .border(spec.metrics.hairline, stroke, CircleShape),
+                .background(activeFill),
             contentAlignment = Alignment.Center,
         ) {
             FilmIcon(kind = icon, tint = tint, iconSize = iconSize)
@@ -326,8 +333,10 @@ fun FilmBodyPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            // 顶角 6dp 而不是 18dp：底盖是"机身的一部分"，圆角一大就读成一张浮卡。
+            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
             .drawWithCache {
-                val gap = 5.dp.toPx()
+                val gap = 6.dp.toPx()
                 val streaks = ArrayList<FloatArray>()
                 var y = gap
                 var seed = 20261021L
@@ -347,12 +356,13 @@ fun FilmBodyPanel(
                             endY = size.height,
                         ),
                     )
+                    // 拉丝更细更淡：满铺的强纹理在整块面板上会显脏。
                     streaks.forEachIndexed { index, line ->
                         drawLine(
                             color = if (index % 2 == 0) {
-                                Color.White.copy(alpha = 0.022f)
+                                Color.White.copy(alpha = 0.015f)
                             } else {
-                                Color.Black.copy(alpha = 0.05f)
+                                Color.Black.copy(alpha = 0.03f)
                             },
                             start = Offset(size.width * line[1], line[0]),
                             end = Offset(size.width * line[2], line[0]),
@@ -362,13 +372,13 @@ fun FilmBodyPanel(
                     // 缝：上面一条受光高光，紧跟着一条暗线。顺序不能反 ——
                     // 反了就变成"贴了一块板上去"，而不是"板从机身里切出来"。
                     drawLine(
-                        color = Color.White.copy(alpha = 0.22f),
+                        color = Color.White.copy(alpha = 0.12f),
                         start = Offset(0f, 0.5.dp.toPx()),
                         end = Offset(size.width, 0.5.dp.toPx()),
                         strokeWidth = 1.dp.toPx(),
                     )
                     drawLine(
-                        color = Color.Black.copy(alpha = 0.50f),
+                        color = Color.Black.copy(alpha = 0.55f),
                         start = Offset(0f, 2.dp.toPx()),
                         end = Offset(size.width, 2.dp.toPx()),
                         strokeWidth = 2.dp.toPx(),
@@ -433,44 +443,22 @@ fun FilmPanelKey(
             modifier = Modifier.size(spec.metrics.touchTarget),
             contentAlignment = Alignment.Center,
         ) {
+            // 2026-10-23：不再画"凹槽里的圆键"（那是第三套高光方向，三种圆形控件
+            // 叠在一屏上最显廉价）。副键改为机身丝印式幽灵图标：只有图标和标签，
+            // 按下去只有 0.92 缩放，不再有圆面。
             Box(
                 modifier = Modifier
                     .size(spec.metrics.panelKey)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                    }
-                    .clip(CircleShape)
-                    .background(p.wellFill)
-                    .drawBehind {
-                        // 内嵌高光方向与浮起按钮相反：上缘暗、下缘亮。
-                        val rad = size.minDimension / 2f
-                        val r = rad - 1.dp.toPx()
-                        drawArc(
-                            color = Color.Black.copy(alpha = 0.55f),
-                            startAngle = 200f,
-                            sweepAngle = 140f,
-                            useCenter = false,
-                            topLeft = Offset(rad - r, rad - r),
-                            size = Size(r * 2f, r * 2f),
-                            style = Stroke(1.dp.toPx()),
-                        )
-                        drawArc(
-                            color = Color.White.copy(alpha = 0.09f),
-                            startAngle = 20f,
-                            sweepAngle = 140f,
-                            useCenter = false,
-                            topLeft = Offset(rad - r, rad - r),
-                            size = Size(r * 2f, r * 2f),
-                            style = Stroke(1.dp.toPx()),
-                        )
                     },
                 contentAlignment = Alignment.Center,
             ) {
                 content()
             }
         }
-        androidx.compose.foundation.layout.Spacer(Modifier.size(5.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
         // 丝印（D-053）。参考里的标签不是"TextView 写了个字"，是印在机身上的油墨：
         // 这行字本身没有阴影，但它底下 1dp 处有一道极淡的高光——那是机身的受光面
         // 被字挡住之后露出来的边。少了这一层，标签就只是"界面文字"。
@@ -503,13 +491,13 @@ fun FilmExposureSlot(fraction: Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp)
-            .height(3.dp)
+            .padding(horizontal = 24.dp)
+            .height(2.dp)
             .clip(CircleShape)
             .background(p.wellFill)
             .drawBehind {
                 drawLine(
-                    color = Color.Black.copy(alpha = 0.45f),
+                    color = Color.Black.copy(alpha = 0.40f),
                     start = Offset(0f, 0.5.dp.toPx()),
                     end = Offset(size.width, 0.5.dp.toPx()),
                     strokeWidth = 1.dp.toPx(),
@@ -520,7 +508,7 @@ fun FilmExposureSlot(fraction: Float, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .background(p.accent.copy(alpha = 0.9f)),
+                .background(p.accent.copy(alpha = 0.55f)),
         )
     }
 }

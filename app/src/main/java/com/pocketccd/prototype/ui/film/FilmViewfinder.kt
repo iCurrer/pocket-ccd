@@ -14,8 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -35,13 +34,17 @@ import androidx.compose.ui.unit.em
  */
 
 /**
- * The metal bezel around the live preview.
+ * 取景窗（2026-10-23 重做）。
  *
- * Design uses `linear-gradient` + `inset box-shadow` + `box-shadow`. Compose
- * gives us one `shadow()` (which does respect custom colours on API 28+, so the
- * outer drop shadow is real) but no inset shadow — the top 1px highlight is
- * therefore drawn by hand in [drawBehind]. Without that single line the frame
- * reads as flat grey instead of brushed metal; it is the whole trick.
+ * 旧版是"3dp 金属 bezel + 20dp 外投影 + 灰色描边"，在真机截图里读成了一圈手机壳：
+ * 高级感不是靠加框，是靠**明暗阶梯**。现在只做三件事：
+ *
+ * 1. 窗口比页面底色更黑（[FilmPalette.windowBg] vs [FilmPalette.appBg]），
+ *    边缘自然分界，不再画描边；
+ * 2. 顶部 1px 白 8% 内高光 + 底部 1px 纯黑：光从上方来，窗口像被"切"进机身；
+ * 3. 全部内容裁进 16dp 圆角，不加任何外投影。
+ *
+ * 暗角（[ViewfinderVignette]）仍单独叠在画面之上，保证亮画面里角标/准星可读。
  */
 @Composable
 fun FilmViewfinder(
@@ -51,45 +54,29 @@ fun FilmViewfinder(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val m = spec.metrics
-    val outerShape = RoundedCornerShape(m.viewfinderRadius)
+    val shape = RoundedCornerShape(m.viewfinderRadius)
 
     Box(
         modifier = modifier
-            .shadow(
-                elevation = 20.dp,
-                shape = outerShape,
-                clip = false,
-                ambientColor = Color.Black,
-                spotColor = Color.Black,
-            )
-            .drawBehind {
+            .clip(shape)
+            .background(p.windowBg)
+            .drawWithContent {
+                drawContent()
                 val r = m.viewfinderRadius.toPx()
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        0.0f to p.bezelMetal[0],
-                        0.36f to p.bezelMetal[1],
-                        0.66f to p.bezelMetal[2],
-                        1.0f to p.bezelMetal[3],
-                        start = Offset.Zero,
-                        // The container is tall, so a corner-to-corner gradient
-                        // stretches the four stops over ~800dp and reads as flat
-                        // grey. Compressing it into the top fifth restores the
-                        // lit-from-above look of the 3px CSS bezel.
-                        end = Offset(size.width * 0.75f, size.height * 0.20f),
-                    ),
-                    cornerRadius = CornerRadius(r, r),
-                )
                 val h = m.hairline.toPx()
                 drawLine(
-                    color = Color.White.copy(alpha = 0.22f),
+                    color = Color.White.copy(alpha = 0.08f),
                     start = Offset(r, h / 2f),
                     end = Offset(size.width - r, h / 2f),
                     strokeWidth = h,
                 )
-            }
-            .padding(m.bezel)
-            .clip(RoundedCornerShape(m.viewfinderRadius - m.bezel))
-            .background(p.viewfinderBg),
+                drawLine(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    start = Offset(r, size.height - h / 2f),
+                    end = Offset(size.width - r, size.height - h / 2f),
+                    strokeWidth = h,
+                )
+            },
         content = content,
     )
 }
@@ -126,11 +113,11 @@ fun ViewfinderVignette(modifier: Modifier = Modifier) {
 }
 
 /**
- * Four L-shaped framing marks. Fixed size so they do not stretch on wide screens.
+ * 四角刻线（2026-10-23 重做）。
  *
- * Every line is drawn twice: a fat dark underlay first, then the thin white
- * stroke. A single white hairline disappears on a bright subject, and the
- * preview can be anything.
+ * 旧版臂长 20dp、线宽 1dp，配 4x 黑描边，读起来像"相机的 UI 括号"。
+ * 现在臂长 18dp、线宽 1.5dp、圆头笔帽、白 62% + 3dp 黑晕：
+ * 更像光学取景器里刻在玻璃上的线，而不是一个装饰组件。
  */
 @Composable
 fun ViewfinderCorners(modifier: Modifier = Modifier) {
@@ -139,7 +126,7 @@ fun ViewfinderCorners(modifier: Modifier = Modifier) {
         val ix = m.cornerInsetX.toPx()
         val iy = m.cornerInsetY.toPx()
         val arm = m.cornerArm.toPx()
-        val w = m.hairline.toPx()
+        val w = 1.5.dp.toPx()
         val right = size.width - ix
         val bottom = size.height - iy
 
@@ -154,11 +141,12 @@ fun ViewfinderCorners(modifier: Modifier = Modifier) {
             Offset(right, bottom) to Offset(right, bottom - arm),
         )
 
+        // 黑晕先画，白线后画：亮画面里白线不会消失，暗画面里黑晕也不会显形。
         segments.forEach { (a, b) ->
-            drawLine(Color.Black.copy(alpha = 0.40f), a, b, w * 3.5f)
+            drawLine(Color.Black.copy(alpha = 0.35f), a, b, w * 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
         segments.forEach { (a, b) ->
-            drawLine(Color.White.copy(alpha = 0.72f), a, b, w)
+            drawLine(Color.White.copy(alpha = 0.62f), a, b, w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
     }
 }
@@ -178,28 +166,30 @@ fun ViewfinderGrid(modifier: Modifier = Modifier) {
     }
 }
 
-/** Centre reticle: four 17dp arms around a 3dp dot, with a deliberate gap. */
+/** Centre reticle: four 8dp ticks around a 1.6dp champagne dot, with a deliberate gap. */
 @Composable
 fun ViewfinderReticle(modifier: Modifier = Modifier) {
     val m = LocalFilmTheme.current.metrics
+    val spec = LocalFilmTheme.current
     Canvas(modifier.size(m.reticle)) {
         val w = 1.dp.toPx()
         val cx = size.width / 2f
         val cy = size.height / 2f
-        val arm = 17.dp.toPx()
+        val inner = 4.dp.toPx()
+        val outer = 12.dp.toPx()
 
         val segments = listOf(
-            Offset(cx, 0f) to Offset(cx, arm),
-            Offset(cx, size.height - arm) to Offset(cx, size.height),
-            Offset(0f, cy) to Offset(arm, cy),
-            Offset(size.width - arm, cy) to Offset(size.width, cy),
+            Offset(cx, cy - inner) to Offset(cx, cy - outer),
+            Offset(cx, cy + inner) to Offset(cx, cy + outer),
+            Offset(cx - inner, cy) to Offset(cx - outer, cy),
+            Offset(cx + inner, cy) to Offset(cx + outer, cy),
         )
 
-        segments.forEach { (a, b) -> drawLine(Color.Black.copy(alpha = 0.35f), a, b, w * 3f) }
-        segments.forEach { (a, b) -> drawLine(Color.White.copy(alpha = 0.85f), a, b, w) }
+        segments.forEach { (a, b) -> drawLine(Color.Black.copy(alpha = 0.30f), a, b, w * 3f) }
+        segments.forEach { (a, b) -> drawLine(Color.White.copy(alpha = 0.46f), a, b, w) }
 
-        drawCircle(Color.Black.copy(alpha = 0.35f), radius = 2.4.dp.toPx(), center = Offset(cx, cy))
-        drawCircle(Color.White.copy(alpha = 0.95f), radius = 1.5.dp.toPx(), center = Offset(cx, cy))
+        drawCircle(Color.Black.copy(alpha = 0.30f), radius = 2.2.dp.toPx(), center = Offset(cx, cy))
+        drawCircle(spec.palette.accent, radius = 1.6.dp.toPx(), center = Offset(cx, cy))
     }
 }
 

@@ -193,7 +193,9 @@ fun FilmCaptureScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = m.gutter, vertical = 4.dp),
+                // 不再加水平 padding：取景窗宽度已经在下面按 0.86 收过，
+                // 再加一层 12dp 会变成 0.86×(412−24)，等于缩两次。
+                .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             // 3:4 viewfinder, matching the design's 369x490 ratio. The preview
@@ -257,7 +259,7 @@ fun FilmCaptureScreen(
                 Column(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 8.dp),
+                        .padding(end = 12.dp),
                     horizontalAlignment = Alignment.End,
                 ) {
                     // 设计稿把变焦钮放在右侧垂直居中（`right-3 top-1/2`）。
@@ -282,7 +284,7 @@ fun FilmCaptureScreen(
                     // 画一条拖不动的刻度比不画更糟，用户会怪自己没拖对。
                     val exposure = exposureProfile
                     if (exposure != null) {
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(2.dp))
                         ViewfinderEv(
                             profile = exposure,
                             evIndex = evIndex,
@@ -307,7 +309,7 @@ fun FilmCaptureScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 26.dp, end = 26.dp, top = 12.dp),
+                    .padding(start = 24.dp, end = 24.dp, top = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 只在拍不了的时候出现（没有胶卷 / 本卷拍满 / 相机没绑上 / 预览出错）。
@@ -333,7 +335,7 @@ fun FilmCaptureScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 26.dp, vertical = 12.dp),
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -409,12 +411,12 @@ private fun StockPill(name: String, onClick: () -> Unit) {
     ) {
         Row(
             modifier = Modifier
+                .height(32.dp)
                 .clip(shape)
                 .background(spec.palette.controlFill)
-                .border(spec.metrics.hairline, spec.palette.hairline, shape)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Box(
                 modifier = Modifier

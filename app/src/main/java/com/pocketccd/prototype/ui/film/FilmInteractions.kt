@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -257,72 +258,43 @@ fun ViewfinderZoom(
     actionLabel: String = "切换变焦",
 ) {
     val spec = LocalFilmTheme.current
+    val p = spec.palette
     // 探不到物理镜头时不显示任何光学倍率：写死的 1x/2x 至少是"数码变焦的档位"，
     // 而编一个 0.6x/3x 出来就是假的。
     val items = stops.ifEmpty { listOf(LensStop(1f), LensStop(2f)) }
-    // 热区扩到 48dp 之后，涟漪仍要画在**40dp 的圆**里：clickable 挂在 48dp 外层并
-    // 关掉自带 indication，再用同一个 interactionSource 在内层圆上手动 indication。
-    // 直接让 48dp 节点画默认涟漪会得到一个方/更大的涟漪 —— 那是视觉变化，不是热区变化。
-    val indication = LocalIndication.current
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalAlignment = Alignment.End,
     ) {
         items.forEach { stop ->
             val active = abs(zoom - stop.zoomRatio) < 0.05f
-            // 每个档位一份 interactionSource；key 用倍率，循环里的 remember 才不会互相串。
-            val interaction = remember(stop.zoomRatio) { MutableInteractionSource() }
-            // 40dp 视觉塞进 48dp 热区。三档竖排共 144dp，取景器右缘放得下。
-            Box(
+            Row(
+                // 2026-10-23：从"三颗描边圆钮"改成文字档位轨。真实相机的倍率就是
+                // 取景器边缘的一行数字，圆钮是手机 App 的语言。热区仍 ≥48dp。
                 modifier = Modifier
-                    .size(48.dp)
+                    .height(40.dp)
+                    .widthIn(min = 64.dp)
                     .semantics { contentDescription = "$accessibilityLabelPrefix ${stop.ratioLabel}" }
                     .clickable(
-                        interactionSource = interaction,
-                        indication = null,
                         onClickLabel = actionLabel,
                         role = Role.Button,
                     ) { onSelect(stop.zoomRatio) },
-                contentAlignment = Alignment.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
             ) {
+                Text(
+                    text = stop.ratioLabel,
+                    color = if (active) p.inkStrong else p.inkMuted,
+                    fontSize = spec.type.rail,
+                    fontFamily = FontFamily.Monospace,
+                )
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(6.dp))
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
+                    modifier = androidx.compose.ui.Modifier
+                        .size(4.dp)
                         .clip(CircleShape)
-                        .indication(interaction, indication)
-                        .background(
-                            if (active) Color.White.copy(alpha = 0.92f) else spec.palette.chipFill,
-                        )
-                        .border(
-                            1.dp,
-                            if (active) Color.White.copy(alpha = 0.92f) else spec.palette.hairline,
-                            CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = stop.ratioLabel,
-                            color = if (active) Color(0xFF151515) else spec.palette.ink,
-                            fontSize = spec.type.monoSmall,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        // 等效焦距只在真有传感器尺寸时才有值；没有就只显示倍率，
-                        // 不要用"标准镜头"之类的词糊弄过去。
-                        stop.focalLabel?.let { label ->
-                            Text(
-                                text = label,
-                                color = if (active) {
-                                    Color(0xFF151515).copy(alpha = 0.62f)
-                                } else {
-                                    spec.palette.ink
-                                },
-                                fontSize = spec.type.label,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                        }
-                    }
-                }
+                        .background(if (active) p.accent else Color.Transparent),
+                )
             }
         }
     }
@@ -398,47 +370,39 @@ private fun FilmEvKey(
     onClick: () -> Unit,
 ) {
     val spec = LocalFilmTheme.current
+    val p = spec.palette
     val ev = profile.evOf(evIndex)
     val neutral = abs(ev) < profile.stepEv / 2f
-    // EV 不为 0 时键面转白：和变焦的激活态一致，也让"我改过曝光"在取景时一眼可见。
-    val lit = active || !neutral
-    val fill = if (lit) Color.White.copy(alpha = 0.92f) else spec.palette.chipFill
-    val ink = if (lit) Color(0xFF151515) else spec.palette.ink
-    // 同变焦档位：48dp 热区 + 涟漪仍画在 40dp 圆里（否则涟漪会变成 48dp 的方块）。
-    val interaction = remember { MutableInteractionSource() }
-    val indication = LocalIndication.current
 
-    Box(
+    Row(
+        // 2026-10-23：从"白底圆键"改成与变焦档位同一行的文字读法（`±  +0.3`）。
+        // 展开时白字/金色，收起时灰字 —— 不靠底色表达状态，减少一屏里的圆点数量。
         modifier = androidx.compose.ui.Modifier
-            .size(48.dp)
+            .height(40.dp)
+            .widthIn(min = 64.dp)
             .semantics { contentDescription = "曝光补偿 ${formatEv(ev)}" }
             .clickable(
-                interactionSource = interaction,
-                indication = null,
                 onClickLabel = if (active) "收起曝光刻度" else "展开曝光刻度",
                 role = Role.Button,
                 onClick = onClick,
             ),
-        contentAlignment = Alignment.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
     ) {
-        Box(
-            modifier = androidx.compose.ui.Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .indication(interaction, indication)
-                .background(fill)
-                .border(1.dp, if (lit) fill else spec.palette.hairline, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                // 0 档显示 `±`，非 0 显示实际值：读数本身就是"现在偏了多少"，
-                // 不需要再加一个小圆点之类的状态符号。
-                text = if (neutral) "±" else formatEv(ev),
-                color = ink,
-                fontSize = spec.type.monoSmall,
-                fontFamily = FontFamily.Monospace,
-            )
-        }
+        Text(
+            text = "±",
+            color = if (neutral) p.inkMuted else p.accent,
+            fontSize = spec.type.rail,
+            fontFamily = FontFamily.Monospace,
+        )
+        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(10.dp))
+        Text(
+            // 0 档写 0.0 而不是 ±：读数和指针位置是同一件事，不需要第二个状态符号。
+            text = if (neutral) "0.0" else formatEv(ev),
+            color = if (neutral) p.inkMuted else p.inkStrong,
+            fontSize = spec.type.rail,
+            fontFamily = FontFamily.Monospace,
+        )
     }
 }
 
