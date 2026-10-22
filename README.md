@@ -380,10 +380,10 @@ release 变体 + debug 签名，非 debuggable）。当前夜间包指纹：
 
 | 项 | 值 |
 |---|---|
-| versionCode / versionName | `2` / `0.2.0` |
-| 构建时间 | 2026-10-23 00:51（Asia/Shanghai） |
-| SHA-256 | `9BDA52D377BD26796DFF74D3B8ECA550BC4564D72FE2D44113DC9224374E1CBA` |
-| 便利副本 | `dist/pocketccd-0.2.0-benchmark.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
+| versionCode / versionName | `3` / `0.2.1` |
+| 构建时间 | 2026-10-23 01:09（Asia/Shanghai） |
+| SHA-256 | `1C6D761A30FCA25893FB53D0A42D8BF414624E63E7169EB4A9D9EC62F3305531` |
+| 便利副本 | `dist/pocketccd-0.2.1-benchmark.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
 
 对方不需要电脑、不需要 adb、不需要 root：
 

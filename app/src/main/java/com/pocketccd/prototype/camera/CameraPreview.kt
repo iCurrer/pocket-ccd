@@ -41,6 +41,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -129,6 +130,12 @@ class CameraHandle internal constructor(
     val lensStops: List<LensStop> = emptyList(),
 ) {
     /**
+     * 这张会话的拍照回调线程。用进程级单线程，避免每次重绑新建线程。
+     * 仅在 [takeJpeg] 里用；对焦回调仍走主线程 executor（要更新 UI 状态）。
+     */
+    private val captureExecutor: Executor get() = CAPTURE_EXECUTOR
+
+    /**
      * 拍一张 JPEG，返回原始字节 + 方向补偿。
      *
      * 走内存回调而不是写文件：12MP 的 JPEG 只有 3–5MB，而多一次落盘再读回
@@ -148,7 +155,10 @@ class CameraHandle internal constructor(
                 // 冲洗要 2–3 秒，等到那时再读 display 会拿到错的姿势。
                 val rotation = rotationDegrees()
                 imageCapture.takePicture(
-                    executor,
+                    // 专用后台线程，不是主线程：这里要做 3–5MB 的字节拷贝 + EXIF 解析，
+                    // 挂在主线程会正好落在快门闪白那一帧（review 第二轮 P2#2）。
+                    // 协程 resume 后仍回到调用方 dispatcher，UI 不受影响。
+                    captureExecutor,
                     object : ImageCapture.OnImageCapturedCallback() {
                         override fun onCaptureSuccess(image: ImageProxy) {
                             try {
@@ -347,6 +357,17 @@ class CameraHandle internal constructor(
          * 路径，也足够短到"卡住"这件事还能被用户感知成一次失败而不是死机。
          */
         const val CAPTURE_TIMEOUT_MS = 5_000L
+
+        /**
+         * ImageCapture 的回调线程。进程内单线程、daemon，不随相机重绑反复创建。
+         *
+         * 为什么不能再用主线程 executor：`onCaptureSuccess` 里要 `buffer.get()` 拷贝
+         * 3–5MB 的 JPEG 字节并解析 EXIF，正好压在快门闪白动画那一帧上；相机重绑
+         * 频繁时主线程会被这些拷贝切碎。回调里没有 View 操作，放后台线程是安全的。
+         */
+        private val CAPTURE_EXECUTOR: Executor = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "pocketccd-capture").apply { isDaemon = true }
+        }
     }
 }
 

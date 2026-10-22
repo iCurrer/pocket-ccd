@@ -201,7 +201,10 @@ fun FilmCaptureScreen(
             // match the captured image, see CameraPreview), so the frame has to
             // match 4:3 too or the photo would be cropped relative to what the
             // user saw.
-            val frameWidth = minOf(maxWidth, maxHeight * 3f / 4f)
+            // 取景窗不再顶满可用宽度：胶卷相机的取景器四周有一圈机身/边框，顶满宽度
+            // 会读成"手机预览框"，不像取景窗。0.86 是"看得出收了一圈、构图又不费劲"
+            // 的折中；可用高度不够时仍以高度为准（保持 3:4 不变形）。
+            val frameWidth = minOf(maxWidth * 0.86f, maxHeight * 3f / 4f)
 
             FilmViewfinder(
                 modifier = Modifier.size(width = frameWidth, height = frameWidth * 4f / 3f),
