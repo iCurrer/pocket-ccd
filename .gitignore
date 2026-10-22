@@ -36,3 +36,6 @@ prebuilt/
 # OS
 .DS_Store
 Thumbs.db
+
+# 夜间/交付用的 APK 副本（二进制，不进仓库；正式产物在 app/build/outputs/apk/）
+dist/

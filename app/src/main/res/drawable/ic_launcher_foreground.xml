@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动图标前景层（adaptive icon，108×108 viewport）。
+
+  为什么是"镜头环 + 六边形光圈开口"而不是画一台相机：
+  桌面图标最小只按 48dp 渲染，机身轮廓、取景器凸起、快门键在这个尺寸会糊成
+  一团（和 FilmIcons.kt 里 ImageMultiple 踩过的坑一模一样：细节越多越像色块）。
+  一个 6dp 的环 + 一个六边形就是这台相机"最可在小尺寸辨认"的抽象：外圈是镜筒，
+  六边形是收缩后的光圈。没有文字、没有渐变、没有 PNG 依赖，任何 dpi 都锐利。
+
+  色彩只用项目令牌：香槟金 #E7B37A（FilmPalette.accent），近黑 #0B0C0E 作背景
+  （colors.xml 的 ic_launcher_background），机身盘 #181A1E 比背景亮一档 —— 只亮一档
+  是为了在浅色壁纸上仍能看出"有一块机身"，又不至于变成一块灰饼。
+
+  几何全部落在中心 66dp 安全区内（半径 33）：最大外接是机身盘半径 31，
+  镜环外缘 28。别把图形画到 33 以外 —— 圆形/圆角矩形遮罩会切掉。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 机身盘：圆 r=31。比背景亮一档，给金色镜环一个"装上去"的底。 -->
+    <path
+        android:fillColor="#181A1E"
+        android:pathData="M54,54m-31,0a31,31 0,1 1,62 0a31,31 0,1 1,-62 0" />
+
+    <!-- 机身盘外缘极淡的一圈描边：没有它，深色壁纸下机身盘和背景连成一片。 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,54m-31,0a31,31 0,1 1,62 0a31,31 0,1 1,-62 0"
+        android:strokeColor="#40E7B37A"
+        android:strokeWidth="1" />
+
+    <!-- 镜筒外环：r=25、线宽 6，外缘到 28，仍在安全区内。 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,54m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0"
+        android:strokeColor="#E7B37A"
+        android:strokeWidth="6" />
+
+    <!--
+      光圈开口：正六边形，外接圆 r=14，**尖顶朝上**（顶点在 θ=-90°）。顶点坐标是手算的
+      （54 + 14·cos(θ), 54 + 14·sin(θ)，θ = -90° + k·60°），保留三位小数。
+      换成圆只会读成一个"甜甜圈"；六边形才是"光圈叶片合拢"的剪影。
+    -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,40L66.124,47L66.124,61L54,68L41.876,61L41.876,47Z"
+        android:strokeColor="#E7B37A"
+        android:strokeWidth="2.8"
+        android:strokeLineJoin="round" />
+</vector>

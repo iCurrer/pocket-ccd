@@ -62,7 +62,8 @@ private const val FULL_FRAME_DIAGONAL_MM = 43.2666f
  * （主摄约 6 mm、长焦约 16 mm），见 [PhotoExif.focalLengthMm]。
  *
  * 探不到（单摄 / 厂商裁掉 / 非 camera2 后端）时返回空列表，调用方应退回数码档，
- * 不要凭空造光学倍率。
+ * 不要凭空造光学倍率。返回的档位**一定 ≥1×**：超广角档被过滤掉，理由见
+ * [toLensStop] 与 D-037（像素密度必须等于 pack 烘焙时的那颗主摄）。
  */
 fun readLensStops(cameraInfo: CameraInfo): List<LensStop> {
     val supported = runCatching { cameraInfo.isLogicalMultiCameraSupported() }
@@ -80,7 +81,9 @@ fun readLensStops(cameraInfo: CameraInfo): List<LensStop> {
         // 倍率相同就只留一个。
         .distinctBy { (it.zoomRatio * 100f).roundToInt() }
         .sortedBy { it.zoomRatio }
-        .take(4)
+        // 档位太多时最多留 4 个，但**不能砍掉最长焦**：老写法 `take(4)` 在五档机型上
+        // 恰好丢掉 10×，用户点不到长焦。保留最短的 3 档 + 最长的一档。
+        .let { sorted -> if (sorted.size <= 4) sorted else sorted.take(3) + sorted.last() }
 
     if (stops.isEmpty()) return emptyList()
     // 主摄缺失会让档位表看起来像"没有 1×"，补一个纯倍率档（mm 由主摄自己算不出来
@@ -94,7 +97,11 @@ fun readLensStops(cameraInfo: CameraInfo): List<LensStop> {
 
 private fun CameraInfo.toLensStop(): LensStop? {
     val ratio = runCatching { intrinsicZoomRatio }.getOrNull() ?: return null
-    if (ratio < 0.3f || ratio > 15f) return null
+    // **下界是 1×，不是 0.3×**（D-044 修订）：超广角是另一块传感器，像素密度与主摄
+    // 不同，而 pack 的扩散/晕光/颗粒半径是按主摄像素密度烘焙的。以前保留 <1× 档，
+    // 结果 UI 画得出 0.6×、`requestZoom` 又把它 clamp 到 1× —— 按了没反应，Toast 还
+    // 报 1.0x。要么为超广角另产 pack，要么不画；在没有第二套 pack 之前只能不画。
+    if (ratio < 0.95f || ratio > 15f) return null
 
     val characteristics = runCatching { Camera2CameraInfo.from(this) }.getOrNull()
     val focalLengths = characteristics?.getCameraCharacteristic(

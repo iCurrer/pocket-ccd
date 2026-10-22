@@ -4,11 +4,14 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
+import kotlin.math.roundToInt
 
 /**
  * 一张已经冲洗完成的成片。
@@ -21,6 +24,14 @@ data class SavedPhoto(
     val stockId: String,
     val stockLabel: String,
     val fullFile: File,
+    /**
+     * 缩略图路径。
+     *
+     * **不保证文件存在**：历史照片的缩略图可能被系统清理或写失败，
+     * [PhotoStore.list] 这时返回的是一个**不存在**的路径，而不是退回全尺寸原图 ——
+     * 照片墙/成片页拿到 12MP 会 decode 出一张 48MB 的 ARGB，列表里解一张就够
+     * 把堆打满（P1-4）。调用方必须先 `isFile` 再解码；不存在就走占位。
+     */
     val thumbnailFile: File,
     val width: Int,
     val height: Int,
@@ -88,6 +99,8 @@ class PhotoStore(context: Context) {
      *   会让冲洗直接失败。所以冲洗永远按 pack 尺寸跑，效果烘焙完再转——
      *   此时像素只是换个摆法，颗粒尺度不受影响。
      * @param quality JPEG 质量。92 是设计稿定的值（设置页「高 · 92」）。
+     * @param exif 相机原始帧里读到的四项硬件参数（P1-14）。null 表示没读到，
+     *   这次就不写 EXIF —— 宁可不写，也不拿编造值填空。
      */
     fun save(
         bitmap: Bitmap,
@@ -97,6 +110,7 @@ class PhotoStore(context: Context) {
         strips: Int,
         rotationDegrees: Int = 0,
         quality: Int = 92,
+        exif: PhotoExif? = null,
     ): SavedPhoto {
         val id = "film_${capturedAt}_${stock.id}"
         val upright = rotate(bitmap, rotationDegrees)
@@ -104,6 +118,11 @@ class PhotoStore(context: Context) {
         try {
             val full = File(fullDir, "$id.jpg")
             writeAtomically(full) { upright.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+
+            // EXIF 必须补在 full 落盘之后、复制进相册之前：Bitmap.compress 不写 EXIF
+            // （P1-14），而下面 publishToGallery 是**按字节复制 full**。顺序反了，
+            // 系统相册里那份就永远没有参数，本地这份有 —— 两份副本内容不一致。
+            writeExif(full, exif)
 
             // 相册副本从**已经落盘的文件**复制，不重新编码位图：12MP 再压一次要多花
             // 约 300ms 和一份 48MB 临时位图，而字节内容完全一样。
@@ -143,6 +162,55 @@ class PhotoStore(context: Context) {
         if (normalized == 0) return source
         val matrix = Matrix().apply { postRotate(normalized.toFloat()) }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    }
+
+    /**
+     * 把硬件四项写进**已经落盘**的全尺寸 JPEG（P1-14）。
+     *
+     * 为什么只能二次写入：`Bitmap.compress` 只输出裸 JPEG，像素管线里不经过任何
+     * EXIF 容器；相机原始帧的四项在 decodeJpeg 那一步就丢了（由 CameraPreview 在
+     * 拿到原始字节时先读出来，随 [CapturedFrame] 带到这里）。
+     *
+     * 为什么**不写** ORIENTATION：像素已经在 [rotate] 里转正，再写方向标记会让
+     * 系统相册和看图软件把已经立起来的图再转一次。不写 = 1（undefined），正确。
+     *
+     * 失败只记日志、不抛：EXIF 是附加信息，不能因为写不进它就让刚拍的照片丢失
+     * （此时 full 文件已经完整落盘，照片墙照常可见，只是成片页参数显示「—」）。
+     */
+    private fun writeExif(file: File, exif: PhotoExif?) {
+        if (exif == null || exif.isEmpty) return
+        runCatching {
+            val target = ExifInterface(file.absolutePath)
+
+            // 焦距的 EXIF 类型是 RATIONAL，而 setAttribute 只收字符串：直接传 "6.0"
+            // 会被平台判成 DOUBLE、与标签声明格式不符而**静默丢弃**（平台实现里
+            // guessDataFormat 不匹配就 continue），所以必须写成分数 "600/100"。
+            exif.focalLengthMm?.let { mm ->
+                target.setAttribute(
+                    ExifInterface.TAG_FOCAL_LENGTH,
+                    "${(mm * 100f).roundToInt()}/100",
+                )
+            }
+            // 光圈 / 快门正好相反：平台 setAttribute 有兼容分支，收到小数会自己换算成
+            // 万分之几的分数（"1.6" → 16000/10000），所以这里必须给小数而不是 "8/1000"。
+            // 也正因为这个分支，快门的精度被平台限制在 1/10000 秒；1/125、1/250 这类
+            // 常见档位是精确的，更快的极限快门会有舍入（见风险报告）。
+            exif.fNumber?.let { target.setAttribute(ExifInterface.TAG_F_NUMBER, it.toString()) }
+            exif.exposureSeconds?.let {
+                target.setAttribute(ExifInterface.TAG_EXPOSURE_TIME, it.toString())
+            }
+            // 平台 ExifInterface 不认 "PhotographicSensitivity" 这个名字（那是
+            // androidx.exifinterface 才补的常量），写进去会被静默忽略；而它对应的
+            // tag 号 34855 在平台侧的名字是 ISOSpeedRatings —— 写这个才真的落盘，
+            // 读到的时候数值就是 PhotographicSensitivity（EXIF 2.3 只是改了名字）。
+            exif.iso?.let {
+                target.setAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS, it.toString())
+            }
+
+            target.saveAttributes()
+        }.onFailure { error ->
+            Log.w(TAG, "EXIF 写入失败（成片不受影响，参数将显示 —）：${file.name}", error)
+        }
     }
 
     /**
@@ -421,13 +489,19 @@ class PhotoStore(context: Context) {
 
         return files.mapNotNull { file ->
             val parsed = parseId(file.name) ?: return@mapNotNull null
+            val thumb = File(thumbDir, file.name)
             SavedPhoto(
                 id = parsed.first,
                 stockId = parsed.second,
                 stockLabel = com.pocketccd.prototype.fotufilm.FilmStockCatalog
                     .labelOf(parsed.second),
                 fullFile = file,
-                thumbnailFile = File(thumbDir, file.name).takeIf { it.isFile } ?: file,
+                // 缩略图丢了就返回**不存在的路径**，让 UI 走占位。
+                // 绝不退回 fullFile：照片墙/成片页会 decodeFile 出一张 12MP（48MB ARGB），
+                // 列表里解一张就够把堆打满（P1-4）。这里保持字段非空是为了不破坏
+                // SavedPhoto 的既有调用点（AppRoot 正在并行改动），语义退化成
+                // "候选路径，调用方必须自己 isFile"。
+                thumbnailFile = thumb,
                 width = 0,
                 height = 0,
                 capturedAt = parsed.third,
@@ -455,16 +529,32 @@ class PhotoStore(context: Context) {
         return Bitmap.createScaledBitmap(source, w, h, true)
     }
 
+    /**
+     * 临时文件 → rename 的原子落盘。
+     *
+     * 失败路径（编码返回 false、`compress` 抛异常、fsync 失败）必须删掉 `.tmp`：
+     * 否则一次失败会在私有目录里留下几 MB 的孤儿文件，永远没人清理。
+     *
+     * 为什么加 `fd.sync()`：rename 只保证**目录项**原子替换，不保证内容已经落到
+     * 闪存。进程在 rename 之后、内核回写之前被杀（拍照时被系统回收是常态），
+     * 重启后可能拿到一张 0 字节/截断的 JPEG —— 而 rename 已经让旧文件没了。
+     * fsync 之后 rename 才是"要么旧文件、要么完整新文件"。
+     */
     private inline fun writeAtomically(target: File, block: (java.io.OutputStream) -> Boolean) {
         val temp = File(target.parentFile, "${target.name}.tmp")
-        temp.outputStream().use { stream ->
-            val ok = block(stream)
-            stream.flush()
-            check(ok) { "JPEG 编码失败：${target.name}" }
-        }
-        if (!temp.renameTo(target)) {
-            temp.copyTo(target, overwrite = true)
-            temp.delete()
+        try {
+            FileOutputStream(temp).use { stream ->
+                val ok = block(stream)
+                stream.flush()
+                check(ok) { "JPEG 编码失败：${target.name}" }
+                stream.fd.sync()
+            }
+            // rename 成功即完成；失败（跨卷/被占用）退回复制，最后统一清理 temp。
+            if (!temp.renameTo(target)) {
+                temp.copyTo(target, overwrite = true)
+            }
+        } finally {
+            if (temp.exists()) temp.delete()
         }
     }
 

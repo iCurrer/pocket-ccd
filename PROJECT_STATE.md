@@ -1,12 +1,12 @@
 # Pocket CCD — 项目状态
 
-**快照时间：** 2026-10-20 23:50（Asia/Shanghai）
-**当前阶段：** **M9 暗色胶片 UI 已完全接管**：四个页面（取景/成片/照片墙/设置）全部走 `FilmTheme`，旧红色玩具机身代码已删除（T9-022）。相机链路 + 多机型分发收官（D-048），两台真机端到端通过。**取景页交互层已落地并逐项验证**（点按对焦 / 真变焦 / 开关+Toast / 90ms 闪白，见 `docs/interaction-spec.md` §2.1.1）
+**快照时间：** 2026-10-23 01:00（Asia/Shanghai）
+**当前阶段：** **夜间包 v0.2.0 已产出，等待真机验收**（`dist/pocketccd-0.2.0-benchmark.apk`，40,925,042 B，SHA-256 `9BDA52D3…`）。本轮在无真机条件下完成：相册查看器/收藏/筛选（T9-015/D-056）、成片真实 EXIF（T9-027/D-055）、权限自救与相机会话自愈（T9-029/D-057）、变焦档位下界改 1×（D-054）、应用图标与无障碍语义/热区（T9-028）、落盘 fsync 硬化（T9-030）。`:app:assembleBenchmark` + `:app:testDebugUnitTest` 全绿（**61 tests / 0 failures**）。**真机逐项清单见 [`docs/handoff/2026-10-23-morning.md`](docs/handoff/2026-10-23-morning.md)**；下面的第 1–12 节是 2026-10-20 23:50 的历史快照，未逐条重写，最新事实以本节、`README.md`「当前状态」与 `TASK_BOARD.md` M9 表为准。
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0
 **工作区：** `D:\Android\pocket ccd`
-**Git：** `main` 分支已初始化并提交（初始提交 `482b804`，后续文档提交会更新 HEAD）
-**App 代码：** Compose + 导航状态机 + `FilmTheme`（近黑 `#0B0C0E` / 香槟金 `#E7B37A`）；`MainActivity` → `ui/AppRoot.kt` → `ui/film`（取景）、`ui/result`、`ui/gallery`、`ui/settings`。`ui/theme` 只剩 M3 兜底（暗色 scheme + 字型 + 圆角），旧 `ui/stage`、`ui/components` 已删
-**已执行 App 构建/测试：** `assembleBenchmark` 通过（40.7 MB，含 3 份 `4000×3000` pack + arm64 内核）；单测 **28/28**（`AppStateTest` 16 + `GalleryReconcilerTest` 12）；真机端到端：`PJZ110` 3909 ms / 华为 `FOA-AL00` 5831 ms（24 strips / 4000×3000），成片 `3000×4000` 正立并进系统相册
+**Git：** `main`；夜间提交 `81db1ae`（前一个稳定点 `eda3887`）
+**App 代码：** Compose + 导航状态机 + `FilmTheme`（近黑 `#0B0C0E` / 香槟金 `#E7B37A`）；`MainActivity` → `ui/AppRoot.kt` → `ui/film`（取景）、`ui/result`、`ui/gallery`（相册查看器）、`ui/settings`
+**已执行 App 构建/测试：** `assembleBenchmark` 通过（40,925,042 B，versionCode 2 / 0.2.0，含 3 份 `4000×3000` pack + arm64 内核 + adaptive icon）；单测 **61/61**（`AppStateTest` 16 + `GalleryReconcilerTest` 12 + `PhotoExifTest` 8 + `GalleryFilterTest` 22 + `InteractiveIconLabelsTest` 2 + `NoBareFontSizeTest` 1）；真机端到端上次记录：`PJZ110` 3909 ms / 华为 `FOA-AL00` 5831 ms（24 strips / 4000×3000）
 
 
 ---

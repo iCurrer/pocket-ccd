@@ -159,6 +159,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ---- 相机 ----
 
     fun onCameraBound(handle: CameraHandle) {
+        // 每次绑定都刷新快门句柄：重绑后旧 ImageCapture 已经解绑，成片页「重试」
+        // 若还拿着旧句柄，只会得到 "Not bound to a valid Camera"（review P2）。
+        // 句柄在 RESULT 期间是活的（相机全程挂着），所以这里存的就是当前会话。
+        lastTaker = handle::takeJpeg
         _camera.value = CameraState.Bound(handle.supportedSizes, handle.hasFlash)
         // 自动落到一个**当前采集尺寸能服务**的卷上：精确相等最好，更大则中心裁切，
         // 更小则拍不了。宁可切卷，也不要偷偷缩放（D-037）。
@@ -212,6 +216,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             renderMillis = developed.renderMillis,
                             strips = developed.strips,
                             rotationDegrees = frame.rotationDegrees,
+                            // P1-14：把相机原始帧里读到的四项带进落盘这一步。
+                            // 晚一步就没了——成片的像素已经重新编码过，EXIF 只剩这里的值。
+                            exif = frame.exif,
                         )
                         _capture.value = CaptureState.Done(saved)
                         _roll.update { listOf(saved) + it }

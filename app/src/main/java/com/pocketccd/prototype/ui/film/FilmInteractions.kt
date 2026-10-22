@@ -8,11 +8,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -96,6 +109,15 @@ fun FocusRing(
         alpha.animateTo(0f, tween(320))
     }
 
+    // 对焦结果全是画出来的（金色方框 + `AF LOCK` 文本），方框本身读屏看不见。
+    // 补一句状态描述并标成 liveRegion：结果从「正在对焦」变成「对焦完成/失败」时
+    // TalkBack 会主动播报一次，不用用户伸手去画面里找那个框。
+    val focusDescription = when (lock) {
+        null -> "正在对焦"
+        true -> "对焦完成"
+        false -> "对焦失败"
+    }
+
     Box(
         modifier = modifier
             .offset {
@@ -105,6 +127,10 @@ fun FocusRing(
                 )
             }
             .size(66.dp)
+            .semantics {
+                contentDescription = focusDescription
+                liveRegion = LiveRegionMode.Polite
+            }
             .graphicsLayer {
                 scaleX = scale.value
                 scaleY = scale.value
@@ -214,6 +240,11 @@ fun ShutterFlash(trigger: Int, modifier: Modifier = Modifier) {
  * `CameraInfo.zoomState` 是异步填的，靠它决定灰度会在某些启动里把可用的
  * 2x 画成不可用（真机实测：同一台机器支持 20x，界面却把 2x 画灰）。
  * 点击后由调用方按真实上限 clamp，并回报实际倍率。
+ *
+ * 无障碍：档位是"圆 + 一行倍率字"，视觉上分得出，读屏却只会把每档读成
+ * "2×" 这样的数字。所以 `contentDescription` 默认拼成「变焦 2×」，
+ * 动作提示「切换变焦」；`accessibilityLabelPrefix` 给调用方留覆盖口。
+ * 热区：40dp 视觉圆外面套 48dp Box，点击挂在 48dp 那一层（否则实际只有 40dp）。
  */
 @Composable
 fun ViewfinderZoom(
@@ -222,26 +253,43 @@ fun ViewfinderZoom(
     modifier: Modifier = Modifier,
     /** 真实光学档位（D-044）。为空表示探不到，退回 1x / 2x 数码档。 */
     stops: List<LensStop> = emptyList(),
+    accessibilityLabelPrefix: String = "变焦",
+    actionLabel: String = "切换变焦",
 ) {
     val spec = LocalFilmTheme.current
     // 探不到物理镜头时不显示任何光学倍率：写死的 1x/2x 至少是"数码变焦的档位"，
     // 而编一个 0.6x/3x 出来就是假的。
     val items = stops.ifEmpty { listOf(LensStop(1f), LensStop(2f)) }
+    // 热区扩到 48dp 之后，涟漪仍要画在**40dp 的圆**里：clickable 挂在 48dp 外层并
+    // 关掉自带 indication，再用同一个 interactionSource 在内层圆上手动 indication。
+    // 直接让 48dp 节点画默认涟漪会得到一个方/更大的涟漪 —— 那是视觉变化，不是热区变化。
+    val indication = LocalIndication.current
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         items.forEach { stop ->
             val active = abs(zoom - stop.zoomRatio) < 0.05f
+            // 每个档位一份 interactionSource；key 用倍率，循环里的 remember 才不会互相串。
+            val interaction = remember(stop.zoomRatio) { MutableInteractionSource() }
             // 40dp 视觉塞进 48dp 热区。三档竖排共 144dp，取景器右缘放得下。
             Box(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "$accessibilityLabelPrefix ${stop.ratioLabel}" }
+                    .clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClickLabel = actionLabel,
+                        role = Role.Button,
+                    ) { onSelect(stop.zoomRatio) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
+                        .indication(interaction, indication)
                         .background(
                             if (active) Color.White.copy(alpha = 0.92f) else spec.palette.chipFill,
                         )
@@ -249,8 +297,7 @@ fun ViewfinderZoom(
                             1.dp,
                             if (active) Color.White.copy(alpha = 0.92f) else spec.palette.hairline,
                             CircleShape,
-                        )
-                        .clickable { onSelect(stop.zoomRatio) },
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -336,7 +383,13 @@ fun ViewfinderEv(
     }
 }
 
-/** 40dp 视觉 / 48dp 热区，和变焦档位同一套尺寸。 */
+/**
+ * 40dp 视觉 / 48dp 热区，和变焦档位同一套尺寸。
+ *
+ * 语义：键面上只有 `±` / `+0.3` 这种小数点符号，读屏念出来是"正负号"、
+ * "加零点三"，没有上下文。所以显式给「曝光补偿 +0.3」，并按展开状态给动作提示。
+ * 点击挂在 48dp 外层 Box 上 —— 之前挂在 40dp 圆上，实际热区只有 40dp。
+ */
 @Composable
 private fun FilmEvKey(
     profile: ExposureProfile,
@@ -351,18 +404,30 @@ private fun FilmEvKey(
     val lit = active || !neutral
     val fill = if (lit) Color.White.copy(alpha = 0.92f) else spec.palette.chipFill
     val ink = if (lit) Color(0xFF151515) else spec.palette.ink
+    // 同变焦档位：48dp 热区 + 涟漪仍画在 40dp 圆里（否则涟漪会变成 48dp 的方块）。
+    val interaction = remember { MutableInteractionSource() }
+    val indication = LocalIndication.current
 
     Box(
-        modifier = androidx.compose.ui.Modifier.size(48.dp),
+        modifier = androidx.compose.ui.Modifier
+            .size(48.dp)
+            .semantics { contentDescription = "曝光补偿 ${formatEv(ev)}" }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClickLabel = if (active) "收起曝光刻度" else "展开曝光刻度",
+                role = Role.Button,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = androidx.compose.ui.Modifier
                 .size(40.dp)
                 .clip(CircleShape)
+                .indication(interaction, indication)
                 .background(fill)
-                .border(1.dp, if (lit) fill else spec.palette.hairline, CircleShape)
-                .clickable(onClick = onClick),
+                .border(1.dp, if (lit) fill else spec.palette.hairline, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -410,6 +475,49 @@ private fun FilmEvRuler(
     Column(
         modifier = androidx.compose.ui.Modifier
             .width(232.dp)
+            // 拖动条本身只有 22dp 高（视觉是设计稿的），低于 48dp 触摸目标。面板高度
+            // 不能为了热区改 —— 那会顶掉取景器的构图。所以给整块刻度面板补**可调节语义**：
+            // TalkBack 用户用滑动/动作菜单改档，不需要精确戳中那条 22dp 的线。
+            // setProgress 收到的是 EV 值，按 stepEv 换算回 index（换算只信 ExposureProfile，
+            // 界面不自己乘，和 CameraPreview 的约定一致）。
+            .semantics(mergeDescendants = true) {
+                contentDescription = "曝光补偿刻度"
+                if (profile.maxIndex > profile.minIndex) {
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        current = profile.evOf(evIndex),
+                        range = profile.minEv..profile.maxEv,
+                        steps = (profile.maxIndex - profile.minIndex - 1).coerceAtLeast(0),
+                    )
+                }
+                setProgress { targetEv ->
+                    val index = (targetEv / profile.stepEv).roundToInt()
+                        .coerceIn(profile.minIndex, profile.maxIndex)
+                    if (index == evIndex) {
+                        false
+                    } else {
+                        onEvChange(index)
+                        true
+                    }
+                }
+                customActions = listOf(
+                    CustomAccessibilityAction("增加一档曝光") {
+                        if (evIndex < profile.maxIndex) {
+                            onEvChange(evIndex + 1)
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    CustomAccessibilityAction("减少一档曝光") {
+                        if (evIndex > profile.minIndex) {
+                            onEvChange(evIndex - 1)
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                )
+            }
             // 参考图里的深色件都没有描边：描边一加就变成"卡片"，而它应该是
             // "取景器里压着的一块暗色"。所以只留底色 + 圆角（D-053）。
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))

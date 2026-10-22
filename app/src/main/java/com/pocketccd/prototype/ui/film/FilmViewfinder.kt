@@ -25,6 +25,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 
 /**
+ * 取景器内的绘制层：金属外框（[FilmViewfinder]）、暗角、四角角标、九宫格、准星。
+ *
+ * **无障碍审计结论（T1-013）：本文件没有任何可点控件，全部是纯 Canvas 装饰，
+ * 因此刻意不挂任何语义。** 给装饰性 Canvas 加 `contentDescription` 只会让读屏
+ * 在取景页多停几个没有动作的焦点，反而是噪音。取景器中唯一可交互的是"点按对焦"，
+ * 它由 `FilmCaptureScreen.kt` 的 `pointerInput` 层实现（那个文件不在本次改动范围）。
+ * 对焦**结果**的语义在 [FocusRing]（FilmInteractions.kt）里，用 liveRegion 播报。
+ */
+
+/**
  * The metal bezel around the live preview.
  *
  * Design uses `linear-gradient` + `inset box-shadow` + `box-shadow`. Compose

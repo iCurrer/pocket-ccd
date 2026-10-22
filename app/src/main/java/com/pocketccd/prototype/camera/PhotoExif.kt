@@ -1,6 +1,7 @@
 package com.pocketccd.prototype.camera
 
 import android.media.ExifInterface
+import java.io.ByteArrayInputStream
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -61,18 +62,40 @@ private fun oneDecimal(value: Float): String {
  * 也不能因为一张图的 EXIF 损坏就崩在"刚拍完"这一屏。
  */
 fun readPhotoExif(file: File): PhotoExif = runCatching {
-    val exif = ExifInterface(file.absolutePath)
-    PhotoExif(
-        focalLengthMm = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0)
-            .takeIf { it > 0.0 }?.toFloat(),
-        fNumber = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0)
-            .takeIf { it > 0.0 }?.toFloat(),
-        exposureSeconds = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
-            .takeIf { it > 0.0 },
-        // `android.media.ExifInterface` 没有导出 TAG_PHOTOGRAPHIC_SENSITIVITY 常量
-        // （那是 androidx.exifinterface 才补上的），所以按规范的 tag 名直接读；
-        // 老机型只写已经废弃的 ISO_SPEED_RATINGS，兜底再读一次。
-        iso = exif.getAttributeInt("PhotographicSensitivity", 0).takeIf { it > 0 }
-            ?: exif.getAttributeInt(ExifInterface.TAG_ISO_SPEED_RATINGS, 0).takeIf { it > 0 },
-    )
+    parseExif(ExifInterface(file.absolutePath))
 }.getOrDefault(PhotoExif())
+
+/**
+ * 读**相机刚交来的 JPEG 字节**里的 EXIF（P1-14）。
+ *
+ * 为什么需要它：成片管线是 `JPEG → decodeJpeg(ARGB) → 引擎 → Bitmap.compress`，
+ * `Bitmap.compress` 只会吐裸 JPEG，相机原始帧里那四项硬件参数在第一步之后就没了。
+ * 唯一保住它们的时机是**拿到原始字节的当下**：在 `takeJpeg` 里解析一次随帧带走，
+ * 落盘时再写回新文件（见 `PhotoStore.writeExif`）。
+ *
+ * 与文件版共用同一套解析：两边的标签名/兜底逻辑必须一致，否则"刚拍完"和
+ * "从相册翻回来"两种入口会显示不同的值。
+ *
+ * 任何异常都退化成空对象。相机帧是热路径，这里**不允许**抛 —— 参数读不到只是
+ * 成片页显示 `—`，拍摄本身绝不能因此失败。
+ */
+fun readPhotoExif(jpeg: ByteArray): PhotoExif = runCatching {
+    // ExifInterface 只解析 JPEG 头部的 EXIF 段，不会解码整张图，代价可以忽略。
+    // ByteArrayInputStream 不需要关闭（没有系统资源）。
+    parseExif(ExifInterface(ByteArrayInputStream(jpeg)))
+}.getOrDefault(PhotoExif())
+
+/** 文件版与字节版共用的四字段解析。 */
+private fun parseExif(exif: ExifInterface): PhotoExif = PhotoExif(
+    focalLengthMm = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0)
+        .takeIf { it > 0.0 }?.toFloat(),
+    fNumber = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0)
+        .takeIf { it > 0.0 }?.toFloat(),
+    exposureSeconds = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
+        .takeIf { it > 0.0 },
+    // `android.media.ExifInterface` 没有导出 TAG_PHOTOGRAPHIC_SENSITIVITY 常量
+    // （那是 androidx.exifinterface 才补上的），所以按规范的 tag 名直接读；
+    // 老机型只写已经废弃的 ISO_SPEED_RATINGS，兜底再读一次。
+    iso = exif.getAttributeInt("PhotographicSensitivity", 0).takeIf { it > 0 }
+        ?: exif.getAttributeInt(ExifInterface.TAG_ISO_SPEED_RATINGS, 0).takeIf { it > 0 },
+)

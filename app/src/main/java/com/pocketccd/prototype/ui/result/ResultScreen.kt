@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,8 @@ import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 enum class ResultStatus {
@@ -104,8 +107,20 @@ fun ResultScreen(
         else -> Stage.DEVELOPING
     }
 
-    val exif = remember(photo?.fullFile?.absolutePath) {
-        photo?.fullFile?.let { readPhotoExif(it) } ?: PhotoExif()
+    // EXIF 从成片文件读，但**不能**在 composition 里同步读：一张 3–5MB 的 JPEG
+    // 要打开/解析文件头，写在 remember 里等于在首帧主线程上做 IO（P3-15）。
+    // produceState 先画 `—`，IO 线程读完再刷新；切照片时按路径重启。
+    // 读不到就是空对象 → 参数格显示 `—`，绝不拿设计稿数值兜底（D-043）。
+    val photoFile = photo?.fullFile
+    val exif by produceState(
+        initialValue = PhotoExif(),
+        key1 = photoFile?.absolutePath,
+    ) {
+        value = if (photoFile == null) {
+            PhotoExif()
+        } else {
+            withContext(Dispatchers.IO) { readPhotoExif(photoFile) }
+        }
     }
     val resolvedStock = photo?.stockLabel ?: stockLabel
 
@@ -470,6 +485,14 @@ private fun ParamCell(label: String, value: String, modifier: Modifier = Modifie
     }
 }
 
+/**
+ * 底部状态行：只画「这张存到哪了」这一件事实。
+ *
+ * **刻意不显示 [SavedPhoto.renderMillis] / [SavedPhoto.strips]**。这两个字段只有
+ * 「刚拍完」的 SavedPhoto 是真的；历史照片来自 `PhotoStore.list()` 重建，两项都是 0。
+ * 画出来就会变成 `0ms · 0 strips` —— 一个看起来像测量值的假数（review P3-14）。
+ * 冲洗耗时只进日志（`AppViewModel.develop`），不进用户界面。
+ */
 @Composable
 private fun StatusRow(status: ResultStatus, stage: Stage, photo: SavedPhoto?) {
     val p = LocalFilmTheme.current.palette

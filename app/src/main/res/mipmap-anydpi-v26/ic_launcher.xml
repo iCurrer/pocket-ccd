@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon。minSdk 29，所以只在 mipmap-anydpi-v26 放 XML 就够了，
+  不需要任何 PNG（这版图标是纯矢量）。
+  前景层文件名故意用 ic_launcher_foreground：和 Android Studio 模板一致，
+  以后谁想加密度相关微调，替换那一个 drawable 即可。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

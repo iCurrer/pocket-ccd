@@ -64,10 +64,15 @@ class CaptureTimeoutException(
  * 为什么必须由相机侧算出来：JPEG 的像素恒为传感器原始方向（见
  * [CameraHandle.takeJpeg]），而"正立"是相对于用户此刻的握持姿势的，
  * 只有拍照那一瞬间读得到 display rotation。
+ *
+ * [exif] 是**相机原始 JPEG 里真实读到**的四项硬件参数（P1-14）。成片管线会把
+ * JPEG 解成 ARGB 再重新编码，`Bitmap.compress` 不写 EXIF —— 不在这一帧上顺手
+ * 带走，这些参数就永久丢了。读不到是 null：成片页显示 `—`，绝不编数。
  */
 data class CapturedFrame(
     val jpeg: ByteArray,
     val rotationDegrees: Int,
+    val exif: PhotoExif? = null,
 )
 
 /**
@@ -150,7 +155,18 @@ class CameraHandle internal constructor(
                                 val buffer = image.planes[0].buffer
                                 val bytes = ByteArray(buffer.remaining())
                                 buffer.get(bytes)
-                                if (continuation.isActive) continuation.resume(CapturedFrame(bytes, rotation))
+                                // P1-14：在原始字节还在手上时解析一次 EXIF（含焦距/光圈/
+                                // 快门/ISO）。这里**绝不能抛**：拍摄是主链路，参数只是装饰。
+                                // 空 EXIF（相机没写这几项）也归成 null，让成片页照实显示 —。
+                                val exif = runCatching {
+                                    readPhotoExif(bytes).takeUnless { it.isEmpty }
+                                }.getOrNull()
+                                if (exif == null) {
+                                    Log.i(TAG, "拍摄帧没有可读 EXIF，成片页参数将显示 —")
+                                }
+                                if (continuation.isActive) {
+                                    continuation.resume(CapturedFrame(bytes, rotation, exif))
+                                }
                             } catch (error: Throwable) {
                                 if (continuation.isActive) continuation.resumeWithException(error)
                             } finally {

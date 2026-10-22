@@ -38,6 +38,57 @@ enum class FilmIconKind {
     Camera,
 }
 
+/**
+ * 图标的默认语义文案（TalkBack 读的那一句）。
+ *
+ * 为什么映射放在这里而不是调用点：这些图标全部是"纯图标可点控件"（[FilmRoundButton]），
+ * 调用点（取景页 / 相册页 / 成片页 / 设置页）只传 `icon` 和开关状态，改一处就能让
+ * 所有页面同时获得描述，也不会出现"取景页写了、设置页忘了"的半覆盖。
+ *
+ * `active` 参与文案：闪光灯/九宫格是开合型开关，按钮上没有任何文字，只有底色变化，
+ * 读屏如果只说"闪光灯"用户无法知道当前状态；带上"已开/已关"才是完整的语义。
+ * 非开合型图标忽略 `active`。
+ *
+ * 这是**无障碍文案**，不是界面文案 —— 不要拿它去做可见标签（可见标签有字号/对比度要求）。
+ */
+fun FilmIconKind.accessibilityLabel(active: Boolean): String = when (this) {
+    FilmIconKind.Flash -> if (active) "闪光灯已开" else "闪光灯已关"
+    // FlashOff 是"已关"的图标；active 仍参与，防止哪天调用方传了 FlashOff 却想要开态文案。
+    FilmIconKind.FlashOff -> if (active) "闪光灯已开" else "闪光灯已关"
+    FilmIconKind.Grid -> if (active) "九宫格参考线已开" else "九宫格参考线已关"
+    FilmIconKind.Tune -> "设置"
+    FilmIconKind.Filmstrip -> "胶卷库"
+    FilmIconKind.ImageMultiple -> "相册"
+    FilmIconKind.Close -> "关闭"
+    FilmIconKind.Check -> "确认"
+    FilmIconKind.ChevronRight -> "进入"
+    FilmIconKind.Camera -> "继续拍摄"
+}
+
+/**
+ * 图标的默认动作提示（TalkBack 在"双击即可…"后面补的那半句）。
+ *
+ * 开关类用"切换…"，导航类用"打开…"，关闭键就是"关闭"。写成映射而不是统一
+ * "点击"：读屏用户靠这半句判断按下去会发生什么，泛泛的"点击"等于没说。
+ */
+fun FilmIconKind.actionLabel(): String = when (this) {
+    FilmIconKind.Flash -> "切换闪光灯"
+    FilmIconKind.FlashOff -> "切换闪光灯"
+    FilmIconKind.Grid -> "切换九宫格参考线"
+    FilmIconKind.Tune -> "打开设置"
+    FilmIconKind.Filmstrip -> "打开胶卷库"
+    FilmIconKind.ImageMultiple -> "打开相册"
+    FilmIconKind.Close -> "关闭"
+    FilmIconKind.Check -> "确认"
+    FilmIconKind.ChevronRight -> "进入"
+    FilmIconKind.Camera -> "继续拍摄"
+}
+
+/**
+ * 纯绘制图标。**没有自己的语义**：它总是被 [FilmRoundButton] / [FilmPanelKey] 这类
+ * 有语义的宿主包住，宿主负责 `contentDescription`。给 Canvas 单独加语义会让
+ * TalkBack 把同一句话读两遍（宿主一次、图标一次）。
+ */
 @Composable
 fun FilmIcon(
     kind: FilmIconKind,

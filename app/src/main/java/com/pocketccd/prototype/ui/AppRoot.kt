@@ -3,7 +3,10 @@ package com.pocketccd.prototype.ui
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +30,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +65,8 @@ import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
 import com.pocketccd.prototype.ui.result.ResultStatus
 import com.pocketccd.prototype.ui.settings.SettingsScreen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 把 ViewModel 接到 UI 上，并持有相机句柄。
@@ -91,6 +97,20 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
     // 和 zoom 一样留在这层：相机重绑会把硬件 EV 打回 0，界面若自己记着 +1 就假了。
     var exposureProfile by remember { mutableStateOf<ExposureProfile?>(null) }
     var evIndex by remember { mutableIntStateOf(0) }
+    // 闪光灯开关留在这层，和 zoom/EV 同一个理由：相机重绑会把硬件 flashMode
+    // 打回 OFF，界面若把开关记在取景页里，翻一趟相册回来就会「图标亮着、实际没闪」。
+    var flashOn by remember { mutableStateOf(false) }
+    // 该镜头到底有没有闪光灯（前置通常没有）。没有时按钮不再假装能开。
+    var flashAvailable by remember { mutableStateOf(true) }
+
+    // 首次绑定失败的自愈计数。相机被别的 App 占着 / 系统相机服务还没起来时，
+    // 一次 bind 失败不代表永远失败；但要限次数，否则会变成死循环重绑。
+    var bindFailures by remember { mutableIntStateOf(0) }
+    // 回前台探会话的次数。探针不能只探一次就判死：ON_RESUME 紧跟 ON_START，
+    // CameraX 此时往往还没把 surface attach 回来（见 CameraPreview 里最多等 1s 的轮询）。
+    var resumeProbe by remember { mutableIntStateOf(0) }
+
+    val scope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -144,15 +164,44 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.reconcileGallery()
-                val bound = handle
-                if (bound != null && !bound.isAttached()) {
-                    previewError = "相机连接已断开，正在重连"
-                    cameraNonce++
-                }
+                // 用户可能是「拒绝权限 → 去系统设置里打开 → 切回来」。权限 launcher
+                // 的回调只在真正弹窗那次触发；从设置页回来只有 ON_RESUME。
+                // 不在这里重查，取景器会一直停在「需要相机权限」，只有杀进程能救。
+                hasPermission = context.hasCameraPermission()
+                // 会话探针交给带重试的 effect（见下），这里只发一个信号。
+                resumeProbe++
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 回到前台验一次会话：相机可能已被系统或其他 App 拿走。
+    // 但**不能探一次就下结论** —— ON_RESUME 紧跟 ON_START，CameraX 此时常常
+    // 还没把 surface attach 回来，一次失败就整轮重绑会让「切回来」永远黑一下。
+    // 这里最多等 3×250ms，仍读不到才认账。
+    LaunchedEffect(resumeProbe) {
+        if (resumeProbe == 0) return@LaunchedEffect
+        if (handle == null) return@LaunchedEffect
+        repeat(3) {
+            delay(250)
+            if (handle?.isAttached() == true) return@LaunchedEffect
+        }
+        previewError = "相机连接已断开，正在重连"
+        cameraNonce++
+    }
+
+    // 权限被永久拒绝后，系统弹窗不会再出现（launch 会静默返回 false）。
+    // 唯一出口是应用详情页的「权限」开关，所以占位区必须给一个按钮。
+    val openAppSettings: () -> Unit = {
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                ),
+            )
+        }
     }
 
     // 进照片墙之前再对一次：从相册切回来但没经过 ON_RESUME 的路径（比如分屏、
@@ -183,8 +232,13 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                         handle = bound
                         if (bound != null) {
                             previewError = null
+                            bindFailures = 0
                             viewModel.onCameraBound(bound)
                             lensStops = bound.lensStops
+                            flashAvailable = bound.hasFlash
+                            // 新会话的闪光灯默认是 OFF，把界面记住的状态补回去；
+                            // 和下面变焦/EV 是同一条规矩——硬件重绑后由这里负责复原。
+                            bound.setFlash(flashOn)
                             // 新会话的变焦是 1x，把界面记住的那一档补回去。
                             if (zoomRatio > 1f) bound.requestZoom(zoomRatio)
                             // EV 同理：重绑后硬件回到 0，把用户设过的档位补回去，
@@ -199,6 +253,17 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                     onError = { message ->
                         previewError = message
                         viewModel.onCameraError(message)
+                        // 首次绑定失败没人会来救：LaunchedEffect 的 key 没变，不会重试。
+                        // 相机被占 / 相机服务刚开机时等一两秒往往就好了，所以退避重绑，
+                        // 但限 2 次——「没有后置镜头」这类错误重试一万次也没用。
+                        if (bindFailures < 2) {
+                            bindFailures++
+                            scope.launch {
+                                delay(1_200L * bindFailures)
+                                previewError = "相机没有响应，正在重试"
+                                cameraNonce++
+                            }
+                        }
                     },
                 )
             }
@@ -218,7 +283,13 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                 viewModel.onEvent(AppEvent.OpenResult)
             }
         },
-        onFlashChange = { on -> handle?.setFlash(on) },
+        flashOn = flashOn,
+        flashAvailable = flashAvailable,
+        onToggleFlash = {
+            val next = !flashOn
+            flashOn = next
+            handle?.setFlash(next)
+        },
         onTapToFocus = { x, y, onResult ->
             val bound = handle
             if (bound == null) onResult(false) else bound.focusAt(x, y, onResult)
@@ -251,6 +322,7 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         onRetry = viewModel::retry,
         onRefreshStocks = viewModel::refreshStocks,
         onRefreshRoll = viewModel::refreshRoll,
+        onOpenAppSettings = openAppSettings,
     )
 }
 
@@ -266,7 +338,17 @@ fun PocketCcdApp(
     permissionGranted: Boolean = true,
     cameraViewfinder: (@Composable (Modifier) -> Unit)? = null,
     onShutter: () -> Unit = {},
-    onFlashChange: (Boolean) -> Unit = {},
+    /**
+     * 闪光灯状态由最外层（[PocketCcdRoute]）持有，不再留在这一层：
+     * 相机重绑会把硬件 flashMode 打回 OFF，只有把状态放在能看到 `CameraHandle`
+     * 的那一层，「重绑后补回去」才有人执行。
+     */
+    flashOn: Boolean = false,
+    /** 该镜头是否有闪光灯。false 时取景页不再假装能开（真机前置常见）。 */
+    flashAvailable: Boolean = true,
+    onToggleFlash: () -> Unit = {},
+    /** 权限被永久拒绝后的唯一出口：应用详情页。 */
+    onOpenAppSettings: () -> Unit = {},
     /** 装卷。胶卷库点某一卷时调用，装完由调用方负责回到取景页。 */
     onSelectStock: (String) -> Unit = {},
     onNewRoll: () -> Unit = {},
@@ -303,9 +385,8 @@ fun PocketCcdApp(
         }
     }
 
-    // Flash and grid live here, not inside the screen: they survive the
-    // viewfinder being covered by the result page.
-    var flashOn by remember { mutableStateOf(false) }
+    // Grid lives here, not inside the screen: it survives the viewfinder being
+    // covered by the result page. (flashOn moved up to PocketCcdRoute.)
     var gridOn by remember { mutableStateOf(false) }
     // 快门闪白的触发器。放在这一层是因为它必须在**成片页之上**：
     // 按下快门会立刻导航，闪白若画在取景页内部会被成片页完全盖住
@@ -348,6 +429,7 @@ fun PocketCcdApp(
                         shotsTaken = rollShots,
                         rollCapacity = ROLL_CAPACITY,
                         flashOn = flashOn,
+                        flashAvailable = flashAvailable,
                         gridOn = gridOn,
                         // 一卷拍满就真的停：容量若只是装饰，计数器就成了摆设（D-002）。
                         canShoot = cameraUi.canShoot && previewError == null && !rollFull,
@@ -361,15 +443,13 @@ fun PocketCcdApp(
                             shutterFlash++
                             onShutter()
                         },
-                        onToggleFlash = {
-                            flashOn = !flashOn
-                            onFlashChange(flashOn)
-                        },
+                        onToggleFlash = onToggleFlash,
                         onToggleGrid = { gridOn = !gridOn },
                         onOpenGallery = { onEvent(AppEvent.OpenGallery) },
                         onOpenFilms = { onEvent(AppEvent.OpenFilms) },
                         onNewRoll = onNewRoll,
                         onOpenSettings = { onEvent(AppEvent.OpenSettings) },
+                        onOpenAppSettings = onOpenAppSettings,
                         permissionGranted = permissionGranted,
                         viewfinder = cameraViewfinder,
                         onTapToFocus = onTapToFocus,
@@ -485,6 +565,8 @@ private fun SavedPhoto.toWallItem(): PhotoWallItem = PhotoWallItem(
     stockLabel = stockLabel,
     capturedAt = capturedAt,
     imagePath = thumbnailFile.absolutePath,
+    // 查看器要大图；照片墙网格仍只用缩略图，别在列表里解 12MP。
+    fullImagePath = fullFile.absolutePath,
 )
 
 @Preview(showBackground = true, backgroundColor = 0xFF0B0C0E)

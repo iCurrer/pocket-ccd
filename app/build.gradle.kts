@@ -15,8 +15,10 @@ android {
         applicationId = "com.pocketccd.prototype"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // 2026-10-23 夜间包：相册查看器/收藏、成片 EXIF、权限自愈、图标与无障碍。
+        // 升 versionCode 是为了覆盖安装能顺利升级（同一 debug 签名）。
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildTypes {

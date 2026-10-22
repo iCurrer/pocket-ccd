@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
@@ -57,12 +60,19 @@ import kotlin.math.sin
  *
  * The click target is the well, not the button: a finger aiming at a physical
  * shutter lands on the rim as often as the face.
+ *
+ * 无障碍（T1-013）：快门是整屏最关键的控件，但按钮上没有一个字。所以语义必须
+ * 由组件自己给：`contentDescription` 默认「快门」，动作提示「拍摄」（读屏会念
+ * "快门，按钮，双击即可拍摄"）。两个参数都有默认值，调用点不用改。
+ * 热区 = 78dp 快门 + 两侧各 5dp 凹槽 = 88dp，远超 48dp 下限。
  */
 @Composable
 fun FilmShutter(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    accessibilityLabel: String = "快门",
+    actionLabel: String = "拍摄",
 ) {
     val spec = LocalFilmTheme.current
     val interaction = remember { MutableInteractionSource() }
@@ -77,10 +87,13 @@ fun FilmShutter(
         modifier = modifier
             .size(spec.metrics.shutter + spec.metrics.panelWell * 2)
             .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
+            .semantics { contentDescription = accessibilityLabel }
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled,
+                onClickLabel = actionLabel,
+                role = Role.Button,
                 onClick = onClick,
             )
             .drawBehind { drawShutterWell(spec) },
@@ -215,10 +228,19 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
 }
 
 /**
- * 36dp circular control in a 48dp touch target.
+ * 36dp 视觉圆钮 + **48dp 热区**。
  *
- * This split is deliberate (spec §2.4): the design's 36px button is below the
- * 48dp minimum, so the visible circle keeps its size while the hit area grows.
+ * 视觉尺寸必须保持 36dp（设计稿如此），但 48dp 的最小触摸目标不能只是"外面套了一个
+ * 48dp 的 Box"：2026-10-22 的无障碍审计发现 `clickable` 之前挂在里面那个 36dp 的
+ * 圆上，外面 48dp 的 Box 只负责居中，**压根不接收点击**。看起来 48dp、实际 36dp，
+ * 这正是 Accessibility Scanner 会报"触摸目标过小"的典型形态。
+ *
+ * 现在点击/按压/hover 全部挂在 48dp 的外层 Box 上，内层圆只负责画。视觉零变化，
+ * 拇指的命中率变了。
+ *
+ * 语义：图标本身没有文字，`accessibilityLabel` / `actionLabel` 的默认值由
+ * [FilmIconKind.accessibilityLabel] / [FilmIconKind.actionLabel] 按图标 + 开关态推导
+ * （如闪光灯会读"闪光灯已开/已关"）。调用点不传也能拿到正确语义；要覆盖时显式传参。
  */
 @Composable
 fun FilmRoundButton(
@@ -228,6 +250,8 @@ fun FilmRoundButton(
     active: Boolean = false,
     enabled: Boolean = true,
     iconSize: androidx.compose.ui.unit.Dp = 17.dp,
+    accessibilityLabel: String = icon.accessibilityLabel(active),
+    actionLabel: String = icon.actionLabel(),
 ) {
     val spec = LocalFilmTheme.current
     val interaction = remember { MutableInteractionSource() }
@@ -247,7 +271,17 @@ fun FilmRoundButton(
     }
 
     Box(
-        modifier = modifier.size(spec.metrics.touchTarget),
+        modifier = modifier
+            .size(spec.metrics.touchTarget)
+            .semantics { contentDescription = accessibilityLabel }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClickLabel = actionLabel,
+                role = Role.Button,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -259,13 +293,7 @@ fun FilmRoundButton(
                 }
                 .clip(CircleShape)
                 .background(fill)
-                .border(spec.metrics.hairline, stroke, CircleShape)
-                .clickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    enabled = enabled,
-                    onClick = onClick,
-                ),
+                .border(spec.metrics.hairline, stroke, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             FilmIcon(kind = icon, tint = tint, iconSize = iconSize)
@@ -357,12 +385,24 @@ fun FilmBodyPanel(
  * 和 [FilmRoundButton] 的区别不是尺寸而是**方向**：那个是浮在页面上的圆钮（顶部亮、
  * 底部暗），这个是嵌进面板的键（顶部暗、底部亮）。两套高光方向必须相反，
  * 否则一眼看出是同一个组件换了颜色。
+ *
+ * 语义：丝印文字 `label` 就是最好的描述，所以 `accessibilityLabel` 默认继承它；
+ * 但丝印是画了两遍的（暗底高光 + 正文），读屏会把合并后的子节点读成"相册 相册"，
+ * 所以这里显式给 `contentDescription` —— 同一句话只读一次。
+ * `actionLabel` 默认「打开$label」（双击即可打开相册 / 打开换卷）。
+ * 热区是整个 64dp 宽的 Column（含丝印行），高度约 67dp，达标。
  */
 @Composable
 fun FilmPanelKey(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    accessibilityLabel: String = label,
+    actionLabel: String = "打开$label",
+    // content 必须留在最后一个参数：取景页用尾随 lambda 传图标
+    // （`FilmPanelKey(label = "相册", onClick = …) { FilmIcon(…) }`），
+    // 把默认参数排在它后面会让尾随 lambda 绑错参数、调用点全部编译失败。
+    // 无障碍参数因此排在 content 之前 —— 这也是"加默认值不能改调用点"的硬约束。
     content: @Composable () -> Unit,
 ) {
     val spec = LocalFilmTheme.current
@@ -379,9 +419,12 @@ fun FilmPanelKey(
         modifier = modifier
             // 固定 64dp 宽：热区不能只裹住 34dp 的圆，也不能窄到标签放不下。
             .width(64.dp)
+            .semantics { contentDescription = accessibilityLabel }
             .clickable(
                 interactionSource = interaction,
                 indication = null,
+                onClickLabel = actionLabel,
+                role = Role.Button,
                 onClick = onClick,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,

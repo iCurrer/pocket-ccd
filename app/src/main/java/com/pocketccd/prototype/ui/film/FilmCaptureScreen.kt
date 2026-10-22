@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -82,8 +84,12 @@ fun FilmCaptureScreen(
     onOpenFilms: () -> Unit,
     onNewRoll: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** 权限被永久拒绝后去应用详情页开权限。系统弹窗不会再出现，这是唯一出口。 */
+    onOpenAppSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     permissionGranted: Boolean = true,
+    /** 该镜头有没有闪光灯。false 时按钮不再假装能开（前置镜头常见）。 */
+    flashAvailable: Boolean = true,
     /** Null when the camera is not available yet (no permission / no pack). */
     viewfinder: (@Composable (Modifier) -> Unit)? = null,
     /**
@@ -156,10 +162,16 @@ fun FilmCaptureScreen(
                 FilmRoundButton(
                     icon = if (flashOn) FilmIconKind.Flash else FilmIconKind.FlashOff,
                     onClick = {
-                        onToggleFlash()
-                        showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
+                        if (flashAvailable) {
+                            onToggleFlash()
+                            showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
+                        } else {
+                            // 没有闪光灯单元时不发 onToggleFlash：否则图标会亮、
+                            // 底层 setFlash 却静默降级，等于骗用户。
+                            showToast("这台设备没有闪光灯")
+                        }
                     },
-                    active = flashOn,
+                    active = flashOn && flashAvailable,
                 )
                 FilmRoundButton(
                     icon = FilmIconKind.Grid,
@@ -220,6 +232,7 @@ fun FilmCaptureScreen(
                     ViewfinderPlaceholder(
                         permissionGranted = permissionGranted,
                         blockReason = blockReason,
+                        onOpenAppSettings = onOpenAppSettings,
                     )
                 }
 
@@ -378,35 +391,48 @@ private fun StockPill(name: String, onClick: () -> Unit) {
     val spec = LocalFilmTheme.current
     val shape = RoundedCornerShape(50)
 
-    Row(
+    // 视觉是 29dp 的胶囊，命中区必须 48dp：外层 Box 撑到 48dp 并接管点击，
+    // 内层只负责画。之前 clickable 挂在 29dp 的胶囊上，是典型的「看着够大、
+    // 实际点不中」（T9 无障碍退出条件要求 ≥48dp）。
+    Box(
         modifier = Modifier
-            .clip(shape)
-            .background(spec.palette.controlFill)
-            .border(spec.metrics.hairline, spec.palette.hairline, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .heightIn(min = 48.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "打开胶卷库选择胶卷",
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(spec.palette.accent),
-        )
-        Text(
-            text = name,
-            color = spec.palette.ink,
-            fontSize = spec.type.mono,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 0.16.em,
-            maxLines = 1,
-        )
-        FilmIcon(
-            kind = FilmIconKind.ChevronRight,
-            tint = spec.palette.inkFaint,
-            iconSize = 12.dp,
-        )
+                .clip(shape)
+                .background(spec.palette.controlFill)
+                .border(spec.metrics.hairline, spec.palette.hairline, shape)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(spec.palette.accent),
+            )
+            Text(
+                text = name,
+                color = spec.palette.ink,
+                fontSize = spec.type.mono,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.16.em,
+                maxLines = 1,
+            )
+            FilmIcon(
+                kind = FilmIconKind.ChevronRight,
+                tint = spec.palette.inkFaint,
+                iconSize = 12.dp,
+            )
+        }
     }
 }
 
@@ -417,7 +443,11 @@ private fun StockPill(name: String, onClick: () -> Unit) {
  * reason is more honest than a placeholder photo.
  */
 @Composable
-private fun ViewfinderPlaceholder(permissionGranted: Boolean, blockReason: String?) {
+private fun ViewfinderPlaceholder(
+    permissionGranted: Boolean,
+    blockReason: String?,
+    onOpenAppSettings: () -> Unit,
+) {
     val spec = LocalFilmTheme.current
     Box(
         modifier = Modifier
@@ -443,6 +473,38 @@ private fun ViewfinderPlaceholder(permissionGranted: Boolean, blockReason: Strin
                 color = spec.palette.textSecondary,
                 fontSize = spec.type.body,
             )
+            // 权限被永久拒绝（点了两次「拒绝」）后，系统弹窗不会再出现，
+            // 光写一行「在系统设置中允许」等于让用户自己去找入口。给一个真按钮。
+            if (!permissionGranted) {
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        // 命中区 48dp（视觉胶囊约 42dp），权限页是用户唯一能自救的地方，
+                        // 不能因为差 6dp 点不中。
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(spec.palette.controlFill)
+                        .border(
+                            spec.metrics.hairline,
+                            spec.palette.accent.copy(alpha = 0.55f),
+                            RoundedCornerShape(50),
+                        )
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = "打开系统设置授予相机权限",
+                            onClick = onOpenAppSettings,
+                        )
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "去设置",
+                        color = spec.palette.accent,
+                        fontSize = spec.type.body,
+                        letterSpacing = 0.12.em,
+                    )
+                }
+            }
         }
     }
 }

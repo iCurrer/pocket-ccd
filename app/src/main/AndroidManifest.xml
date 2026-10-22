@@ -19,10 +19,17 @@
       和分块浮点平面，默认 256MB 的 Java 堆余量太紧。相机/图像类应用开这个
       是常规做法，且它只抬上限、不预留内存。
     -->
+    <!--
+      icon / roundIcon：此前 <application> 没写 android:icon，装到桌面是系统默认的
+      安卓机器人图标。图标是纯矢量 adaptive icon（mipmap-anydpi-v26，minSdk 29 足够），
+      不引 PNG、不引第三方图标库。roundIcon 给圆形遮罩的启动器用；两者共用同一套图层。
+    -->
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:largeHeap="true"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PocketCCD">
 

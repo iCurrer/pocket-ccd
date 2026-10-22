@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Adaptive icon 背景层。值必须和 Compose 侧 FilmPalette.appBg 一致（同为 #0B0C0E）：
+      图标在桌面上是"这个 App 的底色"，冷启动窗口背景 themes.xml 也是这个值，
+      启动时从桌面到首帧不会有颜色跳变。XML 读不到 Compose 令牌，只能手抄 ——
+      改 FilmDarkSpec.appBg 时必须同步改这里。
+    -->
+    <color name="ic_launcher_background">#0B0C0E</color>
+</resources>
