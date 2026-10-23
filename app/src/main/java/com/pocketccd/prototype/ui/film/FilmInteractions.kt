@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -248,6 +249,107 @@ fun ShutterFlash(trigger: Int, modifier: Modifier = Modifier) {
  * 动作提示「切换变焦」；`accessibilityLabelPrefix` 给调用方留覆盖口。
  * 热区：40dp 视觉圆外面套 48dp Box，点击挂在 48dp 那一层（否则实际只有 40dp）。
  */
+/**
+ * 工具条里的横向变焦档位（2026-10-23）。
+ *
+ * 旧版把档位竖排在取景画面右缘，白字压着真实画面：亮场景读不清，暗场景又浮在
+ * 画面上像调试信息。移到取景窗下方的工具条后，画面完整交给构图，参数留在机身上。
+ */
+@Composable
+fun FilmZoomStops(
+    zoom: Float,
+    stops: List<LensStop>,
+    onSelect: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val items = stops.ifEmpty { listOf(LensStop(1f), LensStop(2f)) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        items.forEach { stop ->
+            val active = abs(zoom - stop.zoomRatio) < 0.05f
+            val tint by androidx.compose.animation.animateColorAsState(
+                targetValue = if (active) p.inkStrong else p.inkMuted,
+                animationSpec = androidx.compose.animation.core.tween(160),
+                label = "zoom-stop-tint",
+            )
+            Box(
+                modifier = Modifier
+                    .height(40.dp)
+                    .widthIn(min = 40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .filmClickable(
+                        onClick = { onSelect(stop.zoomRatio) },
+                        onClickLabel = "变焦 ${stop.ratioLabel}",
+                    )
+                    .semantics { contentDescription = "变焦 ${stop.ratioLabel}" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = stop.ratioLabel,
+                        color = tint,
+                        fontSize = spec.type.rail,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    if (active) {
+                        Box(
+                            modifier = androidx.compose.ui.Modifier
+                                .size(3.dp)
+                                .clip(CircleShape)
+                                .background(p.accent),
+                        )
+                    } else {
+                        Spacer(androidx.compose.ui.Modifier.size(3.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 工具条里的 EV 键：`± 0.0`。点开在取景窗底部弹出横向刻度（[FilmEvRuler]）。 */
+@Composable
+fun FilmEvToolbarKey(
+    profile: ExposureProfile,
+    evIndex: Int,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val ev = profile.evOf(evIndex)
+    val neutral = abs(ev) < profile.stepEv / 2f
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .widthIn(min = 58.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .filmClickable(
+                onClickLabel = if (expanded) "收起曝光刻度" else "展开曝光刻度",
+                onClick = onClick,
+            )
+            .semantics { contentDescription = "曝光补偿 ${formatEv(ev)}" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "±",
+            color = if (neutral && !expanded) p.inkMuted else p.accent,
+            fontSize = spec.type.rail,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(androidx.compose.ui.Modifier.width(6.dp))
+        Text(
+            text = if (neutral) "0.0" else formatEv(ev),
+            color = if (neutral && !expanded) p.inkMuted else p.inkStrong,
+            fontSize = spec.type.rail,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+}
+
 @Composable
 fun ViewfinderZoom(
     zoom: Float,
@@ -417,7 +519,7 @@ private fun FilmEvKey(
  * 刻度尺本体。宽 232dp，13 档左右就够用了；档位更多时每格变窄，但仍是 1 档一停。
  */
 @Composable
-private fun FilmEvRuler(
+fun FilmEvRuler(
     profile: ExposureProfile,
     evIndex: Int,
     onEvChange: (Int) -> Unit,

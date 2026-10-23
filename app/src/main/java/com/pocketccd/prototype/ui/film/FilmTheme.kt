@@ -83,11 +83,11 @@ data class FilmMetrics(
     val bezel: Dp = 0.dp,
     val chipRadius: Dp = 3.dp,
     /** 视觉直径（含滚花环）。凹槽尺寸 = shutter + panelWell×2。 */
-    val shutter: Dp = 72.dp,
+    val shutter: Dp = 68.dp,
     /** 内嵌副键的视觉直径。热区仍是 [touchTarget]。 */
     val panelKey: Dp = 34.dp,
     /** 快门凹槽比快门本体外扩多少（单边）。8dp 让凹槽读成"坑"而不是描边。 */
-    val panelWell: Dp = 8.dp,
+    val panelWell: Dp = 6.dp,
     val thumbnail: Dp = 50.dp,
     val sheetRadius: Dp = 26.dp,
     val hairline: Dp = 1.dp,
@@ -125,6 +125,8 @@ data class FilmType(
     val label: TextUnit = 11.sp,
     /** 取景器右缘档位轨（变焦 / EV）的数字。比 label 大一档，站得住。 */
     val rail: TextUnit = 13.sp,
+    /** 底盖中央的帧数窗大数字（`01 / 36` 的 01）。全页唯一的大字号。 */
+    val counterBig: TextUnit = 30.sp,
     /** 只允许用于胶卷筒 / 包装上的仿真印刷字，**不得承载信息**。 */
     val microPrint: TextUnit = 9.sp,
 )

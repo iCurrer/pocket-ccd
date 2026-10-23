@@ -143,100 +143,139 @@ fun FilmCaptureScreen(
         toastText = null
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(p.appBg)
-            .statusBarsPadding(),
-    ) {
-        // 2026-10-23：顶栏只留胶卷 pill。闪光灯/九宫格/设置下移到取景窗下方的
-        // 工具条 —— 上方越空，取景窗越像"一台相机的窗"，而不是"一个带图标的页面"。
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            StockPill(name = stockName, onClick = onOpenFilms)
+    // EV 刻度不再常驻取景画面：工具条里的 EV 键点开后，在取景窗底部展开 4 秒。
+    var evExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(evExpanded, evIndex) {
+        if (evExpanded) {
+            delay(4000)
+            evExpanded = false
         }
+    }
 
+    Box(modifier = modifier.fillMaxSize()) {
         BoxWithConstraints(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                // 不再加水平 padding：取景窗宽度已经在下面按 0.86 收过，
-                // 再加一层 12dp 会变成 0.86×(412−24)，等于缩两次。
-                .padding(top = 2.dp),
-            // 把取景窗顶到上方：重心上移之后，下面的工具条与底盖才有"机身"的层次。
-            contentAlignment = Alignment.TopCenter,
+                .fillMaxSize()
+                .background(p.appBg)
+                .statusBarsPadding(),
         ) {
-            // 3:4 viewfinder, matching the design's 369x490 ratio. The preview
-            // itself is FIT_CENTER inside (never cropped — a framed image must
-            // match the captured image, see CameraPreview), so the frame has to
-            // match 4:3 too or the photo would be cropped relative to what the
-            // user saw.
-            // 取景窗不再顶满可用宽度：胶卷相机的取景器四周有一圈机身/边框，顶满宽度
-            // 会读成"手机预览框"，不像取景窗。0.86 是"看得出收了一圈、构图又不费劲"
-            // 的折中；可用高度不够时仍以高度为准（保持 3:4 不变形）。
-            val frameWidth = minOf(maxWidth * 0.86f, maxHeight * 3f / 4f)
+            // 2026-10-23 第三版布局：窗 → 工具条 → 底盖，三块连续，中间不留死黑。
+            // 取景窗宽度 0.86；同时给底盖保底 240dp，避免小屏把按键挤没。
+            val frameWidth = minOf(
+                maxWidth * 0.86f,
+                (maxHeight - 44.dp - 52.dp - 240.dp) * 0.75f,
+            )
+            val frameHeight = frameWidth * 4f / 3f
 
-            FilmViewfinder(
-                modifier = Modifier.size(width = frameWidth, height = frameWidth * 4f / 3f),
-            ) {
-                val slot = viewfinder
-                if (slot != null) {
-                    slot(Modifier.fillMaxSize())
-
-                    // 对应设计稿的 `#vfTap`（z-10）。放在预览之上、所有 chrome 之下：
-                    // 后加的 chip / 变焦钮仍然先拿到点击，这里只吃"点空白处"。
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectTapGestures { offset ->
-                                    focusLock = null
-                                    // id 用递增计数器而不是坐标：同一处连点两次也要重播动画。
-                                    focusPoint = FocusPoint(offset.x, offset.y, System.nanoTime())
-                                    tapToFocus(offset.x, offset.y) { ok -> focusLock = ok }
-                                }
-                            },
-                    )
-
-                    // Design layer that was missing in v1: without it the corners
-                    // and reticle vanish on a bright subject.
-                    ViewfinderVignette()
-                } else {
-                    ViewfinderPlaceholder(
-                        permissionGranted = permissionGranted,
-                        blockReason = blockReason,
-                        onOpenAppSettings = onOpenAppSettings,
-                    )
-                }
-
-                ViewfinderCorners()
-
-                if (gridOn) {
-                    ViewfinderGrid()
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 顶栏只留胶卷 pill。
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    StockPill(name = stockName, onClick = onOpenFilms)
                 }
 
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    ViewfinderReticle()
+                    FilmViewfinder(
+                        modifier = Modifier.size(width = frameWidth, height = frameHeight),
+                    ) {
+                        val slot = viewfinder
+                        if (slot != null) {
+                            slot(Modifier.fillMaxSize())
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures { offset ->
+                                            focusLock = null
+                                            focusPoint = FocusPoint(offset.x, offset.y, System.nanoTime())
+                                            tapToFocus(offset.x, offset.y) { ok -> focusLock = ok }
+                                        }
+                                    },
+                            )
+
+                            ViewfinderVignette()
+                        } else {
+                            ViewfinderPlaceholder(
+                                permissionGranted = permissionGranted,
+                                blockReason = blockReason,
+                                onOpenAppSettings = onOpenAppSettings,
+                            )
+                        }
+
+                        ViewfinderCorners()
+
+                        if (gridOn) {
+                            ViewfinderGrid()
+                        }
+
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ViewfinderReticle()
+                        }
+
+                        // EV 刻度：只在工具条 EV 键展开时出现，压在画面底部（4s 自动收）。
+                        val exposure = exposureProfile
+                        if (evExpanded && exposure != null) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 10.dp),
+                            ) {
+                                FilmEvRuler(
+                                    profile = exposure,
+                                    evIndex = evIndex,
+                                    onEvChange = { onEvChange(it) },
+                                )
+                            }
+                        }
+
+                        FocusRing(point = focusPoint, lock = focusLock)
+                    }
                 }
 
-                // 取景器右缘一列：变焦档位在上、EV 在下。两者都是"拍摄参数"，
-                // 用同一只拇指够，且都不占画面中心。
-                Column(
+                // 工具条：闪光灯 / 九宫格 | 变焦档位 | EV / 设置。
+                // 所有拍摄参数离开画面，画面完整留给构图。
+                Row(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 12.dp),
-                    horizontalAlignment = Alignment.End,
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 设计稿把变焦钮放在右侧垂直居中（`right-3 top-1/2`）。
-                    ViewfinderZoom(
+                    FilmRoundButton(
+                        icon = if (flashOn) FilmIconKind.Flash else FilmIconKind.FlashOff,
+                        onClick = {
+                            if (flashAvailable) {
+                                onToggleFlash()
+                                showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
+                            } else {
+                                showToast("这台设备没有闪光灯")
+                            }
+                        },
+                        active = flashOn && flashAvailable,
+                    )
+                    FilmRoundButton(
+                        icon = FilmIconKind.Grid,
+                        onClick = {
+                            onToggleGrid()
+                            showToast(if (gridOn) "九宫格参考线已关闭" else "九宫格参考线已开启")
+                        },
+                        active = gridOn,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    FilmZoomStops(
                         zoom = zoom,
                         stops = lensStops,
                         onSelect = { ratio ->
@@ -252,150 +291,115 @@ fun FilmCaptureScreen(
                             }
                         },
                     )
-
-                    // 这台机器不支持曝光补偿时**整块不出现**（D-052）：
-                    // 画一条拖不动的刻度比不画更糟，用户会怪自己没拖对。
-                    val exposure = exposureProfile
-                    if (exposure != null) {
-                        Spacer(Modifier.height(2.dp))
-                        ViewfinderEv(
+                    Spacer(Modifier.weight(1f))
+                    exposureProfile?.let { exposure ->
+                        FilmEvToolbarKey(
                             profile = exposure,
                             evIndex = evIndex,
-                            onEvChange = { onEvChange(it) },
+                            expanded = evExpanded,
+                            onClick = { evExpanded = !evExpanded },
                         )
                     }
-                }
-
-                FocusRing(point = focusPoint, lock = focusLock)
-
-            }
-        }
-
-        // 取景窗下方的工具条：闪光灯 / 九宫格 / 设置。放在这里而不是顶栏，
-        // 一是把上方空间让给取景窗，二是这三颗都在拇指弧内。
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FilmRoundButton(
-                icon = if (flashOn) FilmIconKind.Flash else FilmIconKind.FlashOff,
-                onClick = {
-                    if (flashAvailable) {
-                        onToggleFlash()
-                        showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
-                    } else {
-                        // 没有闪光灯单元时不发 onToggleFlash：否则图标会亮、
-                        // 底层 setFlash 却静默降级，等于骗用户。
-                        showToast("这台设备没有闪光灯")
-                    }
-                },
-                active = flashOn && flashAvailable,
-            )
-            FilmRoundButton(
-                icon = FilmIconKind.Grid,
-                onClick = {
-                    onToggleGrid()
-                    showToast(if (gridOn) "九宫格参考线已关闭" else "九宫格参考线已开启")
-                },
-                active = gridOn,
-            )
-            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            FilmRoundButton(
-                icon = FilmIconKind.Tune,
-                onClick = onOpenSettings,
-            )
-        }
-
-        // 底部整块是机身底盖（D-051）：计数、快门（嵌在凹槽里）、副键（嵌在面板上）、
-        // 曝光刻度槽，全部装在这一块上。导航栏的空白由面板自己吃下，否则金属板
-        // 会在手势条上方断掉，露出底下的 #0B0C0E。
-        //
-        // 计数行原先悬在取景窗和面板之间，是整页唯一"没有着落"的一行（D-053 收进来）：
-        // 它本来就是机身该印的东西，飘在空中反而像界面标签。收进来之后面板总高不变，
-        // 取景窗也没被挤矮 —— 原来那 27dp 本来就在面板之外占着。
-        FilmBodyPanel {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp, top = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 只在拍不了的时候出现（没有胶卷 / 本卷拍满 / 相机没绑上 / 预览出错）。
-                // 一切正常时这块是空的 —— 那正是取景页该有的样子。
-                if (blockReason != null) {
-                    Text(
-                        text = blockReason,
-                        color = p.error,
-                        fontSize = spec.type.monoSmall,
-                        fontFamily = FontFamily.Monospace,
+                    FilmRoundButton(
+                        icon = FilmIconKind.Tune,
+                        onClick = onOpenSettings,
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "$shotsTaken / $rollCapacity EXP",
-                    color = p.textTertiary,
-                    fontSize = spec.type.monoSmall,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.16.em,
-                )
+
+                // 底盖：填满剩余高度，计数窗口在中段，按键与快门压在下段。
+                FilmBodyPanel(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Spacer(Modifier.height(12.dp))
+                        if (blockReason != null) {
+                            Text(
+                                text = blockReason,
+                                color = p.error,
+                                fontSize = spec.type.monoSmall,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+
+                        // 计数器做成机身"帧数窗"：EXP + 大号真实张数。
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = "EXP",
+                                color = p.textTertiary,
+                                fontSize = spec.type.label,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 0.32.em,
+                            )
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    text = "%02d".format(shotsTaken),
+                                    color = p.inkStrong,
+                                    fontSize = spec.type.counterBig,
+                                    fontFamily = FontFamily.Monospace,
+                                )
+                                Text(
+                                    text = " / %02d".format(rollCapacity),
+                                    color = p.textTertiary,
+                                    fontSize = spec.type.value,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(bottom = 5.dp),
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 44.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            FilmBodyKey(
+                                label = "相册",
+                                icon = FilmIconKind.ImageMultiple,
+                                onClick = onOpenGallery,
+                            )
+
+                            FilmShutter(
+                                onClick = onShutter,
+                                enabled = canShoot,
+                            )
+
+                            FilmBodyKey(
+                                label = "换卷",
+                                icon = FilmIconKind.Filmstrip,
+                                onClick = onNewRoll,
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+                        FilmExposureSlot(
+                            fraction = if (rollCapacity <= 0) {
+                                0f
+                            } else {
+                                shotsTaken.toFloat() / rollCapacity
+                            },
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
             }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 副键到屏幕边缘 64dp：两个键的中心落在距中线 ~110dp 处，
-                    // 拇指自然垂落的位置，也给快门留出 42dp 误触安全带。
-                    .padding(horizontal = 64.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                FilmBodyKey(
-                    label = "相册",
-                    icon = FilmIconKind.ImageMultiple,
-                    onClick = onOpenGallery,
-                )
-
-                FilmShutter(
-                    onClick = onShutter,
-                    enabled = canShoot,
-                )
-
-                FilmBodyKey(
-                    label = "换卷",
-                    icon = FilmIconKind.Filmstrip,
-                    onClick = onNewRoll,
-                )
-            }
-
-            FilmExposureSlot(
-                fraction = if (rollCapacity <= 0) {
-                    0f
-                } else {
-                    shotsTaken.toFloat() / rollCapacity
-                },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
-            Spacer(Modifier.height(10.dp))
         }
-    }
 
-        // 两个覆盖层单独挂在最外层 Box 上：它们在 Column 之外，所以不受
-        // 状态栏/导航栏内边距影响。
-        // 快门闪白不在这里 —— 按下快门会立刻导航到成片页，闪白画在取景页
-        // 内部就会被成片页盖住（真机实测整帧均值只差 11，等于没有）。
-        // 它挂在 PocketCcdApp 的最外层，见那边的注释。
+        // 快门闪白不在取景页内部（会被成片页盖住）；Toast 挂在页面最外层。
         FilmToast(
             text = toastText,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                // 180dp 让它落在取景器下沿与卷信息行之间那条缝里（152dp 会压住
-                // 「GOLD 200 · 4096×3072」，真机截图量的）。
-                .padding(bottom = 180.dp),
+                .padding(bottom = 250.dp),
         )
     }
 }

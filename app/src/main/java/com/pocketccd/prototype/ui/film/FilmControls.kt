@@ -512,15 +512,15 @@ fun FilmBodyKey(
             runCatching { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
         }
     }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(12.dp)
 
     Box(
         modifier = modifier
-            .size(width = 84.dp, height = 54.dp)
+            .size(width = 76.dp, height = 50.dp)
             .graphicsLayer { translationY = travel.dp.toPx() }
             .clip(shape)
             .drawBehind {
-                val r = CornerRadius(14.dp.toPx(), 14.dp.toPx())
+                val r = CornerRadius(12.dp.toPx(), 12.dp.toPx())
                 drawRoundRect(
                     color = Color.Black.copy(alpha = if (pressed) 0.25f else 0.45f),
                     topLeft = Offset(0f, 1.5.dp.toPx()),
