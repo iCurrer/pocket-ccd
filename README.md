@@ -34,7 +34,7 @@
 
 ---
 
-## 当前状态（2026-10-23 01:30，夜间包 v0.3.0）
+## 当前状态（2026-10-23 09:05，夜间包 v0.3.1）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
@@ -49,6 +49,7 @@
 | 相册查看器 + 收藏 + 筛选 | **代码完成，待真机** | T9-015 / D-056：点开全屏看大图、左右首尾循环、★收藏持久化、按卷/收藏筛选 |
 | 相机会话自愈 + 权限恢复 | **代码完成，待真机** | T9-029 / D-057：闪光灯重绑回填、绑定失败退避重试、回前台探针重试、去设置入口 |
 | **视觉系统 v2（取景页重做）** | **代码完成，待真机** | T9-033 / D-059：取景窗去壳（去描边/外投影）、右侧变焦改文字档位轨、底盖同色系渐变、快门滚花收敛为 90 齿低对比；设计稿与实测比例见 [`docs/design/`](docs/design/) |
+| **按钮系统 + 按压反馈** | **代码完成，待真机** | T9-034 / D-060：`Modifier.filmClickable`（缩放+覆盖+轻震+spring）、`FilmButton` 三语气、四类控件尺寸表、33 个实例统一；规范图 [`control-sheet-v2.png`](docs/design/control-sheet-v2.png) |
 | 应用图标 + 无障碍语义/热区 | **代码完成，待真机** | T9-028：adaptive icon（纯 XML）；图标钮补 `contentDescription`/`role`；假热区 36/40→48dp |
 | 私有副本 ↔ 系统相册对账（D-047） | **代码完成，待真机** | FOT-020；`GalleryReconcilerTest` 12/12；"相册里删一张"的真机验证还没做 |
 | 真实镜头倍率 + 等效焦距 | **代码完成，待真机** | T9-021；D-044 / D-054；镜头表尚未在 `PJZ110` 上打印过 |
@@ -175,6 +176,18 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 （`docs/design/measure_real.py` + `real-grid.png`），再按 412×915dp 出一版像素级
 设计稿（`docs/design/capture-proposal-v3.png`），最后才改 Compose。
 **目前只有设计稿级证据，真机效果未验**——这一屏的主观评价必须看真机。
+
+### 按钮与按压反馈（2026-10-23，D-060）
+
+全 App 的按钮收敛成**四类层级**，每类只有一种尺寸/状态/反馈：
+主操作（快门 88dp 凹槽）/ 图标操作（48 热区·40 视觉·18 图标）/ 文字操作（48 高，主·次·幽灵）/
+可选项（chip·档位轨·副键）。20 类 33 个实例的完整清单见
+[`docs/design/interaction-system.md`](docs/design/interaction-system.md)，规范图见
+[`docs/design/control-sheet-v2.png`](docs/design/control-sheet-v2.png)。
+
+按下反馈统一三件事：**0.96 缩放（快门 0.94 + 1dp 下压）+ 5% 白/黑覆盖 + 轻震**，
+90ms spring 到位、松手回弹；状态切换 160ms 颜色过渡。不用 Material ripple（近黑底不可见
+且语言不对）。列表行只叠色、不缩放、不震动。
 
 ### 取景页里哪些是真的
 
@@ -401,10 +414,10 @@ release 变体 + debug 签名，非 debuggable）。当前夜间包指纹：
 
 | 项 | 值 |
 |---|---|
-| versionCode / versionName | `4` / `0.3.0` |
-| 构建时间 | 2026-10-23 01:29（Asia/Shanghai） |
-| SHA-256 | `AE3CC3F7A32D17D1A97A2A9836C26DD15DB56886A49026BEC6C6DDBA722B0585` |
-| 便利副本 | `dist/pocketccd-0.3.0-benchmark.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
+| versionCode / versionName | `5` / `0.3.1` |
+| 构建时间 | 2026-10-23 09:05（Asia/Shanghai） |
+| SHA-256 | `09088ABE1D7C189AE260AF45CF05CE8AC5AF2F7BBD89B5FDF0EFDE85A06AFBAB` |
+| 便利副本 | `dist/pocketccd-0.3.1-benchmark.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
 
 对方不需要电脑、不需要 adb、不需要 root：
 

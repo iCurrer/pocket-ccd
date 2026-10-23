@@ -1,6 +1,10 @@
 package com.pocketccd.prototype.ui.film
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,16 +14,21 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -27,20 +36,171 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+/**
+ * ============================ 交互语法（2026-10-23） ============================
+ *
+ * 一屏里的"可点东西"按**层级**分四类，每类只有一种尺寸/状态/反馈，不允许临时发明：
+ *
+ * 1. **主操作**：快门（88dp 热区，唯一会闪白/冲洗的动作）；
+ * 2. **图标操作**：顶栏/页头的返回、闪光灯、九宫格、相册、设置（48dp 热区 / 40dp 视觉圆）；
+ * 3. **文字操作**：低频、破坏性或确认类（成片页重拍/回相册、权限去设置、重新扫描）
+ *    （48dp 高，主/次两种，见 [FilmButton]）；
+ * 4. **可选项**：筛选 chip、档位轨、面板副键（热区≥48dp，视觉更小）。
+ *
+ * 所有可点控件的**按下反馈统一三件事**（缺一件就算没做完）：
+ * - 视觉：0.96 缩放（快门 0.94 + 1dp 下压），并叠一层 5% 白/黑覆盖；
+ * - 触觉：按下瞬间 `KEYBOARD_TAP` 轻震动（禁用态不震）；
+ * - 时序：按下 90ms 到位、松开 spring 回弹；状态切换（开/关、选中）用 160ms 颜色过渡。
+ *
+ * 为什么不在深色相机界面用 Material ripple：涟漪在近黑底上几乎不可见，而且它是
+ * "App 组件"的语言；这台相机的反馈应该像机械键——先缩、再回弹。
+ * =============================================================================
+ */
+
+/**
+ * 统一按压反馈：缩放 + 覆盖层 + 轻震动 + 语义。
+ *
+ * 用法：先 `clip(shape)`/`background()`，再 `.filmClickable { … }`，覆盖层会被裁进形状。
+ *
+ * @param scaleTo 按下时缩到多少。图标/文字 0.96，可选项 0.97，列表行 1.0（只叠色）。
+ * @param overlay 覆盖色：深色面上用白，浅色金属面上用黑。
+ * @param haptic 列表行这类高频控件可关掉，避免一路嗡嗡响。
+ */
+@Composable
+fun Modifier.filmClickable(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    role: Role = Role.Button,
+    onClickLabel: String? = null,
+    scaleTo: Float = 0.96f,
+    overlay: Color = Color.White,
+    overlayAlpha: Float = 0.05f,
+    haptic: Boolean = true,
+): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) scaleTo else 1f,
+        animationSpec = spring(dampingRatio = 0.62f, stiffness = 900f),
+        label = "film-press-scale",
+    )
+    val view = LocalView.current
+    LaunchedEffect(pressed) {
+        if (pressed && enabled && haptic) {
+            runCatching { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+        }
+    }
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .drawWithContent {
+            drawContent()
+            if (pressed && enabled) drawRect(overlay.copy(alpha = overlayAlpha))
+        }
+        .clickable(
+            interactionSource = interaction,
+            indication = null,
+            enabled = enabled,
+            role = role,
+            onClickLabel = onClickLabel,
+            onClick = onClick,
+        )
+}
+
+/** 按钮的语气。主 = 实心浅色（一屏最多一个）；次 = 玻璃；幽灵 = 只有字。 */
+enum class FilmButtonStyle { Primary, Secondary, Ghost }
+
+/**
+ * 文字按钮（主/次/幽灵）。用于成片页、权限空态、胶卷库空态等"读得出来"的动作。
+ *
+ * 与 [FilmRoundButton] 的分工：图标说不清的动作必须写出来，且写出来的动作不能做成
+ * 一个圆。Sizes: 主/次 48dp 高、圆角 12dp（拟物机身上的"键"），幽灵 40dp 高无底。
+ */
+@Composable
+fun FilmButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    style: FilmButtonStyle = FilmButtonStyle.Secondary,
+    enabled: Boolean = true,
+    leadingIcon: FilmIconKind? = null,
+    pill: Boolean = false,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val shape: Shape = if (pill) CircleShape else RoundedCornerShape(12.dp)
+    val fill = when (style) {
+        FilmButtonStyle.Primary -> if (enabled) p.textPrimary else p.textPrimary.copy(alpha = 0.25f)
+        FilmButtonStyle.Secondary -> p.controlFill
+        FilmButtonStyle.Ghost -> Color.Transparent
+    }
+    val textColor = when (style) {
+        FilmButtonStyle.Primary -> p.appBg
+        FilmButtonStyle.Secondary, FilmButtonStyle.Ghost -> p.inkStrong
+    }
+    val height: Dp = if (style == FilmButtonStyle.Ghost) 40.dp else 48.dp
+
+    Box(
+        modifier = modifier
+            .height(height)
+            .clip(shape)
+            .background(fill)
+            .then(
+                if (style == FilmButtonStyle.Secondary) {
+                    Modifier.border(spec.metrics.hairline, p.hairlineStrong, shape)
+                } else {
+                    Modifier
+                },
+            )
+            .filmClickable(
+                onClick = onClick,
+                enabled = enabled,
+                overlay = if (style == FilmButtonStyle.Primary) Color.Black else Color.White,
+                overlayAlpha = if (style == FilmButtonStyle.Primary) 0.06f else 0.06f,
+            )
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        ) {
+            if (leadingIcon != null) {
+                FilmIcon(kind = leadingIcon, tint = textColor, iconSize = 14.dp)
+                Spacer(Modifier.width(7.dp))
+            }
+            Text(
+                text = label,
+                color = textColor,
+                fontSize = spec.type.body,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
 
 /**
  * The shutter, inset into a well cut in the body panel (D-051).
@@ -80,9 +240,16 @@ fun FilmShutter(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = tween(120),
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 700f),
         label = "shutter-press",
     )
+    // 机械键的第一层反馈是触觉：按下瞬间轻震，比任何动画都先被感知到。
+    val view = LocalView.current
+    LaunchedEffect(pressed) {
+        if (pressed && enabled) {
+            runCatching { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -106,8 +273,10 @@ fun FilmShutter(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    // 1dp 下压：真实快门有行程，纯缩放读起来像"图片变小"。
+                    translationY = if (pressed) 1.dp.toPx() else 0f
                 }
-                .drawBehind { drawShutterButton(spec) },
+                .drawBehind { drawShutterButton(spec, pressed = pressed) },
         )
     }
 }
@@ -153,8 +322,8 @@ private fun DrawScope.drawShutterWell(spec: FilmThemeSpec) {
     )
 }
 
-/** 快门本体（金属环 + 暖白面 + 红点），画在自己的 72dp 方框里。 */
-private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
+/** 快门本体（金属环 + 暖白面 + 红点），画在自己的 72dp 方框里。按下时环变亮、面变暗。 */
+private fun DrawScope.drawShutterButton(spec: FilmThemeSpec, pressed: Boolean) {
     val rad = size.minDimension / 2f
     val ringWidth = 6.dp.toPx()
     val faceR = rad - ringWidth
@@ -188,10 +357,11 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
     }
 
     // 环外缘一圈极细的金色：全屏唯一"贵"的材质暗示，只在快门环上出现一次。
+    // 按下时这圈金线变亮 —— 机械键被按下去的瞬间，金属边缘会吃光。
     drawCircle(
-        color = spec.palette.accent.copy(alpha = 0.30f),
+        color = spec.palette.accent.copy(alpha = if (pressed) 0.62f else 0.30f),
         radius = rad - 0.5.dp.toPx(),
-        style = Stroke(width = 1.dp.toPx()),
+        style = Stroke(width = if (pressed) 1.5.dp.toPx() else 1.dp.toPx()),
     )
     drawCircle(
         brush = Brush.radialGradient(
@@ -202,11 +372,12 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec) {
         radius = faceR,
     )
     // 面比环低一档：边缘一圈很窄的暗边，避免整颗按钮读成一个亮圆盘。
+    // 按下时再压暗 6%：手指压住的地方收光，这是"行程"的第二层视觉。
     drawCircle(
         brush = Brush.radialGradient(
             0.0f to Color.Transparent,
             0.88f to Color.Transparent,
-            1.0f to Color(0x33000000),
+            1.0f to Color(if (pressed) 0x55000000 else 0x33000000),
             center = c,
             radius = faceR,
         ),
@@ -261,46 +432,42 @@ fun FilmRoundButton(
     actionLabel: String = icon.actionLabel(),
 ) {
     val spec = LocalFilmTheme.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.93f else 1f,
-        animationSpec = tween(180),
-        label = "round-button-press",
+    val p = spec.palette
+    // 状态切换用 160ms 颜色过渡，而不是瞬间换色：开/关是"硬件灯亮了"，
+    // 瞬间跳变读起来像开关坏了。
+    val fill by animateColorAsState(
+        targetValue = if (active && enabled) p.accent.copy(alpha = 0.14f) else Color.Transparent,
+        animationSpec = tween(160),
+        label = "icon-button-fill",
     )
-
-    val tint = when {
-        !enabled -> spec.palette.inkFaint
-        active -> spec.palette.accent
-        else -> spec.palette.inkMuted
-    }
-    // 2026-10-23：取消圆框 + 描边。取景页顶部三个"描边圆钮"在真机截图上
-    // 是整屏最像模板组件的元素；改成无底的幽灵图标，active 只给一圈 12% 金底。
-    val activeFill = if (active) spec.palette.accent.copy(alpha = 0.12f) else Color.Transparent
+    val tint by animateColorAsState(
+        targetValue = when {
+            !enabled -> p.inkFaint
+            active -> p.accent
+            else -> p.inkMuted
+        },
+        animationSpec = tween(160),
+        label = "icon-button-tint",
+    )
 
     Box(
         modifier = modifier
             .size(spec.metrics.touchTarget)
-            .semantics { contentDescription = accessibilityLabel }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
+            .clip(CircleShape)
+            .filmClickable(
+                onClick = onClick,
                 enabled = enabled,
                 onClickLabel = actionLabel,
+                // 显式传 role：这是「纯图标控件必须报按钮」的契约（静态测试盯着）。
                 role = Role.Button,
-                onClick = onClick,
-            ),
+            )
+            .semantics { contentDescription = accessibilityLabel },
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .clip(CircleShape)
-                .background(activeFill),
+                .background(fill, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             FilmIcon(kind = icon, tint = tint, iconSize = iconSize)
@@ -429,14 +596,14 @@ fun FilmPanelKey(
         modifier = modifier
             // 固定 64dp 宽：热区不能只裹住 34dp 的圆，也不能窄到标签放不下。
             .width(64.dp)
-            .semantics { contentDescription = accessibilityLabel }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClickLabel = actionLabel,
-                role = Role.Button,
+            .clip(RoundedCornerShape(10.dp))
+            .filmClickable(
                 onClick = onClick,
-            ),
+                onClickLabel = actionLabel,
+                overlayAlpha = 0.05f,
+                role = Role.Button,
+            )
+            .semantics { contentDescription = accessibilityLabel },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(

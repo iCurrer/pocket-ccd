@@ -52,6 +52,7 @@ import com.pocketccd.prototype.ui.film.FilmIcon
 import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.filmClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
@@ -331,7 +332,11 @@ private fun ViewerAction(
                 if (active) p.accent.copy(alpha = 0.45f) else p.hairline,
                 shape,
             )
-            .clickable(onClick = onClick)
+            .filmClickable(
+                onClick = onClick,
+                onClickLabel = if (active) "取消收藏" else "收藏这张",
+                overlayAlpha = 0.06f,
+            )
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

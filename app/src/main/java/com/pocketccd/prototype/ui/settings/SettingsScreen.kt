@@ -47,6 +47,7 @@ import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.filmClickable
 
 /**
  * 设置页（T9-020 / D-045）。原型没有这一页，版式按 `FilmTheme` 令牌自行重排：
@@ -290,7 +291,12 @@ private fun SettingsRow(
             .heightIn(min = 64.dp)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                    Modifier.filmClickable(
+                        onClick = onClick,
+                        scaleTo = 1f,
+                        overlayAlpha = 0.04f,
+                        haptic = false,
+                    )
                 } else {
                     Modifier
                 },

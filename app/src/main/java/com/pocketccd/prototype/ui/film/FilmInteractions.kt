@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -268,23 +269,29 @@ fun ViewfinderZoom(
     ) {
         items.forEach { stop ->
             val active = abs(zoom - stop.zoomRatio) < 0.05f
+            val tint by androidx.compose.animation.animateColorAsState(
+                targetValue = if (active) p.inkStrong else p.inkMuted,
+                animationSpec = androidx.compose.animation.core.tween(160),
+                label = "zoom-rail-tint",
+            )
             Row(
                 // 2026-10-23：从"三颗描边圆钮"改成文字档位轨。真实相机的倍率就是
                 // 取景器边缘的一行数字，圆钮是手机 App 的语言。热区仍 ≥48dp。
                 modifier = Modifier
                     .height(40.dp)
                     .widthIn(min = 64.dp)
-                    .semantics { contentDescription = "$accessibilityLabelPrefix ${stop.ratioLabel}" }
-                    .clickable(
+                    .clip(RoundedCornerShape(8.dp))
+                    .filmClickable(
+                        onClick = { onSelect(stop.zoomRatio) },
                         onClickLabel = actionLabel,
-                        role = Role.Button,
-                    ) { onSelect(stop.zoomRatio) },
+                    )
+                    .semantics { contentDescription = "$accessibilityLabelPrefix ${stop.ratioLabel}" },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End,
             ) {
                 Text(
                     text = stop.ratioLabel,
-                    color = if (active) p.inkStrong else p.inkMuted,
+                    color = tint,
                     fontSize = spec.type.rail,
                     fontFamily = FontFamily.Monospace,
                 )
@@ -380,12 +387,12 @@ private fun FilmEvKey(
         modifier = androidx.compose.ui.Modifier
             .height(40.dp)
             .widthIn(min = 64.dp)
-            .semantics { contentDescription = "曝光补偿 ${formatEv(ev)}" }
-            .clickable(
+            .clip(RoundedCornerShape(8.dp))
+            .filmClickable(
                 onClickLabel = if (active) "收起曝光刻度" else "展开曝光刻度",
-                role = Role.Button,
                 onClick = onClick,
-            ),
+            )
+            .semantics { contentDescription = "曝光补偿 ${formatEv(ev)}" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
     ) {

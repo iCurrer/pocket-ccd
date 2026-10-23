@@ -154,7 +154,7 @@ fun FilmCaptureScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(m.topBarHeight)
-                .padding(horizontal = m.gutterWide),
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -335,7 +335,9 @@ fun FilmCaptureScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                    // 副键到屏幕边缘 64dp：两个键的中心落在距中线 ~110dp 处，
+                    // 拇指自然垂落的位置，也给快门留出 42dp 误触安全带。
+                    .padding(horizontal = 64.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -402,10 +404,10 @@ private fun StockPill(name: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "打开胶卷库选择胶卷",
+            .clip(RoundedCornerShape(50))
+            .filmClickable(
                 onClick = onClick,
+                onClickLabel = "打开胶卷库选择胶卷",
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -494,8 +496,7 @@ private fun ViewfinderPlaceholder(
                             spec.palette.accent.copy(alpha = 0.55f),
                             RoundedCornerShape(50),
                         )
-                        .clickable(
-                            role = Role.Button,
+                        .filmClickable(
                             onClickLabel = "打开系统设置授予相机权限",
                             onClick = onOpenAppSettings,
                         )

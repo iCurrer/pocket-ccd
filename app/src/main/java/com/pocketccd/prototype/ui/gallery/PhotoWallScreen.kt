@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -57,6 +59,7 @@ import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.filmClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -311,13 +314,27 @@ private fun FilterChip(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val shape = CircleShape
-    val labelColor = if (selected) p.accent else p.textSecondary
+    // 选中态用 160ms 颜色过渡，而不是瞬间换底色：chip 是"档位"，档位切换应该有行程感。
+    val labelColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (selected) p.accent else p.textSecondary,
+        animationSpec = androidx.compose.animation.core.tween(160),
+        label = "chip-label",
+    )
+    val chipBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (selected) p.accent.copy(alpha = 0.14f) else p.controlFill,
+        animationSpec = androidx.compose.animation.core.tween(160),
+        label = "chip-bg",
+    )
 
     Box(
         modifier = Modifier
             .height(spec.metrics.touchTarget)
             .clip(shape)
-            .clickable(onClick = onClick)
+            .filmClickable(
+                onClick = onClick,
+                onClickLabel = "筛选 $label",
+                overlayAlpha = 0.06f,
+            )
             .padding(vertical = (spec.metrics.touchTarget - CHIP_HEIGHT) * 0.5f),
         contentAlignment = Alignment.Center,
     ) {
@@ -325,9 +342,7 @@ private fun FilterChip(
             modifier = Modifier
                 .height(CHIP_HEIGHT)
                 .clip(shape)
-                // 2026-10-23：选中态从"金色实底 + 深色字"改成"金 14% 底 + 金字"。
-                // 实底金在近黑页上是整屏最亮的一块，会把视线从照片上抢走。
-                .background(if (selected) p.accent.copy(alpha = 0.14f) else p.controlFill)
+                .background(chipBg)
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -455,7 +470,16 @@ private fun PhotoTile(
             .clip(shape)
             .background(p.windowBg)
             .border(spec.metrics.hairline, p.hairline, shape)
-            .clickable(onClick = onClick),
+            .filmClickable(
+                onClick = onClick,
+                onClickLabel = "查看大图",
+                scaleTo = 0.97f,
+                overlayAlpha = 0.06f,
+                haptic = false,
+            )
+            .semantics {
+                contentDescription = "${item.stockLabel} 拍摄于 ${formatClock(item.capturedAt)}"
+            },
     ) {
         if (thumbnail != null) {
             Image(

@@ -1,12 +1,12 @@
 # Pocket CCD — 项目状态
 
 **快照时间：** 2026-10-23 01:00（Asia/Shanghai）
-**当前阶段：** **夜间包 v0.3.0 已产出，等待真机验收**（`dist/pocketccd-0.3.0-benchmark.apk`，40,925,042 B，SHA-256 `AE3CC3F7…`）。本轮在无真机条件下完成：相册查看器/收藏/筛选（T9-015/D-056）、成片真实 EXIF（T9-027/D-055）、权限自救与相机会话自愈（T9-029/D-057）、变焦档位下界改 1×（D-054）、应用图标与无障碍语义/热区（T9-028）、落盘 fsync 硬化（T9-030）。`:app:assembleBenchmark` + `:app:testDebugUnitTest` 全绿（**61 tests / 0 failures**）。**真机逐项清单见 [`docs/handoff/2026-10-23-morning.md`](docs/handoff/2026-10-23-morning.md)**；下面的第 1–12 节是 2026-10-20 23:50 的历史快照，未逐条重写，最新事实以本节、`README.md`「当前状态」与 `TASK_BOARD.md` M9 表为准。
+**当前阶段：** **夜间包 v0.3.1 已产出，等待真机验收**（`dist/pocketccd-0.3.1-benchmark.apk`，40,925,042 B，SHA-256 `09088ABE…`）。本轮在无真机条件下完成：相册查看器/收藏/筛选（T9-015/D-056）、成片真实 EXIF（T9-027/D-055）、权限自救与相机会话自愈（T9-029/D-057）、变焦档位下界改 1×（D-054）、应用图标与无障碍语义/热区（T9-028）、落盘 fsync 硬化（T9-030）。`:app:assembleBenchmark` + `:app:testDebugUnitTest` 全绿（**61 tests / 0 failures**）。**真机逐项清单见 [`docs/handoff/2026-10-23-morning.md`](docs/handoff/2026-10-23-morning.md)**；下面的第 1–12 节是 2026-10-20 23:50 的历史快照，未逐条重写，最新事实以本节、`README.md`「当前状态」与 `TASK_BOARD.md` M9 表为准。
 **规范版本：** `DEVELOPMENT_SPEC.md` V1.0
 **工作区：** `D:\Android\pocket ccd`
 **Git：** `main`；夜间提交 `49a2a39`（前一个稳定点 `eda3887`）
 **App 代码：** Compose + 导航状态机 + `FilmTheme`（近黑 `#0B0C0E` / 香槟金 `#E7B37A`）；`MainActivity` → `ui/AppRoot.kt` → `ui/film`（取景）、`ui/result`、`ui/gallery`（相册查看器）、`ui/settings`
-**已执行 App 构建/测试：** `assembleBenchmark` 通过（40,925,042 B，versionCode 4 / 0.3.0，含 3 份 `4000×3000` pack + arm64 内核 + adaptive icon）；单测 **61/61**（`AppStateTest` 16 + `GalleryReconcilerTest` 12 + `PhotoExifTest` 8 + `GalleryFilterTest` 22 + `InteractiveIconLabelsTest` 2 + `NoBareFontSizeTest` 1）；真机端到端上次记录：`PJZ110` 3909 ms / 华为 `FOA-AL00` 5831 ms（24 strips / 4000×3000）
+**已执行 App 构建/测试：** `assembleBenchmark` 通过（40,925,042 B，versionCode 5 / 0.3.1，含 3 份 `4000×3000` pack + arm64 内核 + adaptive icon）；单测 **61/61**（`AppStateTest` 16 + `GalleryReconcilerTest` 12 + `PhotoExifTest` 8 + `GalleryFilterTest` 22 + `InteractiveIconLabelsTest` 2 + `NoBareFontSizeTest` 1）；真机端到端上次记录：`PJZ110` 3909 ms / 华为 `FOA-AL00` 5831 ms（24 strips / 4000×3000）
 
 
 ---

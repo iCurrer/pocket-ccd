@@ -17,9 +17,9 @@ android {
         targetSdk = 36
         // 2026-10-23 夜间包：相册查看器/收藏、成片 EXIF、权限自愈、图标与无障碍。
         // 升 versionCode 是为了覆盖安装能顺利升级（同一 debug 签名）。
-        // 0.3.0：视觉系统重做（取景器去壳 / 文字档位轨 / 机身底盖 / 快门滚花收敛）。
-        versionCode = 4
-        versionName = "0.3.0"
+        // 0.3.1：按钮系统（层级/尺寸/按压反馈/布局）+ 全局交互语法。
+        versionCode = 5
+        versionName = "0.3.1"
     }
 
     buildTypes {

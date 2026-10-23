@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.camera.PhotoExif
 import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.camera.readPhotoExif
+import com.pocketccd.prototype.ui.film.FilmButton
+import com.pocketccd.prototype.ui.film.FilmButtonStyle
 import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmDarkSpec
@@ -536,40 +538,22 @@ private fun ActionRow(
     onSecondary: () -> Unit,
 ) {
     val p = LocalFilmTheme.current.palette
-    val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .clip(shape)
-                .background(p.controlFill)
-                .border(1.dp, p.hairlineStrong, shape)
-                .clickable(role = Role.Button, onClick = onSecondary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = secondaryLabel,
-                style = MonoLabel.copy(color = p.ink),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .clip(shape)
-                .background(if (stage == Stage.FAILED) p.error else p.textPrimary)
-                .clickable(role = Role.Button, onClick = onPrimary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = primaryLabel,
-                style = MonoLabel.copy(color = p.windowBg),
-            )
-        }
+        FilmButton(
+            label = secondaryLabel,
+            onClick = onSecondary,
+            style = FilmButtonStyle.Secondary,
+            modifier = Modifier.weight(1f),
+        )
+        FilmButton(
+            label = primaryLabel,
+            onClick = onPrimary,
+            style = FilmButtonStyle.Primary,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

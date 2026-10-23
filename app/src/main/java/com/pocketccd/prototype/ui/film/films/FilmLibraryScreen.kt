@@ -52,6 +52,7 @@ import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.filmClickable
 import java.io.File
 
 /**
@@ -517,11 +518,18 @@ private fun PanelButton(
 
     Row(
         modifier = modifier
-            .height(40.dp)
+            .height(44.dp)
             .clip(shape)
             .background(fill)
             .border(1.dp, if (primary) Color.Transparent else Metal.outline, shape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .filmClickable(
+                onClick = onClick,
+                enabled = enabled,
+                // 浅色金属面上的按压覆盖用黑，缩放略小：这是"键"不是"卡片"。
+                overlay = Color.Black,
+                overlayAlpha = 0.05f,
+                scaleTo = 0.97f,
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -698,7 +706,13 @@ private fun StockCard(
             // 半透明在近黑底上会透出一层灰，行与行糊成一片。
             .background(Color(0xFF131518))
             .border(1.dp, if (loaded) p.accent.copy(alpha = 0.45f) else p.hairline, shape)
-            .clickable(onClick = onClick)
+            .filmClickable(
+                onClick = onClick,
+                scaleTo = 0.99f,
+                overlayAlpha = 0.05f,
+                haptic = false,
+                onClickLabel = "装入这卷",
+            )
             .padding(10.dp),
     ) {
         FilmFrame(stock = stock, usage = usage)
@@ -950,11 +964,14 @@ private fun DarkButton(
     val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
-            .height(44.dp)
+            .height(48.dp)
             .clip(shape)
             .background(p.controlFill)
             .border(spec.metrics.hairline, p.hairlineStrong, shape)
-            .clickable(onClick = onClick),
+            .filmClickable(
+                onClick = onClick,
+                overlayAlpha = 0.05f,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(text = label, color = p.inkStrong, fontSize = spec.type.optionTitle)
