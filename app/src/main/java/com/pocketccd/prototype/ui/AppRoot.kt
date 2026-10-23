@@ -14,6 +14,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -55,7 +57,8 @@ import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
 import com.pocketccd.prototype.ui.film.FilmCaptureScreen
-import com.pocketccd.prototype.ui.film.FilmDarkSpec
+import com.pocketccd.prototype.ui.film.FilmGateSpec
+import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.ShutterFlash
 import com.pocketccd.prototype.ui.film.films.FilmLibraryScreen
@@ -65,6 +68,7 @@ import com.pocketccd.prototype.ui.gallery.PhotoWallScreen
 import com.pocketccd.prototype.ui.result.ResultScreen
 import com.pocketccd.prototype.ui.result.ResultStatus
 import com.pocketccd.prototype.ui.settings.SettingsScreen
+import com.pocketccd.prototype.ui.theme.PocketCcdTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -392,21 +396,29 @@ fun PocketCcdApp(
     // 按下快门会立刻导航，闪白若画在取景页内部会被成片页完全盖住
     // （真机实测整帧均值只从 195 变成 206，等于没闪）。
     var shutterFlash by remember { mutableIntStateOf(0) }
+    // 相册查看器是黑底灯箱：它打开时系统栏要换成浅色图标，关闭后恢复纸面页的深色图标。
+    var galleryViewerOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(destination) {
+        if (destination != AppDestination.GALLERY) galleryViewerOpen = false
+    }
 
-    // 四个页面全部改成近黑底（T9-018/019/020），系统栏图标固定走浅色。
+    // D-063：取景页是黑闸门（系统栏浅色图标），其余四页是相纸（系统栏深色图标）；
+    // 相册查看器的黑底灯箱是例外，需要浅色图标。
+    val paperPage = destination != AppDestination.CAMERA
+    // 纸面页要深色系统栏图标；黑闸门与相册灯箱要浅色图标。
+    val darkSystemBarIcons = paperPage && !(destination == AppDestination.GALLERY && galleryViewerOpen)
     SideEffect {
         val activity = view.context as? Activity ?: return@SideEffect
         val controller = WindowCompat.getInsetsController(activity.window, view)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
+        controller.isAppearanceLightStatusBars = darkSystemBarIcons
+        controller.isAppearanceLightNavigationBars = darkSystemBarIcons
     }
 
-    FilmTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            // 四个页面共用同一个底色，AnimatedContent 淡入淡出时不会透出第二层颜色。
-            color = FilmDarkSpec.palette.appBg,
-        ) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        // 取景是黑闸门，纸面页是相纸；底色跟随目标页，转场时不会透出第二层材质。
+        color = if (paperPage) FilmPaperSpec.palette.appBg else FilmGateSpec.palette.appBg,
+    ) {
             Box(modifier = Modifier.fillMaxSize()) {
             // CAMERA 是根：返回交给系统 finish，而不是在 App 内循环。
             BackHandler(enabled = !shooting) {
@@ -424,7 +436,9 @@ fun PocketCcdApp(
                     // 成片页期间它继续挂载（被 ResultScreen 完全遮住），这样刚按下的
                     // 快门不会被 PreviewView 的销毁连带 unbind 掉。
                     val rollFull = rollShots >= ROLL_CAPACITY
-                    FilmCaptureScreen(
+                    // 取景页单独套黑闸门令牌：成片页淡入时下面的相机页不会被纸色翻白。
+                    FilmTheme(FilmGateSpec) {
+                        FilmCaptureScreen(
                         stockName = stock?.label ?: "无胶卷",
                         shotsTaken = rollShots,
                         rollCapacity = ROLL_CAPACITY,
@@ -459,7 +473,8 @@ fun PocketCcdApp(
                         exposureProfile = exposureProfile,
                         evIndex = evIndex,
                         onEvChange = onEvChange,
-                    )
+                        )
+                    }
                 }
 
                 if (destination != AppDestination.CAMERA) {
@@ -467,13 +482,28 @@ fun PocketCcdApp(
                         targetState = destination,
                         modifier = Modifier
                             .fillMaxSize()
-                            .windowInsetsPadding(WindowInsets.safeDrawing),
+                            // GALLERY 的查看器是黑底灯箱，需要铺到系统栏；页面内容自己在
+                            // PhotoWallScreen 里吃 safeDrawing。其余纸面页仍由这里统一让开。
+                            .then(
+                                if (destination == AppDestination.GALLERY) {
+                                    Modifier
+                                } else {
+                                    Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+                                },
+                            ),
                         transitionSpec = {
-                            fadeIn(tween(200)) togetherWith fadeOut(tween(160))
+                            val motion = FilmPaperSpec.motion
+                            (fadeIn(tween(motion.pageEnterMs)) +
+                                slideInVertically(tween(motion.pageEnterMs)) { it / 120 }) togetherWith
+                                (fadeOut(tween(motion.pageExitMs)) +
+                                    slideOutVertically(tween(motion.pageExitMs)) { -it / 120 })
                         },
                         label = "app-overlay-destination",
                     ) { target ->
-                        when (target) {
+                        // 纸面页统一用自己的令牌；M3 兜底也切到亮色，避免对话框闪黑。
+                        FilmTheme(FilmPaperSpec) {
+                            PocketCcdTheme(darkTheme = false) {
+                                when (target) {
                             AppDestination.GALLERY -> {
                                 // 进照片墙顺手重扫一次目录：可能刚保存过，也可能是
                                 // 用户从电脑上补推了文件。
@@ -481,6 +511,7 @@ fun PocketCcdApp(
                                 PhotoWallScreen(
                                     onBack = { onEvent(AppEvent.NavigateBack) },
                                     photos = roll.map { it.toWallItem() },
+                                    onViewerOpenChange = { galleryViewerOpen = it },
                                 )
                             }
 
@@ -533,13 +564,14 @@ fun PocketCcdApp(
                     }
                 }
             }
+                }
+            }
 
             // 最上层：快门闪白盖住整屏（含状态栏、导航栏），成片页淡入时也在它下面。
             ShutterFlash(trigger = shutterFlash)
             }
         }
     }
-}
 
 /**
  * D-040: the design's `24 / 36 EXP` had no backing model. Making the roll a real

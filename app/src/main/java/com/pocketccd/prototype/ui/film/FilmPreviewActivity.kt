@@ -40,7 +40,8 @@ class FilmPreviewActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(scrim = android.graphics.Color.TRANSPARENT),
         )
         setContent {
-            FilmTheme {
+            // D-063：调试入口也跟取景页的黑闸门令牌，避免看到过期的金色旧视觉。
+            FilmTheme(FilmGateSpec) {
                 var flashOn by remember { mutableStateOf(false) }
                 var gridOn by remember { mutableStateOf(false) }
                 var shots by remember { mutableIntStateOf(12) }

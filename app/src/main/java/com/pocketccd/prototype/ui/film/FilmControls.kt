@@ -2,7 +2,6 @@ package com.pocketccd.prototype.ui.film
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,9 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -73,7 +69,8 @@ import kotlin.math.sin
  * 所有可点控件的**按下反馈统一三件事**（缺一件就算没做完）：
  * - 视觉：0.96 缩放（快门 0.94 + 1dp 下压），并叠一层 5% 白/黑覆盖；
  * - 触觉：按下瞬间 `KEYBOARD_TAP` 轻震动（禁用态不震）；
- * - 时序：按下 90ms 到位、松开 spring 回弹；状态切换（开/关、选中）用 160ms 颜色过渡。
+ * - 时序：按压曲线由 `spec.motion` 决定（黑闸门是 90ms 硬切、纸面页同款），
+ *   状态切换（开/关、选中）用 `spec.motion.stateMs` 颜色过渡（D-063）。
  *
  * 为什么不在深色相机界面用 Material ripple：涟漪在近黑底上几乎不可见，而且它是
  * "App 组件"的语言；这台相机的反馈应该像机械键——先缩、再回弹。
@@ -96,15 +93,22 @@ fun Modifier.filmClickable(
     role: Role = Role.Button,
     onClickLabel: String? = null,
     scaleTo: Float = 0.96f,
-    overlay: Color = Color.White,
+    /** null = 跟随当前页面文字色：黑闸门上是白覆盖，纸面页上是墨覆盖。 */
+    overlay: Color? = null,
     overlayAlpha: Float = 0.05f,
     haptic: Boolean = true,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val spec = LocalFilmTheme.current
+    val overlayColor = overlay ?: spec.palette.textPrimary
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) scaleTo else 1f,
-        animationSpec = spring(dampingRatio = 0.62f, stiffness = 900f),
+        animationSpec = if (spec.motion.pressUseSpring) {
+            spring(dampingRatio = spec.motion.pressDamping, stiffness = spec.motion.pressStiffness)
+        } else {
+            tween(spec.motion.pressMs)
+        },
         label = "film-press-scale",
     )
     val view = LocalView.current
@@ -120,7 +124,7 @@ fun Modifier.filmClickable(
         }
         .drawWithContent {
             drawContent()
-            if (pressed && enabled) drawRect(overlay.copy(alpha = overlayAlpha))
+            if (pressed && enabled) drawRect(overlayColor.copy(alpha = overlayAlpha))
         }
         .clickable(
             interactionSource = interaction,
@@ -213,7 +217,11 @@ fun FilmButton(
  *    rather than a grey circle. Compose has no `conic-gradient`, but
  *    `Brush.sweepGradient` is the same thing.
  * 2. Radial face, lit from the upper-left (34%, 28%).
- * 3. A small red dot with a faint halo — the only saturated colour on screen.
+ * 3. A small ink dot (D-063：原来的红点改成墨点，闸门上不再有饱和色)。
+ *
+ * D-063 只换令牌：环/面/点的颜色全部来自 [FilmPalette.shutterRing] /
+ * [FilmPalette.shutterFace] / [FilmPalette.shutterDot]（黑闸门里分别是纸白环、
+ * 暖白面、墨点）。几何、行程、热区、触觉一律不动。
  *
  * The well around it is what changed in the skeuomorphic pass: a 5dp ring of
  * [FilmPalette.wellFill] whose *upper* wall is shaded (light comes from above,
@@ -324,14 +332,15 @@ private fun DrawScope.drawShutterWell(spec: FilmThemeSpec) {
     )
 }
 
-/** 快门本体（金属环 + 暖白面 + 红点），画在自己的 72dp 方框里。按下时环变亮、面变暗。 */
+/** 快门本体（纸白环 + 暖白面 + 墨点），画在自己的 72dp 方框里。按下时环变亮、面变暗。 */
 private fun DrawScope.drawShutterButton(spec: FilmThemeSpec, pressed: Boolean) {
     val rad = size.minDimension / 2f
     val ringWidth = 6.dp.toPx()
     val faceR = rad - ringWidth
     val c = Offset(size.width / 2f, size.height / 2f)
 
-    // 香槟金 + 暖灰扫掠。比旧版黑白高对比安静得多：真机 3x 下高对比会读成"脏边"。
+    // 纸白金属扫掠（黑闸门令牌：EDEAE3→8B8880→EDEAE3→5F5C56→D9D6CC）。
+    // 旧版是香槟金；方向 C 只允许纸白环，金色回潮会让整台机器重新变暖。
     drawCircle(
         brush = Brush.sweepGradient(spec.palette.shutterRing, center = c),
         radius = rad,
@@ -358,10 +367,10 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec, pressed: Boolean) {
         )
     }
 
-    // 环外缘一圈极细的金色：全屏唯一"贵"的材质暗示，只在快门环上出现一次。
-    // 按下时这圈金线变亮 —— 机械键被按下去的瞬间，金属边缘会吃光。
+    // 环外缘一圈极细的纸白线：这是快门环唯一的高光边，只在纸白环上出现一次。
+    // 按下时这圈线变亮 —— 机械键被按下去的瞬间，金属边缘会吃光。
     drawCircle(
-        color = spec.palette.accent.copy(alpha = if (pressed) 0.62f else 0.30f),
+        color = spec.palette.textPrimary.copy(alpha = if (pressed) 0.62f else 0.30f),
         radius = rad - 0.5.dp.toPx(),
         style = Stroke(width = if (pressed) 1.5.dp.toPx() else 1.dp.toPx()),
     )
@@ -395,7 +404,7 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec, pressed: Boolean) {
         size = Size((faceR - 2.dp.toPx()) * 2f, (faceR - 2.dp.toPx()) * 2f),
         style = Stroke(1.dp.toPx()),
     )
-    // 红点缩小到 4dp：它是"录制/快门"符号，不是按钮上的装饰灯。
+    // 墨点缩小到 4dp：它是"录制/快门"符号，不是按钮上的装饰灯（D-063 起不再发红）。
     drawCircle(
         brush = Brush.radialGradient(
             colors = spec.palette.shutterDot,
@@ -421,6 +430,10 @@ private fun DrawScope.drawShutterButton(spec: FilmThemeSpec, pressed: Boolean) {
  * 语义：图标本身没有文字，`accessibilityLabel` / `actionLabel` 的默认值由
  * [FilmIconKind.accessibilityLabel] / [FilmIconKind.actionLabel] 按图标 + 开关态推导
  * （如闪光灯会读"闪光灯已开/已关"）。调用点不传也能拿到正确语义；要覆盖时显式传参。
+ *
+ * D-063：激活态统一为「白 12% 圆底 + 纸白图标」。纸面页的 accent 是石板蓝、
+ * 黑闸门的 accent 是纸白，所以底色继续走 `accent`；但未激活色两边要求不同
+ * （纸面墨色 / 闸门白 46%），由调用点用 [inactiveTint] 覆盖，默认行为不变。
  */
 @Composable
 fun FilmRoundButton(
@@ -432,23 +445,25 @@ fun FilmRoundButton(
     iconSize: androidx.compose.ui.unit.Dp = 17.dp,
     accessibilityLabel: String = icon.accessibilityLabel(active),
     actionLabel: String = icon.actionLabel(),
+    /** 未激活图标色。null = 跟随 [FilmPalette.inkMuted]（纸面页墨色默认）。 */
+    inactiveTint: Color? = null,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    // 状态切换用 160ms 颜色过渡，而不是瞬间换色：开/关是"硬件灯亮了"，
+    // 状态切换用 120ms 颜色过渡（D-063 stateMs），而不是瞬间换色：开/关是"硬件灯亮了"，
     // 瞬间跳变读起来像开关坏了。
     val fill by animateColorAsState(
-        targetValue = if (active && enabled) p.accent.copy(alpha = 0.14f) else Color.Transparent,
-        animationSpec = tween(160),
+        targetValue = if (active && enabled) p.accent.copy(alpha = 0.12f) else Color.Transparent,
+        animationSpec = tween(spec.motion.stateMs),
         label = "icon-button-fill",
     )
     val tint by animateColorAsState(
         targetValue = when {
             !enabled -> p.inkFaint
             active -> p.accent
-            else -> p.inkMuted
+            else -> inactiveTint ?: p.inkMuted
         },
-        animationSpec = tween(160),
+        animationSpec = tween(spec.motion.stateMs),
         label = "icon-button-tint",
     )
 
@@ -478,15 +493,11 @@ fun FilmRoundButton(
 }
 
 /**
- * 底盖上的**凹凸实体键**（相册 / 换卷，2026-10-23 第三版）。
+ * 底盖上的实体副键（相册 / 换卷）。
  *
- * 前两版都错：第一版是"凹槽里的圆键"（第三套圆形控件），第二版是"幽灵图标"
- * （只剩文字，失去实体感）。相机机身上的键应该是**凸起的块**：
- *
- * - 面上竖直渐变（顶受光 → 底沉），顶边 1px 高光、底边 1px 暗线；
- * - 键下方 2dp 黑影，让它"坐"在机身上而不是贴上去；
- * - 按下时整体**下沉 1.6dp**、渐变压平、顶边高光消失、底影收缩 —— 这是"按进去"的全部；
- * - 图标 + 丝印标签都刻在键面上。
+ * 方向 C（D-063）：机身是纯黑同族的整块，副键不再做"顶受光 → 底沉下去"的金属渐变
+ * —— 在黑闸门上那层渐变会读成一块灰塑料。现在是一块压平的深黑键面 + 1px 白 12% 边，
+ * 按下时整体下沉 1.6dp、键面再暗一档、边缘高光收掉。尺寸 76×50、圆角 12dp 不变。
  */
 @Composable
 fun FilmBodyKey(
@@ -513,46 +524,21 @@ fun FilmBodyKey(
         }
     }
     val shape = RoundedCornerShape(12.dp)
+    // 键面比底盖亮一档，靠的是平色 + 1px 边，不是渐变。按下时键面收暗。
+    val face = if (pressed) {
+        p.panelMetal.getOrNull(1) ?: p.wellFill
+    } else {
+        p.panelMetal.first()
+    }
+    val edge = Color.White.copy(alpha = if (pressed) 0.06f else 0.12f)
 
     Box(
         modifier = modifier
             .size(width = 76.dp, height = 50.dp)
             .graphicsLayer { translationY = travel.dp.toPx() }
             .clip(shape)
-            .drawBehind {
-                val r = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = if (pressed) 0.25f else 0.45f),
-                    topLeft = Offset(0f, 1.5.dp.toPx()),
-                    size = Size(size.width, size.height),
-                    cornerRadius = r,
-                )
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = if (pressed) {
-                            listOf(Color(0xFF151719), Color(0xFF101214))
-                        } else {
-                            listOf(Color(0xFF262A2E), Color(0xFF121416))
-                        },
-                        startY = 0f,
-                        endY = size.height,
-                    ),
-                    cornerRadius = r,
-                )
-                val w = 1.dp.toPx()
-                drawLine(
-                    color = Color.White.copy(alpha = if (pressed) 0.02f else 0.12f),
-                    start = Offset(14.dp.toPx(), w / 2f),
-                    end = Offset(size.width - 14.dp.toPx(), w / 2f),
-                    strokeWidth = w,
-                )
-                drawLine(
-                    color = Color.Black.copy(alpha = if (pressed) 0.75f else 0.55f),
-                    start = Offset(14.dp.toPx(), size.height - w / 2f),
-                    end = Offset(size.width - 14.dp.toPx(), size.height - w / 2f),
-                    strokeWidth = w,
-                )
-            }
+            .background(face)
+            .border(1.dp, edge, shape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -582,81 +568,33 @@ fun FilmBodyKey(
 }
 
 /**
- * 机身底盖（D-051）。
+ * 机身底盖（D-063「白纸档案」）。
  *
- * 一整块金属板，把快门、两个副键和曝光刻度槽装进去 —— 取景窗是"窗口"，这块是
- * "机身"，两者之间用一道缝（顶部 1px 高光 + 紧贴其下的暗线）分开。没有那道缝，
- * 面板就只是屏幕底部一条深色区域，白做。
- *
- * 拉丝纹理用 28 条错开的横线，不是满铺细纹：满铺在 3x 屏上会摩尔纹，而且每帧
- * 上百条 drawLine 只为了一点几乎看不见的质感。线段参数在 [drawWithCache] 里算一次，
- * 只在面板尺寸变化时重建。
- *
- * 面板自己吃下导航栏高度的空白（调用方在 content 末尾放
- * `windowInsetsBottomHeight`），否则金属板会在手势条上方断掉，露出底下的页面底色。
+ * 方向 C：底盖是纯黑同族的一整块平色（取 [FilmPalette.panelMetal] 最深的一停），
+ * 只在顶部留 1px 白 10% 的缝把它和取景窗分开。没有渐变、没有拉丝、没有第二道暗线
+ * —— 闸门上只允许刻线（§1.2）。底盖仍自己吃下导航栏高度。
  */
 @Composable
 fun FilmBodyPanel(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
+    val p = LocalFilmTheme.current.palette
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // 顶角 6dp 而不是 18dp：底盖是"机身的一部分"，圆角一大就读成一张浮卡。
+            // 顶角 6dp：底盖是"机身的一部分"，圆角一大就读成一张浮卡。
             .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-            .drawWithCache {
-                val gap = 6.dp.toPx()
-                val streaks = ArrayList<FloatArray>()
-                var y = gap
-                var seed = 20261021L
-                while (y < size.height) {
-                    seed = seed * 6364136223846793005L + 1442695040888963407L
-                    val s = (seed ushr 33).toInt() and 0x7fffffff
-                    val start = (s % 26) / 100f
-                    val len = 0.55f + ((s / 26) % 40) / 100f
-                    streaks.add(floatArrayOf(y, start, (start + len).coerceAtMost(1f)))
-                    y += gap
-                }
-                onDrawBehind {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            p.panelMetal,
-                            startY = 0f,
-                            endY = size.height,
-                        ),
-                    )
-                    // 拉丝更细更淡：满铺的强纹理在整块面板上会显脏。
-                    streaks.forEachIndexed { index, line ->
-                        drawLine(
-                            color = if (index % 2 == 0) {
-                                Color.White.copy(alpha = 0.015f)
-                            } else {
-                                Color.Black.copy(alpha = 0.03f)
-                            },
-                            start = Offset(size.width * line[1], line[0]),
-                            end = Offset(size.width * line[2], line[0]),
-                            strokeWidth = 1f,
-                        )
-                    }
-                    // 缝：上面一条受光高光，紧跟着一条暗线。顺序不能反 ——
-                    // 反了就变成"贴了一块板上去"，而不是"板从机身里切出来"。
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.12f),
-                        start = Offset(0f, 0.5.dp.toPx()),
-                        end = Offset(size.width, 0.5.dp.toPx()),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                    drawLine(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        start = Offset(0f, 2.dp.toPx()),
-                        end = Offset(size.width, 2.dp.toPx()),
-                        strokeWidth = 2.dp.toPx(),
-                    )
-                }
+            .background(p.panelMetal.last())
+            .drawBehind {
+                // 缝：只有一条 1px 白 10%，正压在底盖顶边。
+                drawLine(
+                    color = Color.White.copy(alpha = 0.10f),
+                    start = Offset(0f, 0.5.dp.toPx()),
+                    end = Offset(size.width, 0.5.dp.toPx()),
+                    strokeWidth = 1.dp.toPx(),
+                )
             },
         content = content,
     )
@@ -752,14 +690,14 @@ fun FilmPanelKey(
 }
 
 /**
- * 曝光刻度槽：刻在面板上的一道凹线，金色填充。
+ * 36 格进度（D-063 §5.1）：2dp 高，已曝光段纸白、未曝光段白 12%。
  *
- * 上沿一条暗线是唯一必需的：没有它这就是根 2dp 进度条；有了它才是"金属上刻出来的槽"。
+ * 不再是"金属上刻的槽 + 金色填充"：方向 C 里进度也只是两条白色刻线，
+ * 未曝光部分是 12% 的白，不是深坑。
  */
 @Composable
 fun FilmExposureSlot(fraction: Float, modifier: Modifier = Modifier) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
+    val p = LocalFilmTheme.current.palette
 
     Box(
         modifier = modifier
@@ -767,21 +705,13 @@ fun FilmExposureSlot(fraction: Float, modifier: Modifier = Modifier) {
             .padding(horizontal = 24.dp)
             .height(2.dp)
             .clip(CircleShape)
-            .background(p.wellFill)
-            .drawBehind {
-                drawLine(
-                    color = Color.Black.copy(alpha = 0.40f),
-                    start = Offset(0f, 0.5.dp.toPx()),
-                    end = Offset(size.width, 0.5.dp.toPx()),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            },
+            .background(Color.White.copy(alpha = 0.12f)),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .background(p.accent.copy(alpha = 0.55f)),
+                .background(p.textPrimary),
         )
     }
 }

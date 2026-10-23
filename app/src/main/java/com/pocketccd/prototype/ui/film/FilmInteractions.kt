@@ -8,14 +8,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +47,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
@@ -62,7 +57,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.camera.ExposureProfile
 import com.pocketccd.prototype.camera.LensStop
 import kotlinx.coroutines.delay
@@ -95,7 +89,9 @@ fun FocusRing(
 ) {
     if (point == null) return
     val spec = LocalFilmTheme.current
-    val tint = spec.palette.accent
+    // 方向 C：对焦环是纸白刻线，不是金色。黑闸门里 accent 恰好也是纸白，但这里
+    // 直接取 textPrimary，避免别处皮肤又把它变回强调色。
+    val tint = spec.palette.textPrimary
     val density = LocalDensity.current
     val halfPx = with(density) { 33.dp.toPx() }
     val labelOffset = with(density) { 34.dp.toPx() }
@@ -112,7 +108,7 @@ fun FocusRing(
         alpha.animateTo(0f, tween(320))
     }
 
-    // 对焦结果全是画出来的（金色方框 + `AF LOCK` 文本），方框本身读屏看不见。
+    // 对焦结果全是画出来的（纸白方框 + `AF LOCK` 文本），方框本身读屏看不见。
     // 补一句状态描述并标成 liveRegion：结果从「正在对焦」变成「对焦完成/失败」时
     // TalkBack 会主动播报一次，不用用户伸手去画面里找那个框。
     val focusDescription = when (lock) {
@@ -154,7 +150,7 @@ fun FocusRing(
                     Offset(right, bottom) to Offset(right - arm, bottom),
                     Offset(right, bottom) to Offset(right, bottom - arm),
                 )
-                // 与构图角标同理：先垫一层暗底，否则白墙背景上金色细线会消失。
+                // 与构图角标同理：先垫一层暗底，否则白墙背景上纸白细线会消失。
                 segments.forEach { (a, b) ->
                     drawLine(Color.Black.copy(alpha = 0.45f), a, b, w * 2.6f)
                 }
@@ -181,6 +177,8 @@ fun FocusRing(
  * 轻提示，对应设计稿的 `#toast`：2.2 秒后自动消失，位于快门上方。
  *
  * 文本永远来自真实状态（开关切换、变焦档位），不是"操作成功"这类空话。
+ * D-063：闸门上的 toast 是深色胶囊 + 纸白字；`liveRegion` 让 TalkBack 在
+ * 内容变化时主动播报一次，用户不用去画面里找那行字。
  */
 @Composable
 fun FilmToast(
@@ -197,13 +195,16 @@ fun FilmToast(
         Box(
             modifier = Modifier
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.80f))
-                .border(1.dp, spec.palette.hairline, CircleShape)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .background(Color.Black.copy(alpha = 0.88f))
+                .border(1.dp, spec.palette.hairlineStrong, CircleShape)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                // mergeDescendants：liveRegion 节点自己要有文字内容，TalkBack 才会播报；
+                // 否则它只是一个没有文案的空 Box。
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         ) {
             Text(
                 text = text ?: "",
-                color = Color.White.copy(alpha = 0.85f),
+                color = spec.palette.textPrimary,
                 fontSize = spec.type.mono,
                 letterSpacing = 0.06.em,
                 maxLines = 1,
@@ -265,18 +266,21 @@ fun FilmZoomStops(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val items = stops.ifEmpty { listOf(LensStop(1f), LensStop(2f)) }
+    // D-063：未激活 = 纸白 46%；激活 = 纸白 + 20dp 下划线（和顶栏胶卷 tab 同一套语言）。
+    val inactive = p.textPrimary.copy(alpha = 0.46f)
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         items.forEach { stop ->
             val active = abs(zoom - stop.zoomRatio) < 0.05f
             val tint by androidx.compose.animation.animateColorAsState(
-                targetValue = if (active) p.inkStrong else p.inkMuted,
-                animationSpec = androidx.compose.animation.core.tween(160),
+                targetValue = if (active) p.textPrimary else inactive,
+                animationSpec = tween(spec.motion.stateMs),
                 label = "zoom-stop-tint",
             )
             Box(
+                // 热区 48dp：视觉只有一行字 + 一条 1px 下划线。
                 modifier = Modifier
-                    .height(40.dp)
-                    .widthIn(min = 40.dp)
+                    .height(48.dp)
+                    .widthIn(min = 48.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .filmClickable(
                         onClick = { onSelect(stop.zoomRatio) },
@@ -292,15 +296,21 @@ fun FilmZoomStops(
                         fontSize = spec.type.rail,
                         fontFamily = FontFamily.Monospace,
                     )
-                    if (active) {
-                        Box(
-                            modifier = androidx.compose.ui.Modifier
-                                .size(3.dp)
-                                .clip(CircleShape)
-                                .background(p.accent),
-                        )
-                    } else {
-                        Spacer(androidx.compose.ui.Modifier.size(3.dp))
+                    // 激活态不再用"金色圆点"，改成 20dp 纸白下划线。
+                    Box(
+                        modifier = Modifier
+                            .width(20.dp)
+                            .height(3.dp),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        if (active) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(p.textPrimary),
+                            )
+                        }
                     }
                 }
             }
@@ -321,11 +331,20 @@ fun FilmEvToolbarKey(
     val p = spec.palette
     val ev = profile.evOf(evIndex)
     val neutral = abs(ev) < profile.stepEv / 2f
+    // D-063：和闪光/网格同一套激活态 —— 白 12% 底 + 纸白；未激活白 46%。
+    val fill by androidx.compose.animation.animateColorAsState(
+        targetValue = if (expanded) p.textPrimary.copy(alpha = 0.12f) else Color.Transparent,
+        animationSpec = tween(spec.motion.stateMs),
+        label = "ev-key-fill",
+    )
+    val tint = if (expanded) p.textPrimary else p.textPrimary.copy(alpha = 0.46f)
     Row(
         modifier = modifier
-            .height(40.dp)
-            .widthIn(min = 58.dp)
+            .height(48.dp)
+            // 48dp 宽：`± +0.7` 文字本身约 45dp，热区不再只有 58dp 的"看起来大"。
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
+            .background(fill)
             .filmClickable(
                 onClickLabel = if (expanded) "收起曝光刻度" else "展开曝光刻度",
                 onClick = onClick,
@@ -336,14 +355,14 @@ fun FilmEvToolbarKey(
     ) {
         Text(
             text = "±",
-            color = if (neutral && !expanded) p.inkMuted else p.accent,
+            color = tint,
             fontSize = spec.type.rail,
             fontFamily = FontFamily.Monospace,
         )
         Spacer(androidx.compose.ui.Modifier.width(6.dp))
         Text(
             text = if (neutral) "0.0" else formatEv(ev),
-            color = if (neutral && !expanded) p.inkMuted else p.inkStrong,
+            color = tint,
             fontSize = spec.type.rail,
             fontFamily = FontFamily.Monospace,
         )
@@ -372,15 +391,15 @@ fun ViewfinderZoom(
         items.forEach { stop ->
             val active = abs(zoom - stop.zoomRatio) < 0.05f
             val tint by androidx.compose.animation.animateColorAsState(
-                targetValue = if (active) p.inkStrong else p.inkMuted,
-                animationSpec = androidx.compose.animation.core.tween(160),
+                targetValue = if (active) p.textPrimary else p.textPrimary.copy(alpha = 0.46f),
+                animationSpec = tween(spec.motion.stateMs),
                 label = "zoom-rail-tint",
             )
             Row(
                 // 2026-10-23：从"三颗描边圆钮"改成文字档位轨。真实相机的倍率就是
-                // 取景器边缘的一行数字，圆钮是手机 App 的语言。热区仍 ≥48dp。
+                // 取景器边缘的一行数字，圆钮是手机 App 的语言。热区 ≥48dp。
                 modifier = Modifier
-                    .height(40.dp)
+                    .height(48.dp)
                     .widthIn(min = 64.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .filmClickable(
@@ -402,7 +421,7 @@ fun ViewfinderZoom(
                     modifier = androidx.compose.ui.Modifier
                         .size(4.dp)
                         .clip(CircleShape)
-                        .background(if (active) p.accent else Color.Transparent),
+                        .background(if (active) p.textPrimary else Color.Transparent),
                 )
             }
         }
@@ -485,9 +504,9 @@ private fun FilmEvKey(
 
     Row(
         // 2026-10-23：从"白底圆键"改成与变焦档位同一行的文字读法（`±  +0.3`）。
-        // 展开时白字/金色，收起时灰字 —— 不靠底色表达状态，减少一屏里的圆点数量。
+        // D-063：展开时纸白、收起时纸白 46% —— 不靠底色表达状态，也不再有金点。
         modifier = androidx.compose.ui.Modifier
-            .height(40.dp)
+            .height(48.dp)
             .widthIn(min = 64.dp)
             .clip(RoundedCornerShape(8.dp))
             .filmClickable(
@@ -500,7 +519,7 @@ private fun FilmEvKey(
     ) {
         Text(
             text = "±",
-            color = if (neutral) p.inkMuted else p.accent,
+            color = if (neutral) p.textPrimary.copy(alpha = 0.46f) else p.textPrimary,
             fontSize = spec.type.rail,
             fontFamily = FontFamily.Monospace,
         )
@@ -508,7 +527,7 @@ private fun FilmEvKey(
         Text(
             // 0 档写 0.0 而不是 ±：读数和指针位置是同一件事，不需要第二个状态符号。
             text = if (neutral) "0.0" else formatEv(ev),
-            color = if (neutral) p.inkMuted else p.inkStrong,
+            color = if (neutral) p.textPrimary.copy(alpha = 0.46f) else p.textPrimary,
             fontSize = spec.type.rail,
             fontFamily = FontFamily.Monospace,
         )
@@ -682,15 +701,15 @@ fun FilmEvRuler(
                 end = Offset(zeroX, midY + 9.dp.toPx()),
                 strokeWidth = 1.dp.toPx(),
             )
-            // 金色指针：唯一有颜色的元素，位置就是当前 index。
+            // 纸白指针：唯一有颜色的元素就是纸白，位置就是当前 index。
             val pointerX = padPx + usable * (evIndex - profile.minIndex) / span
             drawLine(
-                color = p.accent,
+                color = p.textPrimary,
                 start = Offset(pointerX, midY - 11.dp.toPx()),
                 end = Offset(pointerX, midY + 11.dp.toPx()),
                 strokeWidth = 2.dp.toPx(),
             )
-            drawCircle(color = p.accent, radius = 2.dp.toPx(), center = Offset(pointerX, midY))
+            drawCircle(color = p.textPrimary, radius = 2.dp.toPx(), center = Offset(pointerX, midY))
         }
     }
 }

@@ -2,12 +2,12 @@ package com.pocketccd.prototype.ui.film
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,11 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.camera.ExposureProfile
 import com.pocketccd.prototype.camera.LensStop
 import kotlinx.coroutines.delay
@@ -161,21 +159,23 @@ fun FilmCaptureScreen(
         ) {
             // 2026-10-23 第三版布局：窗 → 工具条 → 底盖，三块连续，中间不留死黑。
             // 取景窗宽度 0.86；同时给底盖保底 240dp，避免小屏把按键挤没。
+            // 顶栏按 D-063 §5.1 是下划线 tab，热区必须 48dp（原先是 44dp 的胶囊条）。
             val frameWidth = minOf(
                 maxWidth * 0.86f,
-                (maxHeight - 44.dp - 52.dp - 240.dp) * 0.75f,
+                (maxHeight - 48.dp - 52.dp - 240.dp) * 0.75f,
             )
             val frameHeight = frameWidth * 4f / 3f
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // 顶栏只留胶卷 pill。
+                // 顶栏只留胶卷 tab：下划线式（12sp mono 纸白 + 1px 白 20%），
+                // 不再有金色圆点和胶囊底。
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
+                        .height(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    StockPill(name = stockName, onClick = onOpenFilms)
+                    StockTab(name = stockName, onClick = onOpenFilms)
                 }
 
                 Box(
@@ -247,11 +247,15 @@ fun FilmCaptureScreen(
 
                 // 工具条：闪光灯 / 九宫格 | 变焦档位 | EV / 设置。
                 // 所有拍摄参数离开画面，画面完整留给构图。
+                // D-063：未激活图标 = 纸白 46%，激活 = 白 12% 圆底 + 纸白图标。
+                val toolbarInactive = p.textPrimary.copy(alpha = 0.46f)
                 Row(
+                    // 左右 12dp（取景页 12/16/20 体系里的一档）：48dp 热区比旧版宽，
+                    // 3 个光学档位 + EV 键在 360dp 屏上刚好排得下，不再靠 16dp 边距。
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     FilmRoundButton(
@@ -265,6 +269,7 @@ fun FilmCaptureScreen(
                             }
                         },
                         active = flashOn && flashAvailable,
+                        inactiveTint = toolbarInactive,
                     )
                     FilmRoundButton(
                         icon = FilmIconKind.Grid,
@@ -273,6 +278,7 @@ fun FilmCaptureScreen(
                             showToast(if (gridOn) "九宫格参考线已关闭" else "九宫格参考线已开启")
                         },
                         active = gridOn,
+                        inactiveTint = toolbarInactive,
                     )
                     Spacer(Modifier.weight(1f))
                     FilmZoomStops(
@@ -303,6 +309,7 @@ fun FilmCaptureScreen(
                     FilmRoundButton(
                         icon = FilmIconKind.Tune,
                         onClick = onOpenSettings,
+                        inactiveTint = toolbarInactive,
                     )
                 }
 
@@ -337,7 +344,8 @@ fun FilmCaptureScreen(
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
                                     text = "%02d".format(shotsTaken),
-                                    color = p.inkStrong,
+                                    // D-063 §5.1：计数是 30sp mono 纸白（counterBig）。
+                                    color = p.textPrimary,
                                     fontSize = spec.type.counterBig,
                                     fontFamily = FontFamily.Monospace,
                                 )
@@ -404,51 +412,48 @@ fun FilmCaptureScreen(
     }
 }
 
+/**
+ * 顶栏胶卷 tab（D-063「白纸档案」）。
+ *
+ * 方向 C 的取景页只刻纸白线：胶卷名是一条 12sp mono 的下划线 tab，不再是
+ * "金色圆点 + 胶囊"。热区撑到 48dp（父级顶栏也是 48dp），视觉只有一行字和 1px 线。
+ */
 @Composable
-private fun StockPill(name: String, onClick: () -> Unit) {
+private fun StockTab(name: String, onClick: () -> Unit) {
     val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(50)
+    val p = spec.palette
 
-    // 视觉是 29dp 的胶囊，命中区必须 48dp：外层 Box 撑到 48dp 并接管点击，
-    // 内层只负责画。之前 clickable 挂在 29dp 的胶囊上，是典型的「看着够大、
-    // 实际点不中」（T9 无障碍退出条件要求 ≥48dp）。
     Box(
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(50))
             .filmClickable(
                 onClick = onClick,
                 onClickLabel = "打开胶卷库选择胶卷",
-            ),
+            )
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier
-                .height(32.dp)
-                .clip(shape)
-                .background(spec.palette.controlFill)
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        // 用 IntrinsicSize 把下划线卡在文字宽度上：fillMaxWidth 在这里只会撑满
+        // 整条顶栏，那读起来是"分隔线"，不是 tab。
+        Column(
+            modifier = Modifier.width(IntrinsicSize.Max),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(spec.palette.accent),
-            )
             Text(
                 text = name,
-                color = spec.palette.ink,
+                color = p.textPrimary,
                 fontSize = spec.type.mono,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 0.16.em,
                 maxLines = 1,
             )
-            FilmIcon(
-                kind = FilmIconKind.ChevronRight,
-                tint = spec.palette.inkFaint,
-                iconSize = 12.dp,
+            Spacer(Modifier.height(4.dp))
+            // 下划线：白 20%、1px，宽度就是这行字的宽度。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color.White.copy(alpha = 0.20f)),
             )
         }
     }
@@ -470,7 +475,8 @@ private fun ViewfinderPlaceholder(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070C11)),
+            // 闸门兜底：和取景窗同一个纯黑（D-063 去掉旧版偏蓝的 #070C11）。
+            .background(spec.palette.viewfinderBg),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -486,7 +492,7 @@ private fun ViewfinderPlaceholder(
                     blockReason != null -> blockReason
                     else -> "等待相机绑定"
                 },
-                // 占位态没有画面，底下是纯色 #070C11，可以用 textSecondary（7.2:1）；
+                // 占位态没有画面，底下是纯色 viewfinderBg，可以用 textSecondary（7.2:1）；
                 // 不要用 inkFaint(3.15:1)，那是压真实画面时才不得已的选择。
                 color = spec.palette.textSecondary,
                 fontSize = spec.type.body,
@@ -504,7 +510,8 @@ private fun ViewfinderPlaceholder(
                         .background(spec.palette.controlFill)
                         .border(
                             spec.metrics.hairline,
-                            spec.palette.accent.copy(alpha = 0.55f),
+                            // 白 16% 边（hairlineStrong），不再是 accent 色描边。
+                            spec.palette.hairlineStrong,
                             RoundedCornerShape(50),
                         )
                         .filmClickable(
@@ -516,7 +523,7 @@ private fun ViewfinderPlaceholder(
                 ) {
                     Text(
                         text = "去设置",
-                        color = spec.palette.accent,
+                        color = spec.palette.textPrimary,
                         fontSize = spec.type.body,
                         letterSpacing = 0.12.em,
                     )

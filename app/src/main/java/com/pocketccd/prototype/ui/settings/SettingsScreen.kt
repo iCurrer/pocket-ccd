@@ -1,12 +1,9 @@
 package com.pocketccd.prototype.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,10 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,33 +24,43 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.BuildConfig
 import com.pocketccd.prototype.R
 import com.pocketccd.prototype.ui.film.FilmIcon
 import com.pocketccd.prototype.ui.film.FilmIconKind
-import com.pocketccd.prototype.ui.film.FilmRoundButton
+import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.PaperHairline
+import com.pocketccd.prototype.ui.film.PaperPageHeader
+import com.pocketccd.prototype.ui.film.PaperSectionLabel
 import com.pocketccd.prototype.ui.film.filmClickable
 
 /**
- * 设置页（T9-020 / D-045）。原型没有这一页，版式按 `FilmTheme` 令牌自行重排：
- * 与取景/成片/相册同一套近黑底、香槟金、等宽小字。
+ * 设置页（T9-020 / D-045，D-063「白纸档案」版权页版式）。
+ *
+ * 这一页不是"设置面板"，是一张**版权页（colophon）**：编号小节 + 规则线 + 条目行，
+ * 没有卡片、描边块、玻璃、阴影，也没有金属。层级只靠留白与 1px 墨线。
  *
  * **删掉了**旧版的「默认滤镜」分段控件（日间/闪光/夜间）。它没有接线 ——
  * 选了不落盘、也不影响任何成像路径，是一个点了没反应的假开关。
  * D-041 也确认了不做"预览风格"维度，留着只会让人以为真能改。
+ *
+ * 事实口径（D-002）：本页每个值都必须有来源。
+ * - `保存位置` 的副题写「本应用 + 系统相册」：成片确实同时写应用私有目录
+ *   （`files/Pictures/pocket-ccd/`）与系统相册（`Pictures/Pocket CCD/`），
+ *   旧文案「仅本应用」是错的（`PhotoStore.save` 两份都写）。
+ * - `照片质量` 的 92 是真实 JPEG 质量（`PhotoStore.save` 默认值）。
+ * - `胶卷` 的卷数来自真实扫描结果，点行触发重扫（内置 pack 已随 APK 释放）。
+ *
+ * 说明：本页当前没有任何布尔型设置，所以没有引入 [com.pocketccd.prototype.ui.film.PaperSwitch]
+ * —— 没有可切换的真值就不该画一个开关（D-002）。将来加真开关时按它的 48dp 整行规格用。
  */
 @Composable
 fun SettingsScreen(
@@ -69,102 +74,119 @@ fun SettingsScreen(
     var showDiagnostics by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(p.appBg)
-                .padding(horizontal = spec.metrics.gutterWide),
-        ) {
-            SettingsHeader(onBack = onBack)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(p.appBg),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PaperPageHeader(
+                title = stringResource(R.string.settings_title),
+                subtitle = stringResource(R.string.settings_subtitle),
+                onBack = onBack,
+            )
 
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
             ) {
                 item {
-                    SettingsSection(title = "保存与输出") {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_save_location),
-                            subtitle = stringResource(R.string.settings_save_location_value),
-                            value = "相册",
-                        )
-                        Hairline()
-                        SettingsRow(
-                            title = stringResource(R.string.settings_quality),
-                            subtitle = stringResource(R.string.settings_quality_subtitle),
-                            value = stringResource(R.string.settings_quality_value),
-                        )
-                        Hairline()
-                        // 卷随 APK 内置（D-048），首次启动自动落盘；这一行是给
-                        // 手动 adb push 覆盖的场景留的重扫入口，点了才重扫，
-                        // 不用杀进程重进。
-                        SettingsRow(
-                            title = stringResource(R.string.settings_film_roll),
-                            subtitle = stringResource(R.string.settings_film_roll_hint),
-                            value = "$stockCount 卷",
-                            onClick = onRefreshStocks,
-                        )
-                    }
+                    PaperSectionLabel(index = "01", title = "保存与输出")
+
+                    ColophonRow(
+                        title = stringResource(R.string.settings_save_location),
+                        subtitle = stringResource(R.string.settings_save_location_value),
+                        value = "相册",
+                    )
+                    ColophonHairline()
+                    ColophonRow(
+                        title = stringResource(R.string.settings_quality),
+                        subtitle = stringResource(R.string.settings_quality_subtitle),
+                        value = stringResource(R.string.settings_quality_value),
+                    )
+                    ColophonHairline()
+                    // 卷随 APK 内置（D-048），首次启动自动落盘；这一行是给
+                    // 手动 adb push 覆盖的场景留的重扫入口，点了才重扫，
+                    // 不用杀进程重进。
+                    ColophonRow(
+                        title = stringResource(R.string.settings_film_roll),
+                        subtitle = stringResource(R.string.settings_film_roll_hint),
+                        value = "$stockCount 卷",
+                        onClick = onRefreshStocks,
+                        onClickLabel = "重新扫描胶卷",
+                        showChevron = true,
+                    )
+                    ColophonHairline()
                 }
+
                 item {
-                    SettingsSection(title = "关于") {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_version),
-                            value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                        )
-                        Hairline()
-                        SettingsRow(
-                            title = stringResource(R.string.settings_privacy),
-                            subtitle = stringResource(R.string.settings_privacy_note),
-                            value = stringResource(R.string.settings_privacy_value),
-                        )
-                        Hairline()
-                        // CC BY-SA 4.0 要求署名与修改声明随分发物走。pack 内置进
-                        // APK 之后，这一页就不是"可选彩蛋"了 —— 对外发包前必须有。
-                        SettingsRow(
-                            title = stringResource(R.string.settings_licenses),
-                            subtitle = stringResource(R.string.settings_licenses_subtitle),
-                            value = stringResource(R.string.settings_licenses_value),
-                            onClick = { showLicenses = true },
-                        )
-                    }
+                    PaperSectionLabel(index = "02", title = "关于")
+
+                    ColophonRow(
+                        title = stringResource(R.string.settings_version),
+                        value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    )
+                    ColophonHairline()
+                    ColophonRow(
+                        title = stringResource(R.string.settings_privacy),
+                        subtitle = stringResource(R.string.settings_privacy_note),
+                        value = stringResource(R.string.settings_privacy_value),
+                    )
+                    ColophonHairline()
+                    // CC BY-SA 4.0 要求署名与修改声明随分发物走。pack 内置进
+                    // APK 之后，这一页就不是"可选彩蛋"了 —— 对外发包前必须有。
+                    ColophonRow(
+                        title = stringResource(R.string.settings_licenses),
+                        subtitle = stringResource(R.string.settings_licenses_subtitle),
+                        value = stringResource(R.string.settings_licenses_value),
+                        onClick = { showLicenses = true },
+                        onClickLabel = "打开开源与素材声明",
+                        showChevron = true,
+                    )
+                    ColophonHairline()
                 }
+
                 if (BuildConfig.DEBUG) {
                     item {
-                        SettingsSection(title = "开发者") {
-                            SettingsRow(
-                                title = stringResource(R.string.settings_diagnostics),
-                                subtitle = stringResource(R.string.settings_diagnostics_value),
-                                onClick = { showDiagnostics = true },
-                            )
-                        }
+                        // 开发者条目只在 debug 构建出现；编号顺延成 03，版式与正式条目一致。
+                        PaperSectionLabel(index = "03", title = "开发者")
+                        ColophonRow(
+                            title = stringResource(R.string.settings_diagnostics),
+                            subtitle = stringResource(R.string.settings_diagnostics_value),
+                            onClick = { showDiagnostics = true },
+                            onClickLabel = "查看诊断信息",
+                            showChevron = true,
+                        )
+                        ColophonHairline()
                     }
                 }
             }
         }
 
-        // 声明页盖满整屏（含设置页自己的标题栏），返回即关闭。
+        // 声明页盖满整屏（含设置页自己的页头），返回即关闭。
         if (showLicenses) {
+            // 覆盖层打开时系统返回先关它，而不是退出设置页：AppRoot 的 BackHandler
+            // 会把 SETTINGS 直接回取景页。内层 BackHandler 后注册，优先消费返回键。
+            BackHandler { showLicenses = false }
             LicensesScreen(onBack = { showLicenses = false })
         }
     }
 
     if (showDiagnostics) {
-        // Material3 的 AlertDialog 默认用浅色容器，在暗色页上会弹一块白。
-        // 显式给三个颜色，让它跟着令牌走。
+        // 不再显式指定容器/内容色：外层 AppRoot 已用 PocketCcdTheme(darkTheme = false)
+        // 提供纸色 M3 亮色方案（surface = sheetBg、onSurface = 墨色），对话框自动继承。
+        // 文字仍走本页字阶令牌，避免 M3 默认字型与页头分叉。
         AlertDialog(
             onDismissRequest = { showDiagnostics = false },
-            containerColor = p.sheetBg,
-            titleContentColor = p.textPrimary,
-            textContentColor = p.ink,
             title = {
                 Text(
                     text = stringResource(R.string.settings_diagnostics_title),
-                    style = TextStyle(fontSize = spec.type.optionTitle, fontWeight = FontWeight.Medium),
+                    fontFamily = spec.type.titleFamily,
+                    fontSize = spec.type.optionTitle,
+                    lineHeight = spec.type.bodyLineHeight,
+                    fontWeight = FontWeight.Medium,
                 )
             },
             text = {
@@ -174,19 +196,19 @@ fun SettingsScreen(
                         BuildConfig.VERSION_NAME,
                         BuildConfig.VERSION_CODE,
                     ),
-                    style = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = spec.type.body,
-                        lineHeight = 19.sp,
-                    ),
+                    fontFamily = spec.type.monoFamily,
+                    fontSize = spec.type.mono,
+                    lineHeight = spec.type.monoLineHeight,
                 )
             },
             confirmButton = {
                 TextButton(onClick = { showDiagnostics = false }) {
                     Text(
                         text = stringResource(R.string.settings_close),
-                        style = TextStyle(fontSize = spec.type.body, fontWeight = FontWeight.Medium),
-                        color = p.accent,
+                        fontFamily = spec.type.bodyFamily,
+                        fontSize = spec.type.body,
+                        lineHeight = spec.type.labelLineHeight,
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             },
@@ -194,180 +216,105 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * 版权页条目行：左标题 14sp + 副题 13sp（`textSecondary`）+ 右值 14sp mono。
+ *
+ * 行高 ≥56dp；有动作时**整行可点**（点击区域含左右 24dp 页边距）。
+ * 列表行沿用 D-060 的高频列表约定：只叠 5% 墨覆盖，不缩放、不震动。
+ */
 @Composable
-internal fun SettingsHeader(
-    onBack: () -> Unit,
-    title: String = stringResource(R.string.settings_title),
-    subtitle: String = stringResource(R.string.settings_subtitle),
-) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    // 与成片页/相册页同一套居中标题结构，三个页面来回切不会有标题跳位。
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FilmRoundButton(
-            icon = FilmIconKind.Close,
-            onClick = onBack,
-            iconSize = 15.dp,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(4f),
-        ) {
-            Text(
-                text = title,
-                style = TextStyle(
-                    fontSize = spec.type.optionTitle,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.04.em,
-                    color = p.textPrimary,
-                ),
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = subtitle,
-                style = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = spec.type.label,
-                    letterSpacing = 0.14.em,
-                    color = p.textTertiary,
-                ),
-            )
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        // 与左侧按钮等宽的占位，保证标题真正居中。
-        Spacer(modifier = Modifier.width(48.dp))
-    }
-}
-
-@Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    val shape = RoundedCornerShape(16.dp)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = spec.type.label,
-                letterSpacing = 0.16.em,
-                color = p.textTertiary,
-            ),
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(p.controlFill)
-                .border(spec.metrics.hairline, p.hairline, shape),
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun SettingsRow(
+private fun ColophonRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     value: String? = null,
     onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    showChevron: Boolean = false,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = 56.dp)
             .then(
                 if (onClick != null) {
                     Modifier.filmClickable(
                         onClick = onClick,
                         scaleTo = 1f,
-                        overlayAlpha = 0.04f,
+                        overlayAlpha = 0.05f,
                         haptic = false,
+                        onClickLabel = onClickLabel,
                     )
                 } else {
                     Modifier
                 },
             )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = spec.metrics.pageMargin, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = TextStyle(
-                    fontSize = spec.type.optionTitle,
-                    fontWeight = FontWeight.Normal,
-                    color = p.textPrimary,
-                ),
+                color = p.textPrimary,
+                fontFamily = spec.type.bodyFamily,
+                fontSize = spec.type.body,
+                lineHeight = spec.type.bodyLineHeight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
+                    // 13sp 副题：FilmPaperSpec 里 13sp 这一档沿用共享 FilmType 的
+                    // `rail` 命名（取景档位轨），纸面页借用；不写裸字号。
                     text = subtitle,
-                    style = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = spec.type.body,
-                        lineHeight = 19.sp,
-                        letterSpacing = 0.04.em,
-                        color = p.textSecondary,
-                    ),
+                    color = p.textSecondary,
+                    fontFamily = spec.type.bodyFamily,
+                    fontSize = spec.type.rail,
+                    lineHeight = spec.type.labelLineHeight,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         if (value != null) {
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 text = value,
-                style = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = spec.type.value,
-                    letterSpacing = 0.06.em,
-                    color = p.textSecondary,
-                ),
+                color = p.textSecondary,
+                fontFamily = spec.type.monoFamily,
+                fontSize = spec.type.value,
+                lineHeight = spec.type.monoLineHeight,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (onClick != null) {
-            Spacer(modifier = Modifier.width(6.dp))
+        if (showChevron) {
+            Spacer(Modifier.width(8.dp))
             FilmIcon(
                 kind = FilmIconKind.ChevronRight,
-                tint = p.inkGhost,
-                iconSize = 14.dp,
+                tint = p.textTertiary,
+                iconSize = 16.dp,
+                strokeWidth = 1.5.dp,
             )
         }
     }
 }
 
+/** 条目行的 1px 分隔线：与内容同宽（左右各让出 24dp 页边距）。 */
 @Composable
-private fun Hairline() {
-    val p = LocalFilmTheme.current.palette
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 14.dp)
-            .height(1.dp)
-            .background(p.hairline),
-    )
+private fun ColophonHairline() {
+    val margin = LocalFilmTheme.current.metrics.pageMargin
+    PaperHairline(startInset = margin, endInset = margin)
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Preview(widthDp = 412, heightDp = 915, showBackground = true, backgroundColor = 0xFFECEAE4)
 @Composable
 private fun SettingsScreenPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         SettingsScreen(onBack = {}, stockCount = 3)
     }
 }

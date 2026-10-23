@@ -1,11 +1,21 @@
 package com.pocketccd.prototype.ui.film.films
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,20 +31,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,29 +43,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.fotufilm.FilmStock
-import com.pocketccd.prototype.ui.film.FilmIcon
 import com.pocketccd.prototype.ui.film.FilmIconKind
+import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmRoundButton
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.PaperButton
+import com.pocketccd.prototype.ui.film.PaperEmptyState
+import com.pocketccd.prototype.ui.film.PaperHairline
+import com.pocketccd.prototype.ui.film.PaperPageHeader
 import com.pocketccd.prototype.ui.film.filmClickable
 import java.io.File
 
@@ -84,23 +82,29 @@ data class StockUsage(
 )
 
 /**
- * 胶卷库（T9-016 / D-043）。视觉基线：`docs/reference/pages/films.html`。
+ * 胶卷库：视觉方向 C「白纸档案」的**索引卡**（D-063 / `docs/paper-archive-ui-spec.md` §5.4）。
  *
- * 原型里有两处「非文字」的视觉，是第一版漏掉后显得廉价的根因，这一版都补了：
+ * 整页是一张纸：`appBg` 打底，页头一条 1px 墨线，内容只有两类东西——
  *
- * 1. **已装卷卡是浅色金属面板**（`linear-gradient(135deg,#F2F4F5,#DCE0E3,#B4BAC0)`
- *    + 白描边 + 大投影 + 右上白色光斑 + 深色文字）。整页只有这一块是亮的，
- *    它承担全部"实体感"，其余都是近黑底。第一版做成了半透明深色，于是整页一个调子。
- * 2. **左侧 84×108 的画格**。原型用 CSS 画天空渐变 + 太阳光晕 + 山脊剪影 + 颗粒，
- *    占每行 40% 的面积。第一版把它换成了文字，行就退化成了列表项。
+ * 1. **已装卷 = 一张索引卡**。顶部 `CURRENT` 黑带（纸白 12sp mono + READY/FULL），
+ *    下面左边是胶卷筒、右边是卷名/画幅/剩余/帧号/36 帧点阵，底部两个纸面按钮。
+ *    上一版这里是「浅色金属面板 + 私配色 + 大投影」，它靠反色和亮度抢注意力；
+ *    纸面方向里，层级只由 1px 规则线和纸色明度差承担（§1.1）。
+ * 2. **全部胶卷 = 索引卡列表**。每行左 84×108 真实画格（有真实成片就显示，没有就画
+ *    胶卷筒），右侧卷名、张数、上次拍摄、装卷状态。行与行之间只有一条 hairline，
+ *    没有卡片底、没有圆角、没有阴影。
  *
- * 画格里放什么：**该卷最新一张真实成片**；这卷还没拍过就画胶卷筒。
- * 原型的风景画是"这卷大概长这样"的示意，我们没法凭空生成，也不该编
- * （D-002）。真拍过的片子比示意更有用，还能顺带回答"拍过几张"。
+ * 画格里放什么：**该卷最新一张真实成片**；这卷还没拍过就画胶卷筒。原型的风景画是
+ * "这卷大概长这样"的示意，我们没法凭空生成，也不该编（D-002）。
  *
- * 原型里有而这里没有的字段，都是因为没有数据源：`¥78`、`2027.08 到期`、
- * `ISO 400`、`C-41`、`彩色负片/黑白/电影卷` 分类、品牌文案。pack 格式里没有
- * ISO 与工艺字段，从卷名反推（`GOLD 200` → 200）属于猜。
+ * 不显示的字段（D-050）：`.fswp` 文件名、pack 体积、`4096×3072` 这类像素尺寸。
+ * 它们的共同点是"真实，但不参与任何决定"。留下的都是用户会用的：卷名、张数、
+ * 上次拍摄日期、剩余张数、`05 / 36`、36 帧点阵。画幅（`4:3`）保留 —— 它由真实宽高
+ * 约分得来，回答"这卷拍出来什么形状"，不是内部参数。
+ *
+ * 原型里有而这里没有的字段，都是因为没有数据源：`¥78`、`2027.08 到期`、`ISO 400`、
+ * `C-41`、`彩色负片/黑白/电影卷` 分类、品牌文案。pack 格式里没有 ISO 与工艺字段，
+ * 从卷名反推（`GOLD 200` → 200）属于猜。
  */
 @Composable
 fun FilmLibraryScreen(
@@ -134,17 +138,37 @@ fun FilmLibraryScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(p.appBg)
-            .padding(horizontal = spec.metrics.gutterWide),
+            .background(p.appBg),
     ) {
-        LibraryHeader(
-            stockCount = stocks.size,
+        // 页头自带 24dp 内容边距与底部 hairline，外层不要再套横向 padding。
+        PaperPageHeader(
+            title = "胶卷库",
+            subtitle = "FILM STOCK",
             onBack = onBack,
-            onOpenGallery = onOpenGallery,
+            trailing = {
+                FilmRoundButton(
+                    icon = FilmIconKind.ImageMultiple,
+                    onClick = onOpenGallery,
+                )
+            },
         )
 
         if (stocks.isEmpty()) {
-            EmptyLibrary(onRefresh = onRefresh)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                PaperEmptyState(
+                    title = "还没有胶卷",
+                    // 空着的唯一原因是应用目录里没有能解析的胶卷文件，所以把真实原因和
+                    // 该做的事一起写出来，而不是留一句"暂无数据"。
+                    body = "应用里还没有可用的胶卷文件。\n点下面的按钮重新扫描一次。",
+                    action = "重新扫描",
+                    onAction = onRefresh,
+                )
+            }
             return@Column
         }
 
@@ -152,63 +176,52 @@ fun FilmLibraryScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
+            contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             item(key = "loaded") {
-                // 换卷动画：旧卷淡出下滑、新卷淡入上滑。不是"卡片闪一下"。
-                AnimatedContent(
-                    targetState = active?.id,
-                    transitionSpec = {
-                        (fadeIn(tween(240)) + slideInVertically(tween(260)) { it / 8 }) togetherWith
-                            (fadeOut(tween(150)) + slideOutVertically(tween(180)) { -it / 10 })
-                    },
-                    label = "loaded-roll-change",
-                ) { id ->
-                    val shown = stocks.firstOrNull { it.id == id } ?: active
-                    if (shown != null) {
-                        LoadedPanel(
-                            stock = shown,
-                            shotsTaken = if (shown.id == active?.id) shotsTaken else 0,
-                            rollCapacity = rollCapacity,
-                            onResume = onBack,
-                            onNewRoll = onNewRoll,
-                        )
+                Box(
+                    modifier = Modifier.padding(
+                        start = spec.metrics.pageMargin,
+                        end = spec.metrics.pageMargin,
+                        top = 16.dp,
+                    ),
+                ) {
+                    // 换卷动画：旧卷淡出下滑、新卷淡入上滑。不是"卡片闪一下"。
+                    AnimatedContent(
+                        targetState = active?.id,
+                        transitionSpec = {
+                            (fadeIn(tween(spec.motion.sheetEnterMs)) +
+                                slideInVertically(tween(spec.motion.sheetEnterMs)) { it / 8 }) togetherWith
+                                (fadeOut(tween(spec.motion.pageExitMs)) +
+                                    slideOutVertically(tween(spec.motion.pageExitMs)) { -it / 10 })
+                        },
+                        label = "loaded-roll-change",
+                    ) { id ->
+                        val shown = stocks.firstOrNull { it.id == id } ?: active
+                        if (shown != null) {
+                            LoadedRollCard(
+                                stock = shown,
+                                shotsTaken = if (shown.id == active?.id) shotsTaken else 0,
+                                rollCapacity = rollCapacity,
+                                onResume = onBack,
+                                onNewRoll = onNewRoll,
+                            )
+                        }
                     }
                 }
             }
 
             item(key = "all-head") {
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "全部胶卷",
-                        color = p.inkStrong,
-                        fontSize = spec.type.optionTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.02.em,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "${stocks.size} 款",
-                        color = p.textTertiary,
-                        fontSize = spec.type.monoSmall,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
+                LibrarySectionHead(title = "全部胶卷", count = stocks.size)
             }
 
-            items(items = stocks, key = { it.id }) { stock ->
-                StockCard(
+            itemsIndexed(items = stocks, key = { _, stock -> stock.id }) { index, stock ->
+                StockIndexRow(
                     stock = stock,
                     loaded = stock.id == active?.id,
                     usage = usage[stock.id],
-                    rollCapacity = rollCapacity,
                     onClick = {
-                        // 只装卷，不跳页。装卷动画由下面的 installingId 驱动，
+                        // 只装卷，不跳页。装卷动画由上面的 installingId 驱动，
                         // 回取景器留给「继续拍摄」—— 那是一次明确的用户动作。
                         if (installingId == null && stock.id != active?.id) {
                             installingId = stock.id
@@ -217,78 +230,77 @@ fun FilmLibraryScreen(
                     },
                     installing = installingId == stock.id,
                 )
+                if (index != stocks.lastIndex) {
+                    PaperHairline(
+                        startInset = spec.metrics.pageMargin,
+                        endInset = spec.metrics.pageMargin,
+                    )
+                }
             }
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+// 小节标题
+// ---------------------------------------------------------------------------
+
+/**
+ * `全部胶卷` + 右侧真实卷数 + 底部 hairline。
+ *
+ * 不套 [com.pocketccd.prototype.ui.film.PaperSectionLabel]：那个组件带 `01 / 02`
+ * 编号，本页只有"已装卷"和"全部胶卷"两段，第一段由黑带 `CURRENT` 自报家门，
+ * 给第二段单挂一个 `01` 会读成错号。样式（Serif 标题 + mono 小字 + hairline）
+ * 与它保持一致。
+ */
 @Composable
-private fun LibraryHeader(
-    stockCount: Int,
-    onBack: () -> Unit,
-    onOpenGallery: () -> Unit,
-) {
+private fun LibrarySectionHead(title: String, count: Int) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
 
-    // 原型是「左右各一个圆钮 + 居中标题」。第一版做成左对齐标题 + 右侧数字，
-    // 视觉重心歪到左边，后面的大卡再亮也压不住。
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(spec.metrics.topBarHeight + 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = spec.metrics.pageMargin,
+                    end = spec.metrics.pageMargin,
+                    top = 24.dp,
+                    bottom = 8.dp,
+                ),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            FilmRoundButton(icon = FilmIconKind.Close, onClick = onBack)
-            FilmRoundButton(icon = FilmIconKind.ImageMultiple, onClick = onOpenGallery)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "胶卷库",
-                color = p.inkStrong,
-                fontSize = spec.type.sheetTitle,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.08.em,
+                text = title,
+                color = p.textPrimary,
+                fontFamily = spec.type.titleFamily,
+                fontSize = spec.type.optionTitle,
+                fontWeight = FontWeight.Medium,
             )
+            Spacer(Modifier.weight(1f))
             Text(
-                text = if (stockCount > 0) "FILM STOCK" else "NO STOCK",
+                text = "$count 款",
                 color = p.textTertiary,
-                fontSize = spec.type.label,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.24.em,
+                fontFamily = spec.type.monoFamily,
+                fontSize = spec.type.monoSmall,
             )
         }
+        PaperHairline(startInset = spec.metrics.pageMargin, endInset = spec.metrics.pageMargin)
     }
 }
 
 // ---------------------------------------------------------------------------
-// 已装卷：浅色金属面板
+// 已装卷：纸面索引卡 + CURRENT 黑带
 // ---------------------------------------------------------------------------
 
 /**
- * 金属面板配色。**不入主题令牌**：这是整页唯一的反色（浅底深字）面板，
- * 只在"已装卷"这个位置成立，做成全局令牌会让别处被误用。
+ * 索引卡：`sheetBg` 抬起的纸面 + 1px hairline 边 + 0 阴影。
+ *
+ * 卡内只有一条"反色"：顶部 28dp 的 `CURRENT` 黑带。它是全页唯一一块实心墨，
+ * 用来标"这张卡是当前装着的卷"，和纸面列表区分开，而不靠投影或金属渐变。
  */
-private object Metal {
-    val fill = listOf(Color(0xFFF2F4F5), Color(0xFFDCE0E3), Color(0xFFB4BAC0))
-    val border = Color.White.copy(alpha = 0.5f)
-    val inkStrong = Color(0xFF17191B)
-    val inkBody = Color.Black.copy(alpha = 0.55f)
-    val inkMono = Color.Black.copy(alpha = 0.45f)
-    val inkFaint = Color.Black.copy(alpha = 0.40f)
-    val track = Color.Black.copy(alpha = 0.15f)
-    val progress = Color(0xFFB4703A)
-    val darkPill = Color.Black.copy(alpha = 0.85f)
-    val outline = Color.Black.copy(alpha = 0.15f)
-}
-
 @Composable
-private fun LoadedPanel(
+private fun LoadedRollCard(
     stock: FilmStock?,
     shotsTaken: Int,
     rollCapacity: Int,
@@ -298,58 +310,45 @@ private fun LoadedPanel(
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val shots = shotsTaken.coerceIn(0, rollCapacity)
-    val full = shots >= rollCapacity
+    val full = rollCapacity > 0 && shots >= rollCapacity
     val remaining = (rollCapacity - shots).coerceAtLeast(0)
-    val shape = RoundedCornerShape(24.dp)
-    val glowRadius = 110.dp
+    val shape = RoundedCornerShape(spec.metrics.cardRadius)
+    // 黑带上的纸白字：墨底纸白是纸面方向唯一的反色搭配。
+    val onInk = p.sheetBg
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 投影在 clip 之前打，否则会被裁剪掉。原型是 0 18px 44px rgba(0,0,0,.5)。
-            .shadow(
-                elevation = 18.dp,
-                shape = shape,
-                ambientColor = Color.Black,
-                spotColor = Color.Black,
-            )
             .clip(shape)
-            .background(Brush.linearGradient(Metal.fill, Offset.Zero, Offset.Infinite))
-            .drawBehind {
-                // 右上一个虚化的白色光斑，原型靠 blur-2xl + 半透明白圆实现。
-                // Compose 的径向渐变到此为止就够了：不需要真模糊，只要亮度不均。
-                val r = glowRadius.toPx()
-                val c = Offset(size.width - 30.dp.toPx(), -14.dp.toPx())
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.55f), Color.Transparent),
-                        center = c,
-                        radius = r,
-                    ),
-                    radius = r,
-                    center = c,
-                )
-            }
-            .border(1.dp, Metal.border, shape)
-            .padding(16.dp),
+            .background(p.sheetBg)
+            .border(1.dp, p.hairline, shape),
     ) {
+        // CURRENT 黑带
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(28.dp)
+                .background(p.textPrimary)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "LOADED · 已装卷",
-                color = Metal.inkMono,
+                text = "CURRENT",
+                color = onInk,
+                fontFamily = spec.type.monoFamily,
                 fontSize = spec.type.label,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.22.em,
+                letterSpacing = 0.18.em,
             )
             Spacer(Modifier.weight(1f))
-            StatusBadge(full = full)
+            RollStateMark(full = full, tint = onInk)
         }
 
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.Top) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             FilmCanister(
                 label = stock?.label,
                 capacity = rollCapacity,
@@ -359,167 +358,123 @@ private fun LoadedPanel(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stock?.label ?: "没有可用的胶卷",
-                    color = Metal.inkStrong,
-                    fontSize = spec.type.sheetTitle,
+                    color = p.textPrimary,
+                    fontFamily = spec.type.titleFamily,
+                    fontSize = spec.type.optionTitle,
                     fontWeight = FontWeight.SemiBold,
-                    lineHeight = 20.sp,
-                    letterSpacing = (-0.01).em,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stock?.let { "${aspectLabel(it.width, it.height)} 画幅" } ?: "—",
+                    color = p.textTertiary,
+                    fontFamily = spec.type.monoFamily,
+                    fontSize = spec.type.mono,
+                    maxLines = 1,
+                )
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MetalPill(
-                        text = stock?.sizeLabel ?: "—",
-                        filled = true,
-                        dark = Metal.darkPill,
-                        textColor = Color.White.copy(alpha = 0.85f),
-                    )
-                    MetalPill(
-                        text = "4:3",
-                        filled = false,
-                        dark = Metal.track,
-                        textColor = Metal.inkBody,
-                    )
-                }
+                Text(
+                    // 整页唯一回答"还能不能拍"的数字，所以给 value 一档（14sp）。
+                    text = "剩余 $remaining 张",
+                    color = if (full) p.textSecondary else p.textPrimary,
+                    fontFamily = spec.type.bodyFamily,
+                    fontSize = spec.type.value,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "%02d / %02d".format(shots, rollCapacity),
+                    color = p.textSecondary,
+                    fontFamily = spec.type.monoFamily,
+                    fontSize = spec.type.mono,
+                    letterSpacing = 0.08.em,
+                )
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(text = "剩余", color = Metal.inkBody, fontSize = spec.type.label)
-            Spacer(Modifier.width(5.dp))
-            Text(
-                text = "$remaining",
-                color = if (full) Color(0xFFB84A3A) else Metal.inkStrong.copy(alpha = 0.85f),
-                fontSize = spec.type.optionTitle,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.width(3.dp))
-            Text(
-                text = "张",
-                color = Metal.inkBody,
-                fontSize = spec.type.label,
-                modifier = Modifier.padding(bottom = 2.dp),
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "%02d / %02d".format(shots, rollCapacity),
-                color = Metal.inkFaint,
-                fontSize = spec.type.label,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.10.em,
-            )
-        }
+        FrameDots(
+            shots = shots,
+            capacity = rollCapacity,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
 
-        Spacer(Modifier.height(8.dp))
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(Metal.track),
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(if (rollCapacity <= 0) 0f else shots.toFloat() / rollCapacity)
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(if (full) Color(0xFFB84A3A) else Metal.progress),
-            )
-        }
-
-        Spacer(Modifier.height(6.dp))
-        FrameDots(shots = shots, capacity = rollCapacity)
-
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PanelButton(
-                label = "继续拍摄",
-                primary = true,
-                icon = FilmIconKind.Camera,
-                modifier = Modifier.weight(1f),
+            PaperButton(
+                text = "继续拍摄",
                 onClick = onResume,
+                primary = true,
+                modifier = Modifier.weight(1f),
             )
-            PanelButton(
-                label = "开新卷",
-                primary = false,
+            PaperButton(
+                text = "开新卷",
+                onClick = onNewRoll,
+                secondary = true,
                 // 一张都没拍时开新卷没有意义，点了只会让人怀疑自己按了什么。
                 enabled = shots > 0,
                 modifier = Modifier.weight(1f),
-                onClick = onNewRoll,
             )
         }
     }
 }
 
+/**
+ * `READY` / `FULL`：黑带上的状态。
+ *
+ * 只用纸白一种颜色 + 实心/空心两种方块做双编码 —— 黑带上放不下第二个可读色
+ * （石板蓝、错误红在墨底上都不到 4.5:1），文字本身已经说清了状态。
+ */
 @Composable
-private fun StatusBadge(full: Boolean) {
+private fun RollStateMark(full: Boolean, tint: Color) {
     val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(999.dp)
-    val dot = if (full) Color(0xFFB84A3A) else Color(0xFFE7B37A)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .background(Metal.darkPill)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val dotShape = RoundedCornerShape(1.dp)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .size(4.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(dot),
+                .then(
+                    if (full) {
+                        Modifier.border(1.dp, tint, dotShape)
+                    } else {
+                        Modifier.background(tint, dotShape)
+                    },
+                ),
         )
-        Spacer(Modifier.width(5.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
             text = if (full) "FULL" else "READY",
-            color = dot,
+            color = tint,
+            fontFamily = spec.type.monoFamily,
             fontSize = spec.type.label,
-            fontFamily = FontFamily.Monospace,
             letterSpacing = 0.14.em,
         )
     }
 }
 
-@Composable
-private fun MetalPill(
-    text: String,
-    filled: Boolean,
-    dark: Color,
-    textColor: Color,
-) {
-    val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(999.dp)
-    Text(
-        text = text,
-        color = textColor,
-        fontSize = spec.type.label,
-        fontFamily = FontFamily.Monospace,
-        letterSpacing = 0.08.em,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(shape)
-            .background(if (filled) dark else Color.Transparent)
-            .border(1.dp, if (filled) Color.Transparent else Metal.outline, shape)
-            .padding(horizontal = 7.dp, vertical = 4.dp),
-    )
-}
-
 /**
- * 每格一条的帧点阵（原型 `renderDots`：36 个 `h-[6px] flex-1` 的竖条，
- * 已曝光 `#B4703A`，未曝光 `rgba(0,0,0,.15)`）。
+ * 36 格帧点阵：已曝光墨色、未曝光墨 15%（规格「36 帧点阵列」）。
  *
- * 它比进度条更能读出"还剩几格"，也是原型里最像胶片的东西之一。
+ * 它比进度条更能读出"还剩几格"，也是原型里最像胶片的东西之一。进度条已删：
+ * 它和点阵是同一个事实的两种画法（D-050：真实 ≠ 该显示）。
  */
 @Composable
-private fun FrameDots(shots: Int, capacity: Int) {
+private fun FrameDots(
+    shots: Int,
+    capacity: Int,
+    modifier: Modifier = Modifier,
+) {
     if (capacity <= 0) return
+    val p = LocalFilmTheme.current.palette
+    val dotShape = RoundedCornerShape(1.dp)
+
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(6.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -529,368 +484,190 @@ private fun FrameDots(shots: Int, capacity: Int) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(if (i < shots) Metal.progress else Metal.track),
+                    .background(
+                        color = if (i < shots) p.textPrimary else p.textPrimary.copy(alpha = 0.15f),
+                        shape = dotShape,
+                    ),
             )
         }
     }
 }
 
-@Composable
-private fun PanelButton(
-    label: String,
-    primary: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: FilmIconKind? = null,
-    enabled: Boolean = true,
-) {
-    val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(12.dp)
-    val fill = when {
-        !enabled -> Color.Black.copy(alpha = 0.25f)
-        primary -> Color(0xFF17191B)
-        else -> Color.White.copy(alpha = 0.30f)
-    }
-    val textColor = when {
-        !enabled -> Metal.inkFaint
-        primary -> Color.White
-        else -> Metal.inkBody.copy(alpha = 0.80f)
-    }
-
-    Row(
-        modifier = modifier
-            .height(44.dp)
-            .clip(shape)
-            .background(fill)
-            .border(1.dp, if (primary) Color.Transparent else Metal.outline, shape)
-            .filmClickable(
-                onClick = onClick,
-                enabled = enabled,
-                // 浅色金属面上的按压覆盖用黑，缩放略小：这是"键"不是"卡片"。
-                overlay = Color.Black,
-                overlayAlpha = 0.05f,
-                scaleTo = 0.97f,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        if (icon != null) {
-            FilmIcon(kind = icon, tint = textColor, iconSize = 14.dp)
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = spec.type.label,
-            fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
-        )
-    }
-}
-
 // ---------------------------------------------------------------------------
-// 胶卷筒插画
+// 全部胶卷：索引卡行
 // ---------------------------------------------------------------------------
 
 /**
- * 58×84 的胶卷筒（原型 `.film-canister`）：金属筒身 + 顶盖 + 底唇 + 奶油色标签。
+ * 一行索引卡。**没有卡片底**：行与行之间靠 hairline 与 12dp 呼吸分开，
+ * 圆角/投影在这页不存在（§1.1 纸面页无阴影）。
  *
- * 总高 93dp 而非 84：原型靠 `::before` / `::after` 的负 top/bottom 溢出，
- * 这里直接把盖子算进测量高度，避免依赖"父容器不裁剪"这种隐式前提。
+ * 整行可点（热区 = 84×108 画格那一行，远超 48dp），点下去只装卷，不跳页。
  */
 @Composable
-private fun FilmCanister(
-    label: String?,
-    capacity: Int,
-    modifier: Modifier = Modifier,
-) {
-    val spec = LocalFilmTheme.current
-    val bodyW = 58.dp
-    val bodyH = 84.dp
-    val capH = 7.dp
-    val capOver = 5.dp
-    val lipH = 6.dp
-    // 顶盖比筒身高出 5dp、底唇比筒身低 4dp，所以测量高度是 93 而不是 84。
-    // 原型靠伪元素的负定位溢出，这里直接把溢出算进高度，免得依赖父容器不裁剪。
-    val totalH = 93.dp
-
-    Box(modifier = modifier.size(width = bodyW, height = totalH)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val s = bodyW.toPx() / 58f
-            val bodyTop = capOver.toPx()
-
-            // 筒身：横跨的高光，45% 处最亮（原型 90deg 三段渐变）。
-            drawRoundRect(
-                brush = Brush.horizontalGradient(
-                    0f to Color(0xFF191C1F),
-                    0.45f to Color(0xFF3B4045),
-                    1f to Color(0xFF121416),
-                ),
-                topLeft = Offset(0f, bodyTop),
-                size = Size(w, bodyH.toPx()),
-                cornerRadius = CornerRadius(9f * s, 9f * s),
-            )
-            drawRoundRect(
-                color = Color.White.copy(alpha = 0.12f),
-                topLeft = Offset(0f, bodyTop),
-                size = Size(w, bodyH.toPx()),
-                cornerRadius = CornerRadius(9f * s, 9f * s),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-            )
-
-            // 顶盖。原型是 #EDEFF1→#8D9298，但这块面板本身接近白，
-            // 直接照抄的结果是"盖子消失、筒身像一块黑砖"（真机第一版）。
-            // 所以压深一档并加一圈暗描边，让金属边在白底上也读得出来。
-            val capInset = 8f * s
-            val capTop = Offset(capInset, 0f)
-            val capSize = Size(w - capInset * 2, capH.toPx())
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFFDBDFE3), Color(0xFF6E747A)),
-                ),
-                topLeft = capTop,
-                size = capSize,
-                cornerRadius = CornerRadius(3f * s, 3f * s),
-            )
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.28f),
-                topLeft = capTop,
-                size = capSize,
-                cornerRadius = CornerRadius(3f * s, 3f * s),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-            )
-            // 底唇：底边贴住 totalH，往上叠 2dp 压进筒身，接缝不会露缝。
-            val lipInset = 14f * s
-            val lipTop = Offset(lipInset, totalH.toPx() - lipH.toPx())
-            val lipSize = Size(w - lipInset * 2, lipH.toPx())
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFFC6CBD0), Color(0xFF565C62)),
-                ),
-                topLeft = lipTop,
-                size = lipSize,
-                cornerRadius = CornerRadius(2f * s, 2f * s),
-            )
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.24f),
-                topLeft = lipTop,
-                size = lipSize,
-                cornerRadius = CornerRadius(2f * s, 2f * s),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-            )
-        }
-
-        // 标签贴纸：left/right 6，top 22，bottom 17（相对筒身）。
-        Column(
-            modifier = Modifier
-                .width(bodyW - 12.dp)
-                .height(bodyH - 22.dp - 17.dp)
-                .offset(x = 6.dp, y = capOver + 22.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(
-                    Brush.verticalGradient(listOf(Color(0xFFEBD9B4), Color(0xFFD3B585))),
-                )
-                .padding(horizontal = 4.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            val parts = (label ?: "—").trim().split(Regex("\\s+"), limit = 2)
-            Text(
-                text = parts.firstOrNull()?.uppercase() ?: "—",
-                color = Color(0xFF2B2419),
-                // micro-print: 仿真印刷标签，装饰，不承载信息
-                fontSize = spec.type.microPrint,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.02).em,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                // 第二行是卷名的后半段 + 真实卷容量。原型这里写「400 · 36」，
-                // 400 是 ISO，我们没有这个字段；36 是真实的。
-                text = listOfNotNull(
-                    parts.getOrNull(1)?.takeIf { it.isNotBlank() },
-                    "$capacity",
-                ).joinToString(" · "),
-                color = Color(0xFF2B2419).copy(alpha = 0.70f),
-                // micro-print: 仿真印刷标签，装饰，不承载信息
-                fontSize = spec.type.microPrint,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.06.em,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// 胶卷列表项
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun StockCard(
+private fun StockIndexRow(
     stock: FilmStock,
     loaded: Boolean,
     usage: StockUsage?,
-    rollCapacity: Int,
     onClick: () -> Unit,
-    installing: Boolean = false,
+    installing: Boolean,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    val shape = RoundedCornerShape(16.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            // 原型 .film-card 是 #131518 实色，不是白 4% 的半透明。
-            // 半透明在近黑底上会透出一层灰，行与行糊成一片。
-            .background(Color(0xFF131518))
-            .border(1.dp, if (loaded) p.accent.copy(alpha = 0.45f) else p.hairline, shape)
+            .padding(horizontal = spec.metrics.pageMargin)
             .filmClickable(
                 onClick = onClick,
-                scaleTo = 0.99f,
+                // 列表行只叠色不缩放：整行跟着手指抖会读成"页面在晃"。
+                scaleTo = 1f,
                 overlayAlpha = 0.05f,
                 haptic = false,
                 onClickLabel = "装入这卷",
             )
-            .padding(10.dp),
+            .padding(vertical = 12.dp),
     ) {
-        FilmFrame(stock = stock, usage = usage)
+        StockFrame(stock = stock, usage = usage)
 
         Spacer(Modifier.width(12.dp))
-        // SpaceBetween + heightIn(min) 而不是写死 108dp：写死高度时内容一旦
-        // 多出几 dp 就会把底部那行按钮裁掉（真机第一次就踩到了）。
-        // 现在内容短就靠 SpaceBetween 压到底部，内容长就让卡片自己长高。
+        // SpaceBetween + heightIn(min) 而不是写死 108dp：内容短就压到底部对齐画格，
+        // 内容长（卷名两行）就让行自己长高。
         Column(
-            modifier = Modifier.heightIn(min = 108.dp),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 108.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Column {
                 Row(verticalAlignment = Alignment.Top) {
                     Text(
                         text = stock.label,
-                        color = p.inkStrong,
+                        color = p.textPrimary,
+                        fontFamily = spec.type.titleFamily,
                         fontSize = spec.type.optionTitle,
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = 20.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         // 原型这里是「¥78」。我们不经手销售，但"这卷拍过几张"是真数据。
                         text = usage?.shots?.takeIf { it > 0 }?.let { "$it 张" } ?: "—",
                         color = p.textTertiary,
-                        fontSize = spec.type.label,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = spec.type.monoFamily,
+                        fontSize = spec.type.mono,
+                        maxLines = 1,
                     )
                 }
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     // 原型这里是一句品牌文案（"柔和肤色与细腻颗粒…"），是编的。
-                    // 换成本机真实记录：这卷上次拍是什么时候。没拍过就直说没拍过。
+                    // 换成本机真实记录：这卷上次拍是什么时候。
                     text = when {
                         usage == null || usage.shots <= 0 -> "这卷还没拍过"
                         usage.lastCapturedAt != null -> "上次拍摄 ${monthDay(usage.lastCapturedAt)}"
-                        else -> "本机共 ${usage.shots} 张"
+                        else -> "拍摄日期未知"
                     },
                     color = p.textSecondary,
+                    fontFamily = spec.type.bodyFamily,
                     fontSize = spec.type.body,
-                    lineHeight = 19.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(9.dp))
-                // 只留张数。帧尺寸是内部参数（而且裁切后与 pack 尺寸未必一致，
-                // 写出来反而误导）；两个 pill 在 11sp 下也会横向溢出。
-                BorderPill(text = "$rollCapacity 张", color = p)
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End,
             ) {
-                LoadPill(loaded = loaded, installing = installing)
+                LoadStateLabel(loaded = loaded, installing = installing)
             }
         }
     }
 }
 
+/**
+ * `装卷` / `已装卷` / `装卷中…`。
+ *
+ * 「装卷中…」的呼吸动画是整页唯一的循环动效（900ms 一个来回，`tween(450)` 往返）。
+ * **文字本身不动**：纸面上把 12sp 文字压到 45% 透明度只有 2:1 左右，读不出来；
+ * 呼吸放在前面那颗 4dp 方点上，文字保持正文对比度。
+ */
 @Composable
-private fun BorderPill(text: String, color: com.pocketccd.prototype.ui.film.FilmPalette) {
-    val spec = LocalFilmTheme.current
-    val shape = RoundedCornerShape(999.dp)
-    Text(
-        text = text,
-        color = color.textTertiary,
-        fontSize = spec.type.label,
-        fontFamily = FontFamily.Monospace,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, color.hairline, shape)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
-    )
-}
-
-@Composable
-private fun LoadPill(loaded: Boolean, installing: Boolean = false) {
+private fun LoadStateLabel(loaded: Boolean, installing: Boolean) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    val shape = RoundedCornerShape(999.dp)
-    // 「装卷中…」用呼吸动画：这是唯一一个"正在发生"的状态，需要一个时间维度。
-    val transition = rememberInfiniteTransition(label = "loading-pill")
+    val shape = RoundedCornerShape(spec.metrics.chipRadius)
+
+    val transition = rememberInfiniteTransition(label = "load-breath")
     val pulse by transition.animateFloat(
-        initialValue = 0.45f,
+        initialValue = 0.30f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(520), repeatMode = RepeatMode.Reverse),
-        label = "loading-pill-alpha",
+        animationSpec = infiniteRepeatable(animation = tween(450), repeatMode = RepeatMode.Reverse),
+        label = "load-breath-alpha",
     )
+
+    val active = loaded || installing
     val text = when {
         installing -> "装卷中…"
         loaded -> "已装卷"
         else -> "装卷"
     }
-    Text(
-        text = text,
-        color = when {
-            installing -> p.accent.copy(alpha = pulse)
-            loaded -> p.accent
-            else -> Color(0xFFEDEFF2)
-        },
-        fontSize = spec.type.label,
+    val textColor = if (active) p.accent else p.textTertiary
+    val dotColor = if (active) p.accent else p.textTertiary
+
+    Row(
         modifier = Modifier
             .clip(shape)
-            .background(
-                if (loaded || installing) p.accent.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.07f),
-            )
+            .background(if (active) p.accent.copy(alpha = 0.08f) else Color.Transparent)
             .border(
-                1.dp,
-                if (loaded || installing) p.accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.12f),
-                shape,
+                width = 1.dp,
+                color = if (active) p.accent.copy(alpha = 0.40f) else p.hairline,
+                shape = shape,
             )
-            .padding(horizontal = 11.dp, vertical = 4.dp),
-    )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(4.dp)
+                .background(
+                    color = when {
+                        installing -> dotColor.copy(alpha = pulse)
+                        loaded -> dotColor
+                        else -> Color.Transparent
+                    },
+                    shape = RoundedCornerShape(1.dp),
+                )
+                .then(
+                    if (loaded || installing) Modifier else Modifier.border(1.dp, dotColor, RoundedCornerShape(1.dp)),
+                ),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = textColor,
+            fontFamily = spec.type.monoFamily,
+            fontSize = spec.type.monoSmall,
+            maxLines = 1,
+        )
+    }
 }
 
 /**
- * 84×108 的画格。有真实成片就显示该卷最新一张（裁切填满），没有就画胶卷筒。
+ * 84×108 的画格：**该卷最新一张真实成片**；没拍过就画这卷本身（胶卷筒）。
  *
- * 原型这里的风景是 CSS 画的假场景，代表"这卷大概长这样"。我们既不能生成，
- * 也不该用一张假图冒充实拍（D-002），所以换成两个都能对上事实的东西：
- * 真拍过 → 你的片子；没拍过 → 这卷本身（胶卷筒）。
+ * 有图时保留上下两排齿孔 —— 它是"这是一格胶片"的物证；没有图时纸色打底、墨色筒身。
+ * 上一版叠了一道自下而上的暗渐变，那是为了在近黑底上救文字；现在是纸面 + 白边，
+ * 渐变属于规格禁止项（§1.1），已删。
  */
 @Composable
-private fun FilmFrame(stock: FilmStock, usage: StockUsage?) {
+private fun StockFrame(stock: FilmStock, usage: StockUsage?) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(spec.metrics.cardRadius)
     val thumb = usage?.latestThumbnail
 
     // 只解到 4 倍降采样：槽位 84×108，3 倍屏要 252×324 像素，
@@ -908,7 +685,10 @@ private fun FilmFrame(stock: FilmStock, usage: StockUsage?) {
         modifier = Modifier
             .size(width = 84.dp, height = 108.dp)
             .clip(shape)
-            .background(Color(0xFF0E1013)),
+            // 未拍过时是一块纸色凹格，墨色胶卷筒压在上面才读得出来；
+            // 有照片时这张底就被图盖住，只在图缝里露出胶片黑。
+            .background(if (bitmap != null) p.textPrimary else p.appBg)
+            .border(1.dp, p.hairline, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
@@ -918,40 +698,18 @@ private fun FilmFrame(stock: FilmStock, usage: StockUsage?) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-            // 上下齿孔。压一道胶片边框，让"这是胶片"一眼看得出，
-            // 而不是一张普通截图的缩略图。
             SprocketRow(modifier = Modifier.align(Alignment.TopCenter))
             SprocketRow(modifier = Modifier.align(Alignment.BottomCenter))
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
-                        ),
-                    ),
-            )
         } else {
-            FilmCanister(label = stock.label, capacity = 0, modifier = Modifier.padding(top = 6.dp))
-        }
-        if (thumb == null) {
-            Text(
-                text = "未拍过",
-                color = p.textTertiary,
-                fontSize = spec.type.label,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp),
-            )
+            FilmCanister(label = stock.label, capacity = 0)
         }
     }
 }
 
-/** 原型 `.sprocket`：`repeating-linear-gradient`，4px 孔 / 6px 间隔。 */
+/** 原型 `.sprocket`：`repeating-linear-gradient`，4px 孔 / 6px 间隔。这里画成墨色方块。 */
 @Composable
 private fun SprocketRow(modifier: Modifier = Modifier) {
+    val p = LocalFilmTheme.current.palette
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -962,7 +720,7 @@ private fun SprocketRow(modifier: Modifier = Modifier) {
         var x = 0f
         while (x < size.width) {
             drawRect(
-                color = Color(0xE0060606),
+                color = p.textPrimary,
                 topLeft = Offset(x, 0f),
                 size = Size(hole.coerceAtMost(size.width - x), size.height),
             )
@@ -971,92 +729,194 @@ private fun SprocketRow(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun EmptyLibrary(onRefresh: () -> Unit) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
+// ---------------------------------------------------------------------------
+// 胶卷筒插画（纸色体系）
+// ---------------------------------------------------------------------------
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(p.controlFill)
-                .border(spec.metrics.hairline, p.hairline, RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            FilmIcon(kind = FilmIconKind.Filmstrip, tint = p.inkMuted, iconSize = 22.dp)
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "还没有胶卷",
-            color = p.ink,
-            fontSize = spec.type.optionTitle,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            // 这页空着唯一的原因是 pack 没推进去，所以直接把该做的事写出来，
-            // 而不是留一句"暂无数据"。
-            text = "还没有可用的胶卷\n点下面的按钮重新扫描",
-            color = p.textSecondary,
-            fontSize = spec.type.body,
-            lineHeight = 18.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(18.dp))
-        DarkButton(label = "重新扫描", modifier = Modifier.width(132.dp), onClick = onRefresh)
-    }
-}
-
+/**
+ * 58×93 的胶卷筒：墨色筒身 + 浅一档的顶盖/底唇 + 纸白标签。
+ *
+ * 上一版是"金属筒身 + 奶油标签 + 金色系印刷"，属于 D-063 明令去掉的金属/暖金。
+ * 现在只用两个墨色阶（`textPrimary` 筒身、`ink` 盖与唇）和纸白标签：
+ * **没有渐变**，边界靠 1px 描边而不是光影 —— 纸面页的层级规则同样
+ * 适用于插画（§1.1）。
+ *
+ * 总高 93dp 而非 84：原型靠 `::before` / `::after` 的负 top/bottom 溢出，
+ * 这里直接把盖子算进测量高度，避免依赖"父容器不裁剪"这种隐式前提。
+ */
 @Composable
-private fun DarkButton(
-    label: String,
-    onClick: () -> Unit,
+private fun FilmCanister(
+    label: String?,
+    capacity: Int,
     modifier: Modifier = Modifier,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
-    val shape = RoundedCornerShape(10.dp)
-    Box(
-        modifier = modifier
-            .height(48.dp)
-            .clip(shape)
-            .background(p.controlFill)
-            .border(spec.metrics.hairline, p.hairlineStrong, shape)
-            .filmClickable(
-                onClick = onClick,
-                overlayAlpha = 0.05f,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = label, color = p.inkStrong, fontSize = spec.type.optionTitle)
+    val bodyW = 58.dp
+    val bodyH = 84.dp
+    val capH = 7.dp
+    val capOver = 5.dp
+    val lipH = 6.dp
+    // 顶盖比筒身高出 5dp、底唇比筒身低 4dp，所以测量高度是 93 而不是 84。
+    // 原型靠伪元素的负定位溢出，这里直接把溢出算进高度，免得依赖父容器不裁剪。
+    val totalH = 93.dp
+
+    Box(modifier = modifier.size(width = bodyW, height = totalH)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val s = bodyW.toPx() / 58f
+            val bodyTop = capOver.toPx()
+
+            // 筒身：平涂墨黑。
+            drawRoundRect(
+                color = p.textPrimary,
+                topLeft = Offset(0f, bodyTop),
+                size = Size(w, bodyH.toPx()),
+                cornerRadius = CornerRadius(9f * s, 9f * s),
+            )
+            // 筒身外缘：1px 纸白描边。纸面上不靠投影立起来，靠一条亮边。
+            drawRoundRect(
+                color = p.sheetBg.copy(alpha = 0.20f),
+                topLeft = Offset(0f, bodyTop),
+                size = Size(w, bodyH.toPx()),
+                cornerRadius = CornerRadius(9f * s, 9f * s),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+
+            // 顶盖：比筒身浅一档的墨（p.ink），加 1px 纸白描边区分边界。
+            val capInset = 8f * s
+            val capTop = Offset(capInset, 0f)
+            val capSize = Size(w - capInset * 2, capH.toPx())
+            drawRoundRect(
+                color = p.ink,
+                topLeft = capTop,
+                size = capSize,
+                cornerRadius = CornerRadius(3f * s, 3f * s),
+            )
+            drawRoundRect(
+                color = p.sheetBg.copy(alpha = 0.35f),
+                topLeft = capTop,
+                size = capSize,
+                cornerRadius = CornerRadius(3f * s, 3f * s),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+
+            // 底唇：底边贴住 totalH，往上叠 2dp 压进筒身，接缝不会露缝。
+            val lipInset = 14f * s
+            val lipTop = Offset(lipInset, totalH.toPx() - lipH.toPx())
+            val lipSize = Size(w - lipInset * 2, lipH.toPx())
+            drawRoundRect(
+                color = p.ink,
+                topLeft = lipTop,
+                size = lipSize,
+                cornerRadius = CornerRadius(2f * s, 2f * s),
+            )
+            drawRoundRect(
+                color = p.sheetBg.copy(alpha = 0.30f),
+                topLeft = lipTop,
+                size = lipSize,
+                cornerRadius = CornerRadius(2f * s, 2f * s),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+        }
+
+        // 标签贴纸：left/right 6，top 22，bottom 17（相对筒身）。纸白底 + 墨字。
+        Column(
+            modifier = Modifier
+                .width(bodyW - 12.dp)
+                .height(bodyH - 22.dp - 17.dp)
+                .offset(x = 6.dp, y = capOver + 22.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(p.sheetBg)
+                .border(1.dp, p.hairline, RoundedCornerShape(3.dp))
+                .padding(horizontal = 4.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            val parts = (label ?: "—").trim().split(Regex("\\s+"), limit = 2)
+            // 第二行原本写「400 · 36」，400 是 ISO —— pack 里没有这个字段，属于猜。
+            // 现在只印卷名的后半段和真实卷容量；两者都没有就不印那一行。
+            val secondLine = listOfNotNull(
+                parts.getOrNull(1)?.takeIf { it.isNotBlank() },
+                capacity.takeIf { it > 0 }?.toString(),
+            ).joinToString(" · ")
+
+            Text(
+                text = parts.firstOrNull()?.uppercase() ?: "—",
+                color = p.textPrimary,
+                // micro-print: 仿真印刷标签，装饰，不承载信息
+                fontSize = spec.type.microPrint,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.02).em,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (secondLine.isNotBlank()) {
+                Text(
+                    text = secondLine,
+                    color = p.textTertiary,
+                    // micro-print: 仿真印刷标签，装饰，不承载信息
+                    fontSize = spec.type.microPrint,
+                    fontFamily = spec.type.monoFamily,
+                    letterSpacing = 0.06.em,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// 数据与预览
+// ---------------------------------------------------------------------------
+
+/**
+ * 画幅（`4:3`）。像素尺寸 `4096×3072` 是内部参数、不上屏（D-050），
+ * 但"这卷拍出来是什么形状"用户看得懂，所以用真实宽高约分后保留。
+ */
+private fun aspectLabel(width: Int, height: Int): String {
+    if (width <= 0 || height <= 0) return "—"
+    val g = gcd(width, height)
+    return "${width / g}:${height / g}"
+}
+
+private fun gcd(a: Int, b: Int): Int {
+    var x = kotlin.math.abs(a)
+    var y = kotlin.math.abs(b)
+    while (y != 0) {
+        val t = x % y
+        x = y
+        y = t
+    }
+    return x.coerceAtLeast(1)
 }
 
 /** `10.19`。只取月日：卷是按卷分组的，年份在库里没有信息量。 */
 private fun monthDay(epochMillis: Long): String {
     val c = java.util.Calendar.getInstance().apply { timeInMillis = epochMillis }
-    return "%02d.%02d".format(c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH))
+    return "%02d.%02d".format(
+        c.get(java.util.Calendar.MONTH) + 1,
+        c.get(java.util.Calendar.DAY_OF_MONTH),
+    )
 }
 
 private fun previewStock(id: String, label: String, w: Int, h: Int) = FilmStock(
     id = id,
     label = label,
-    file = File("$id" + "__${w}x$h.fswp"),
+    // 预览不碰磁盘：不需要（也不该）出现 `.fswp` 文件名。
+    file = File("preview-$id"),
     width = w,
     height = h,
     maxHalo = 64,
 )
 
-@Preview(widthDp = 380, heightDp = 900, showBackground = true, backgroundColor = 0xFF0B0C0E)
+/** 预览里的"上次拍摄"时间：2026-10-19，用于让日期那行有真实排版。 */
+private const val PREVIEW_CAPTURED_AT = 1_792_368_000_000L
+
+@Preview(widthDp = 380, heightDp = 900, showBackground = true, backgroundColor = 0xFFECEAE4)
 @Composable
 private fun FilmLibraryPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         FilmLibraryScreen(
             stocks = listOf(
                 previewStock("gold200", "GOLD 200", 4096, 3072),
@@ -1071,17 +931,25 @@ private fun FilmLibraryPreview() {
             onNewRoll = {},
             onRefresh = {},
             usage = mapOf(
-                "gold200" to StockUsage(shots = 12, latestThumbnail = null),
-                "portra400" to StockUsage(shots = 3, latestThumbnail = null),
+                "gold200" to StockUsage(
+                    shots = 12,
+                    latestThumbnail = null,
+                    lastCapturedAt = PREVIEW_CAPTURED_AT,
+                ),
+                "portra400" to StockUsage(
+                    shots = 3,
+                    latestThumbnail = null,
+                    lastCapturedAt = PREVIEW_CAPTURED_AT,
+                ),
             ),
         )
     }
 }
 
-@Preview(widthDp = 380, heightDp = 900, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Preview(widthDp = 380, heightDp = 900, showBackground = true, backgroundColor = 0xFFECEAE4)
 @Composable
 private fun FilmLibraryEmptyPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         FilmLibraryScreen(
             stocks = emptyList(),
             selectedStockId = null,

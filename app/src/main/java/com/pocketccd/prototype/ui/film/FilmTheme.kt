@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -96,6 +97,14 @@ data class FilmMetrics(
     val cornerInsetX: Dp = 18.dp,
     val cornerInsetY: Dp = 18.dp,
     val reticle: Dp = 24.dp,
+    /** 纸面页内容边距（D-063）。取景页仍用页面内自己的 12/16/20 计算。 */
+    val pageMargin: Dp = 24.dp,
+    /** 纸面页的面板/卡片圆角：纸张方向 = 0–2dp。 */
+    val surfaceRadius: Dp = 0.dp,
+    /** 索引卡/印相格圆角。 */
+    val cardRadius: Dp = 2.dp,
+    /** 照片纸边圆角。 */
+    val printRadius: Dp = 2.dp,
 )
 
 /**
@@ -109,6 +118,12 @@ data class FilmMetrics(
  */
 @Immutable
 data class FilmType(
+    /** 页面主标题字体。纸面方向用系统 Serif；取景/金属方向用 Sans。 */
+    val titleFamily: FontFamily = FontFamily.SansSerif,
+    val bodyFamily: FontFamily = FontFamily.SansSerif,
+    val monoFamily: FontFamily = FontFamily.Monospace,
+    /** 纸面页唯一大标题。 */
+    val display: TextUnit = 32.sp,
     /** 页面标题。 */
     val sheetTitle: TextUnit = 16.sp,
     /** 行标题 / 强调信息。 */
@@ -129,6 +144,29 @@ data class FilmType(
     val counterBig: TextUnit = 30.sp,
     /** 只允许用于胶卷筒 / 包装上的仿真印刷字，**不得承载信息**。 */
     val microPrint: TextUnit = 9.sp,
+    val titleLineHeight: TextUnit = 34.sp,
+    val sheetTitleLineHeight: TextUnit = 20.sp,
+    val bodyLineHeight: TextUnit = 18.sp,
+    val labelLineHeight: TextUnit = 16.sp,
+    val monoLineHeight: TextUnit = 16.sp,
+)
+
+/** 动效令牌（D-063）。取景页偏机械，纸面页偏硬切。 */
+@Immutable
+data class FilmMotion(
+    val pressScale: Float = 0.96f,
+    val pressStiffness: Float = 900f,
+    val pressDamping: Float = 0.62f,
+    /** true = 弹簧回弹；false = 90ms 硬切（白纸档案）。 */
+    val pressUseSpring: Boolean = true,
+    val pressMs: Int = 90,
+    val stateMs: Int = 160,
+    val pageEnterMs: Int = 200,
+    val pageExitMs: Int = 160,
+    val sheetEnterMs: Int = 240,
+    val revealMs: Int = 400,
+    val pulseMs: Int = 760,
+    val scanMs: Int = 1900,
 )
 
 @Immutable
@@ -136,6 +174,7 @@ data class FilmThemeSpec(
     val palette: FilmPalette,
     val metrics: FilmMetrics = FilmMetrics(),
     val type: FilmType = FilmType(),
+    val motion: FilmMotion = FilmMotion(),
 )
 
 /** Design baseline: `docs/reference/film-dark-home-2026-10-19.html`. */
@@ -193,6 +232,166 @@ val FilmDarkSpec = FilmThemeSpec(
             Color(0xFFD95C4A),
             Color(0xFFA83226),
         ),
+    ),
+)
+
+/**
+ * D-063「白纸档案」的黑闸门：取景页专用。
+ *
+ * 保留暗色取景的工艺理由（取景时不该有暖色污染判断），但把强调色从香槟金
+ * 换成纸白：闸门上只有刻线与纸白，快门红点改为墨点。相机链路完全不读颜色以外的
+ * 东西，所以这层只是视觉替换。
+ */
+val FilmGateSpec = FilmDarkSpec.copy(
+    palette = FilmDarkSpec.palette.copy(
+        appBg = Color(0xFF0A0B0C),
+        windowBg = Color(0xFF030304),
+        viewfinderBg = Color(0xFF0A0B0C),
+        textPrimary = Color(0xFFEDEAE3),
+        textSecondary = Color(0xFFEDEAE3).copy(alpha = 0.70f),
+        textTertiary = Color(0xFFEDEAE3).copy(alpha = 0.52f),
+        accent = Color(0xFFEDEAE3),
+        onAccent = Color(0xFF16181A),
+        ink = Color(0xFFEDEAE3).copy(alpha = 0.80f),
+        inkStrong = Color(0xFFEDEAE3).copy(alpha = 0.95f),
+        inkMuted = Color(0xFFEDEAE3).copy(alpha = 0.52f),
+        inkFaint = Color(0xFFEDEAE3).copy(alpha = 0.36f),
+        inkGhost = Color(0xFFEDEAE3).copy(alpha = 0.24f),
+        hairline = Color(0xFFFFFFFF).copy(alpha = 0.10f),
+        hairlineStrong = Color(0xFFFFFFFF).copy(alpha = 0.16f),
+        controlFill = Color(0xFFFFFFFF).copy(alpha = 0.05f),
+        chipFill = Color(0xFF000000).copy(alpha = 0.30f),
+        error = Color(0xFFB84A3A),
+        panelMetal = listOf(
+            Color(0xFF101214),
+            Color(0xFF0C0D0F),
+            Color(0xFF0A0B0C),
+            Color(0xFF070808),
+        ),
+        wellFill = Color(0xFF050606),
+        shutterRing = listOf(
+            Color(0xFFEDEAE3),
+            Color(0xFF8B8880),
+            Color(0xFFEDEAE3),
+            Color(0xFF5F5C56),
+            Color(0xFFD9D6CC),
+        ),
+        shutterFace = listOf(
+            Color(0xFFF6F4EE),
+            Color(0xFFE8E4DA),
+            Color(0xFFD6D1C4),
+        ),
+        shutterDot = listOf(
+            Color(0xFF16181A),
+            Color(0xFF0A0B0C),
+        ),
+    ),
+    type = FilmType(
+        sheetTitle = 18.sp,
+        optionTitle = 16.sp,
+        value = 14.sp,
+        body = 14.sp,
+        mono = 12.sp,
+        monoSmall = 11.sp,
+        label = 12.sp,
+        rail = 13.sp,
+        counterBig = 30.sp,
+        microPrint = 9.sp,
+        bodyLineHeight = 20.sp,
+        labelLineHeight = 15.sp,
+        monoLineHeight = 15.sp,
+    ),
+    motion = FilmMotion(
+        pressScale = 0.97f,
+        pressUseSpring = false,
+        pressMs = 90,
+        stateMs = 120,
+        pageEnterMs = 160,
+        pageExitMs = 120,
+        revealMs = 300,
+        pulseMs = 0,
+        scanMs = 0,
+    ),
+)
+
+/**
+ * D-063「白纸档案」的纸面：成片 / 照片墙 / 胶卷库 / 设置 / 声明。
+ *
+ * 彩色照片落在中性纸上，颜色由内容提供，界面不提供任何色偏。纸面没有阴影、
+ * 没有渐变，层级只靠 1px 规则线与纸色明度差。
+ */
+val FilmPaperSpec = FilmThemeSpec(
+    palette = FilmPalette(
+        appBg = Color(0xFFECEAE4),
+        windowBg = Color(0xFF0A0B0C),
+        sheetBg = Color(0xFFF6F4EE),
+        viewfinderBg = Color(0xFF0A0B0C),
+        textPrimary = Color(0xFF16181A),
+        textSecondary = Color(0xFF4A4E52),
+        textTertiary = Color(0xFF61676C),
+        accent = Color(0xFF4F6B7A),
+        onAccent = Color(0xFFFFFFFF),
+        ink = Color(0xFF2A2E31),
+        inkStrong = Color(0xFF16181A),
+        inkMuted = Color(0xFF4A4E52),
+        inkFaint = Color(0xFF61676C),
+        inkGhost = Color(0xFF8A8F93),
+        hairline = Color(0xFF16181A).copy(alpha = 0.12f),
+        hairlineStrong = Color(0xFF16181A).copy(alpha = 0.20f),
+        controlFill = Color(0xFF16181A).copy(alpha = 0.05f),
+        chipFill = Color(0xFF16181A).copy(alpha = 0.08f),
+        error = Color(0xFFB23A2A),
+        bezelMetal = listOf(Color(0xFFECEAE4), Color(0xFFF6F4EE)),
+        panelMetal = listOf(
+            Color(0xFFF6F4EE),
+            Color(0xFFECEAE4),
+            Color(0xFFE4E1D9),
+            Color(0xFFDCD8CF),
+        ),
+        wellFill = Color(0xFFE4E1D9),
+        shutterRing = listOf(Color(0xFFEDEAE3), Color(0xFFCFCCC2)),
+        shutterFace = listOf(Color(0xFFF6F4EE), Color(0xFFECEAE4)),
+        shutterDot = listOf(Color(0xFF16181A), Color(0xFF16181A)),
+    ),
+    metrics = FilmMetrics(
+        pageMargin = 24.dp,
+        surfaceRadius = 0.dp,
+        cardRadius = 2.dp,
+        printRadius = 2.dp,
+        chipRadius = 2.dp,
+        sheetRadius = 2.dp,
+        viewfinderRadius = 0.dp,
+    ),
+    type = FilmType(
+        titleFamily = FontFamily.Serif,
+        display = 32.sp,
+        sheetTitle = 24.sp,
+        sheetTitleLineHeight = 30.sp,
+        optionTitle = 16.sp,
+        value = 14.sp,
+        body = 14.sp,
+        mono = 12.sp,
+        monoSmall = 11.sp,
+        label = 12.sp,
+        rail = 13.sp,
+        counterBig = 30.sp,
+        microPrint = 9.sp,
+        titleLineHeight = 34.sp,
+        bodyLineHeight = 22.sp,
+        labelLineHeight = 16.sp,
+        monoLineHeight = 16.sp,
+    ),
+    motion = FilmMotion(
+        pressScale = 0.97f,
+        pressUseSpring = false,
+        pressMs = 90,
+        stateMs = 120,
+        pageEnterMs = 160,
+        pageExitMs = 120,
+        sheetEnterMs = 200,
+        revealMs = 300,
+        pulseMs = 0,
+        scanMs = 0,
     ),
 )
 

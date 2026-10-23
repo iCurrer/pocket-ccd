@@ -53,12 +53,12 @@
     <string name="settings_placeholder">设置占位</string>
     <string name="settings_header">SETTINGS</string>
     <string name="settings_back">返回首页</string>
-    <string name="settings_subtitle">POCKET CCD · 本地相机</string>
+    <string name="settings_subtitle">SETTINGS</string>
     <string name="settings_section_photos">照片</string>
     <string name="settings_section_about">关于</string>
     <string name="settings_section_developer">开发者</string>
     <string name="settings_save_location">保存位置</string>
-    <string name="settings_save_location_value">Pocket CCD 相册 · 仅本应用</string>
+    <string name="settings_save_location_value">本应用 + 系统相册</string>
     <string name="settings_save_location_value_short">本地</string>
     <string name="settings_default_filter">默认滤镜</string>
     <string name="settings_filter_daylight">日光</string>
@@ -86,7 +86,8 @@
     <string name="settings_licenses_subtitle">胶片档案 · 第三方组件 · 商标</string>
     <string name="settings_licenses_value">CC BY-SA 4.0</string>
     <string name="licenses_title">开源与素材声明</string>
-    <string name="licenses_subtitle">OPEN SOURCE · CREDITS</string>
+    <string name="licenses_intro">本应用使用的胶片引擎、胶片档案与第三方组件如下。胶片档案按 CC BY-SA 4.0 分发，文件保持可读出、可替换。</string>
+    <string name="licenses_subtitle">LICENSES</string>
     <string name="licenses_section_engine">胶片与渲染引擎</string>
     <string name="licenses_engine_body">Film simulation engine: Fotufilm\nhttps://fotufilm.com\nCopyright MUAStudio Inc.\n\n引擎代码 Apache-2.0；胶片档案（film profiles）CC BY-SA 4.0。\n\n本应用对引擎做了修改：跨平台移植到 Android（C++/JNI 适配），并把胶片档案按帧尺寸预烘焙成 .fswp 文件。修改后的胶片档案仍以 CC BY-SA 4.0 分发。\n\nPocket CCD 与 Fotufilm、MUAStudio Inc. 无从属关系，也未获其背书。</string>
     <string name="licenses_section_packs">本机的胶片文件</string>

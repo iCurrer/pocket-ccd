@@ -1,64 +1,61 @@
-package com.pocketccd.prototype.ui.result
+﻿package com.pocketccd.prototype.ui.result
 
 import android.graphics.BitmapFactory
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.pocketccd.prototype.camera.PhotoExif
 import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.camera.readPhotoExif
-import com.pocketccd.prototype.ui.film.FilmButton
-import com.pocketccd.prototype.ui.film.FilmButtonStyle
 import com.pocketccd.prototype.ui.film.FilmIconKind
+import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmRoundButton
-import com.pocketccd.prototype.ui.film.FilmDarkSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.LocalFilmTheme
+import com.pocketccd.prototype.ui.film.PaperButton
+import com.pocketccd.prototype.ui.film.PaperEmptyState
+import com.pocketccd.prototype.ui.film.PaperHairline
+import com.pocketccd.prototype.ui.film.PaperPageHeader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 
@@ -72,19 +69,31 @@ enum class ResultStatus {
 /** 页面实际呈现的四种形态。`status` + `photo` + `demo` 三个输入都折到这里。 */
 private enum class Stage { SAVED, DEVELOPING, FAILED, EMPTY }
 
+/** 印相纸边：印相框内窗四周的纸白留边（规格 §4 `PrintFrame`）。 */
+private val PrintEdge = 6.dp
+
+/** 只给 `@Preview` 画布铺纸底用；界面取色一律走 `LocalFilmTheme`，不读这个常量。 */
+private const val PreviewPaperBg = 0xFFECEAE4L
+
+/** 打字机每打一个字的间隔。三个字 ≈ 210ms，与 200ms 的阶段淡入同拍。 */
+private const val TypewriterCharMs = 70L
+
 /**
- * 成片页（T9-018 / D-043 / D-045）。
+ * 成片页（T9-018 / D-043 / D-045；视觉方向 C「白纸档案」D-063）。
  *
- * 视觉照 `docs/reference/pages/gallery.html` 的单张详情重排：顶部标题栏、
- * 居中的画框、`FRAME n / capacity` 行、三列参数网格、底部动作行。
+ * 整页是一张相纸：页头（Serif「成片」+ mono 真实卷名/片号）、居中的印相
+ * （88% 宽、6dp 纸白边、1px 墨线、2dp 圆角、**无阴影**）、三行 colophon
+ * （DATE / EXPOSURE / FILM，值来自真实文件与 EXIF）、底部墨色 `PaperButton`。
  *
- * **数据只显示真的**：
+ * **数据只显示真的**（D-002 / D-043）：
  * - 画幅比例取 [SavedPhoto.width]/[SavedPhoto.height]，不写死 4:3；
- * - 参数网格全部来自 [readPhotoExif]，读不到的那一项显示 `—`；
- * - `FRAME` 行只在拿到真实本卷张数（[frameIndex]）时才画；
- * - 原型右上角的 `3:2 · 6000×4000` 换成真实像素尺寸，`DNG + JPG` 直接删掉（只出 JPEG）。
+ * - colophon 全部来自 [readPhotoExif] 与 [SavedPhoto.capturedAt]，读不到显示 `—`；
+ * - 副题的 `FRAME 05 / 36` 只在拿到真实本卷片号（[frameIndex]）时才拼；
+ * - 不显示 `renderMillis` / `strips` / 文件路径 / 像素尺寸这类内部参数，
+ *   也不编 ISO / 光圈 / 百分比。
  *
- * 这个页面仍然不碰相机、文件和 MediaStore：只渲染传进来的状态。
+ * **保留的数据链路**：`ResultStatus` 三态语义、`CaptureState` 的映射（在 `AppRoot`）、
+ * EXIF 异步读取、失败重试回调都没动，这次只换版式与样式。
  */
 @Composable
 fun ResultScreen(
@@ -114,7 +123,7 @@ fun ResultScreen(
     // EXIF 从成片文件读，但**不能**在 composition 里同步读：一张 3–5MB 的 JPEG
     // 要打开/解析文件头，写在 remember 里等于在首帧主线程上做 IO（P3-15）。
     // produceState 先画 `—`，IO 线程读完再刷新；切照片时按路径重启。
-    // 读不到就是空对象 → 参数格显示 `—`，绝不拿设计稿数值兜底（D-043）。
+    // 读不到就是空对象 → colophon 显示 `—`，绝不拿设计稿数值兜底（D-043）。
     val photoFile = photo?.fullFile
     val exif by produceState(
         initialValue = PhotoExif(),
@@ -127,613 +136,575 @@ fun ResultScreen(
         }
     }
     val resolvedStock = photo?.stockLabel ?: stockLabel
+    val actions = resultActions(
+        stage = stage,
+        onBackToCamera = onBackToCamera,
+        onOpenPhotoWall = onOpenPhotoWall,
+        onRetry = onRetry,
+    )
 
+    // 整页纸面可滚：200% 字体或小屏时内容变高，底部的操作必须还能滚到。
+    // 页头也一起滚 —— 纸面页不需要常驻的标题栏。
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(p.appBg)
-            .padding(horizontal = spec.metrics.gutterWide),
+            .verticalScroll(rememberScrollState()),
     ) {
-        ResultTopBar(
-            stage = stage,
-            stockLabel = resolvedStock,
-            canOpenWall = stage == Stage.SAVED,
-            onBackToCamera = onBackToCamera,
-            onOpenPhotoWall = onOpenPhotoWall,
+        PaperPageHeader(
+            title = "成片",
+            // 缺失的项直接省略：不拿 `FRAME 00 / 0` 充数。
+            subtitle = resultSubtitle(
+                photo = photo,
+                stockLabel = resolvedStock,
+                frameIndex = frameIndex,
+                rollCapacity = rollCapacity,
+            ),
+            onBack = onBackToCamera,
+            trailing = {
+                FilmRoundButton(
+                    icon = FilmIconKind.ImageMultiple,
+                    onClick = onOpenPhotoWall,
+                )
+            },
         )
 
+        Spacer(Modifier.height(16.dp))
+
+        when (stage) {
+            // stage == SAVED 由 `photo != null` 推出，这里显式取一次带类型收窄的值。
+            Stage.SAVED -> photo?.let { saved ->
+                SavedPrint(
+                    photo = saved,
+                    stockLabel = resolvedStock,
+                    exif = exif,
+                    modifier = Modifier.padding(horizontal = spec.metrics.pageMargin),
+                )
+            }
+
+            Stage.DEVELOPING -> DevelopingBody(
+                status = status,
+                modifier = Modifier.padding(horizontal = spec.metrics.pageMargin),
+            )
+
+            Stage.FAILED -> FailedBody(
+                failureMessage = failureMessage,
+                modifier = Modifier.padding(horizontal = spec.metrics.pageMargin),
+            )
+
+            // 空态自带 24dp 内容边距与 48dp 纵向留白，外层不要再套横向 padding。
+            Stage.EMPTY -> PaperEmptyState(
+                title = "还没有拍过",
+                body = "回到取景按快门，第一张成片会落在这张纸上。",
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        BottomActions(
+            primaryLabel = actions.primaryLabel,
+            onPrimary = actions.onPrimary,
+            secondaryLabel = actions.secondaryLabel,
+            onSecondary = actions.onSecondary,
+            modifier = Modifier.padding(horizontal = spec.metrics.pageMargin),
+        )
+
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 页头副题 / 底部操作
+// ---------------------------------------------------------------------------
+
+/** `GOLD 200 · FRAME 05 / 36`；只有真实存在的项才拼进去，全缺就返回 null（页头不画副题）。 */
+private fun resultSubtitle(
+    photo: SavedPhoto?,
+    stockLabel: String?,
+    frameIndex: Int,
+    rollCapacity: Int,
+): String? {
+    // 片号只在有真实成片时成立：冲洗中/失败时 frameIndex 是"本卷已存张数"，
+    // 不是这张的序号，拼上去会把上一张的号说成这一张的。
+    val frame = if (photo != null && frameIndex > 0 && rollCapacity > 0) {
+        "FRAME %02d / %d".format(frameIndex, rollCapacity)
+    } else {
+        null
+    }
+    return listOfNotNull(stockLabel?.takeIf { it.isNotBlank() }, frame)
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(" · ")
+}
+
+/** 一屏最多两个动作：主操作（墨底）在右，次操作（描边）在左。 */
+private data class ResultAction(
+    val primaryLabel: String,
+    val onPrimary: () -> Unit,
+    val secondaryLabel: String? = null,
+    val onSecondary: (() -> Unit)? = null,
+)
+
+/**
+ * 动作映射**沿用旧页面的回调归属**，只换文案与纸面按钮：
+ * - 成片：主「继续拍摄」回相机，次「回相册」去照片墙（旧版「打开相册」）；
+ * - 冲洗中：只留「继续拍摄」——旧版两个按钮都回相机，重复且没有第二个含义；
+ * - 失败：主「重试」重跑这次冲洗，次「重拍」回取景重新拍；
+ * - 空态：主「继续拍摄」回取景。
+ */
+private fun resultActions(
+    stage: Stage,
+    onBackToCamera: () -> Unit,
+    onOpenPhotoWall: () -> Unit,
+    onRetry: () -> Unit,
+): ResultAction = when (stage) {
+    Stage.SAVED -> ResultAction(
+        primaryLabel = "继续拍摄",
+        onPrimary = onBackToCamera,
+        secondaryLabel = "回相册",
+        onSecondary = onOpenPhotoWall,
+    )
+
+    Stage.DEVELOPING -> ResultAction(
+        primaryLabel = "继续拍摄",
+        onPrimary = onBackToCamera,
+    )
+
+    Stage.FAILED -> ResultAction(
+        primaryLabel = "重试",
+        onPrimary = onRetry,
+        secondaryLabel = "重拍",
+        onSecondary = onBackToCamera,
+    )
+
+    Stage.EMPTY -> ResultAction(
+        primaryLabel = "继续拍摄",
+        onPrimary = onBackToCamera,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 成片：印相 + colophon
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun SavedPrint(
+    photo: SavedPhoto,
+    stockLabel: String?,
+    exif: PhotoExif,
+    modifier: Modifier = Modifier,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+
+    // 画幅比例取真实宽高，不写死 4:3；比例坏掉才退回 4:3。
+    val aspect = if (photo.width > 0 && photo.height > 0) {
+        photo.width.toFloat() / photo.height.toFloat()
+    } else {
+        4f / 3f
+    }
+
+    // 缩略图解码必须离开主线程：`BitmapFactory.decodeFile` 是一张 1440px 长边的
+    // JPEG，主线程解一次就是好几毫秒的掉帧。采样逻辑不变——只用 PhotoStore 已经
+    // 压过的缩略图，绝不在这里碰 12MP 原片（会解码出 48MB 的 ARGB）。
+    val thumbnail = photo.thumbnailFile
+    val image by produceState<PrintImage>(
+        initialValue = PrintImage.Loading,
+        key1 = thumbnail.absolutePath,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            if (!thumbnail.isFile) {
+                PrintImage.Missing
+            } else {
+                BitmapFactory.decodeFile(thumbnail.absolutePath)
+                    ?.asImageBitmap()
+                    ?.let(PrintImage::Ready)
+                    ?: PrintImage.Missing
+            }
+        }
+    }
+
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth(0.88f)) {
+                PrintFrame(
+                    aspect = aspect,
+                    bitmap = (image as? PrintImage.Ready)?.bitmap,
+                    contentDescription = stockLabel?.let { "成片：$it" },
+                    emptyLabel = if (image is PrintImage.Missing) "缩略图缺失" else null,
+                )
+                if (stockLabel != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stockLabel,
+                        color = p.textPrimary,
+                        fontFamily = spec.type.titleFamily,
+                        fontSize = spec.type.optionTitle,
+                        lineHeight = spec.type.bodyLineHeight,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Colophon(
+            capturedAt = photo.capturedAt,
+            exif = exif,
+            stockLabel = stockLabel,
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // 「这张存到哪了」是真实状态（galleryUri 只在刚拍完那次有效），
+        // 不显示 renderMillis / strips —— 重建的历史记录里它们都是 0，画出来就是假数。
+        Text(
+            text = if (photo.galleryUri != null) "已存入系统相册" else "已保存到本机",
+            color = p.textTertiary,
+            fontFamily = spec.type.monoFamily,
+            fontSize = spec.type.mono,
+            lineHeight = spec.type.monoLineHeight,
+            letterSpacing = 0.06.em,
+        )
+    }
+}
+
+/**
+ * 印相框（规格 §4 `PrintFrame`）：图片外 6dp 纸白边 + 1px 墨线，圆角 2dp，**无阴影**。
+ *
+ * 没有成片（冲洗中）或缩略图丢了时，内窗是一块**纸色空窗**，不是灯箱黑块：
+ * 纸面页上唯一允许出现的黑色是照片本身，空窗不替照片占位成假画面。
+ */
+@Composable
+private fun PrintFrame(
+    aspect: Float,
+    modifier: Modifier = Modifier,
+    bitmap: ImageBitmap? = null,
+    contentDescription: String? = null,
+    emptyLabel: String? = null,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val shape = RoundedCornerShape(spec.metrics.printRadius)
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(p.sheetBg)
+            .border(spec.metrics.hairline, p.hairline, shape)
+            .padding(PrintEdge),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .aspectRatio(aspect)
+                .background(p.appBg),
             contentAlignment = Alignment.Center,
         ) {
-            PhotoFrame(stage = stage, photo = photo, stockLabel = resolvedStock, status = status)
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        FrameCaption(
-            photo = photo,
-            frameIndex = frameIndex,
-            rollCapacity = rollCapacity,
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        ParameterGrid(
-            capturedAt = photo?.capturedAt,
-            exif = exif,
-            stockLabel = resolvedStock,
-        )
-
-        if (stage == Stage.FAILED && failureMessage != null) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = failureMessage,
-                style = MonoSmall.copy(color = p.error),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        StatusRow(status = status, stage = stage, photo = photo)
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        ActionRow(
-            stage = stage,
-            onPrimary = if (stage == Stage.FAILED) onRetry else onBackToCamera,
-            onSecondary = if (stage == Stage.SAVED) onOpenPhotoWall else onBackToCamera,
-            primaryLabel = if (stage == Stage.FAILED) "重试" else "继续拍摄",
-            secondaryLabel = if (stage == Stage.SAVED) "打开相册" else "返回相机",
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun ResultTopBar(
-    stage: Stage,
-    stockLabel: String?,
-    canOpenWall: Boolean,
-    onBackToCamera: () -> Unit,
-    onOpenPhotoWall: () -> Unit,
-) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    // 左右两侧都是 48dp 热区，标题因此天然居中，不需要再算偏移。
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FilmRoundButton(
-            icon = FilmIconKind.Close,
-            onClick = onBackToCamera,
-            iconSize = 15.dp,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(4f),
-        ) {
-            Text(
-                text = when (stage) {
-                    Stage.SAVED -> "已冲洗"
-                    Stage.DEVELOPING -> "正在冲洗"
-                    Stage.FAILED -> "冲洗失败"
-                    Stage.EMPTY -> "还没有照片"
-                },
-                style = TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontSize = spec.type.optionTitle,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.04.em,
-                    color = p.textPrimary,
-                ),
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = stockLabel ?: "POCKET CCD",
-                style = MonoSmall.copy(color = p.textTertiary),
-            )
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        FilmRoundButton(
-            icon = FilmIconKind.ImageMultiple,
-            onClick = onOpenPhotoWall,
-            enabled = canOpenWall,
-            iconSize = 15.dp,
-        )
-    }
-}
-
-/**
- * 画框。宽度取 `min(可用宽, 可用高 × 画幅比)`，保证 4:3 的框在任何屏幕上
- * 都不会被压扁或溢出 —— 直接用 `aspectRatio` + `fillMaxWidth` 在小屏上会顶出父容器。
- */
-@Composable
-private fun PhotoFrame(
-    stage: Stage,
-    photo: SavedPhoto?,
-    stockLabel: String?,
-    status: ResultStatus,
-) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    val shape = RoundedCornerShape(10.dp)
-
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        val ratio = if (photo != null && photo.width > 0 && photo.height > 0) {
-            photo.width.toFloat() / photo.height.toFloat()
-        } else {
-            4f / 3f
-        }
-        val frameWidth = minOf(maxWidth, maxHeight * ratio)
-        val frameHeight = frameWidth / ratio
-
-        Box(
-            modifier = Modifier
-                .size(frameWidth, frameHeight)
-                .clip(shape)
-                .background(spec.palette.windowBg)
-                .border(spec.metrics.hairline, p.hairlineStrong, shape),
-        ) {
-            when (stage) {
-                Stage.SAVED -> {
-                    val bitmap = remember(photo?.thumbnailFile?.absolutePath) {
-                        photo?.thumbnailFile?.absolutePath
-                            ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-                    }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        // 缩略图丢了但记录还在：说明文件被外部删了。照实说，不画假画面。
-                        MissingFrameNote("缩略图缺失")
-                    }
-                    if (photo != null) {
-                        FrameTag(
-                            text = "${photo.width}×${photo.height}",
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp),
-                        )
-                    }
-                    if (stockLabel != null) {
-                        Text(
-                            text = stockLabel,
-                            style = MonoTag.copy(color = Color.White.copy(alpha = 0.66f)),
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(8.dp),
-                        )
-                    }
-                }
-
-                Stage.DEVELOPING -> DevelopingFrame(stockLabel, status)
-                Stage.FAILED -> MissingFrameNote("本次冲洗没有产出照片")
-                Stage.EMPTY -> MissingFrameNote("按快门开始拍摄")
-            }
-        }
-    }
-}
-
-/**
- * 显影中的画框（2026-10-23 重做）。
- *
- * 旧版是"两行字 + 呼吸"，干巴且没有时间感。新版用**真实存在的东西**填满等待：
- *
- * - 画框里一条扫描光带从上到下扫过（显影槽里相纸被拎起来的意象），
- *   叠一层固定的细横纹（胶片的物理纹理）；
- * - 两段**真实的管线阶段**：显影（引擎渲染）→ 写入（JPEG/相册），当前段金点呼吸；
- * - "已等待 Ns" 是真实墙钟时间，不是假进度；引擎不给百分比，就不编百分比。
- * - 取景页同款四角刻线，让成片页与取景器是同一台机器。
- */
-@Composable
-private fun DevelopingFrame(stockLabel: String?, status: ResultStatus) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    val transition = rememberInfiniteTransition(label = "developing")
-    val scan by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_900, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "developing-scan",
-    )
-    val pulse by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(760), repeatMode = RepeatMode.Reverse),
-        label = "developing-pulse",
-    )
-    var elapsed by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(1_000)
-            elapsed += 1
-        }
-    }
-    val writing = status == ResultStatus.OUTPUT_WRITING
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(p.windowBg, p.sheetBg, p.windowBg)),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            // 胶片横纹（静态）：非常淡，只给"底片"的质感，不抢字。
-            val hair = Color.White.copy(alpha = 0.028f)
-            var y = 0f
-            while (y < size.height) {
-                drawLine(hair, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 1f)
-                y += 6.dp.toPx()
-            }
-            // 扫描带：一条 80dp 高的香槟金光带，在整块画框里循环走。
-            val band = 80.dp.toPx()
-            val sy = size.height * scan
-            drawRect(
-                brush = Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    0.5f to p.accent.copy(alpha = 0.10f),
-                    1f to Color.Transparent,
-                    startY = sy - band / 2f,
-                    endY = sy + band / 2f,
-                ),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, (sy - band / 2f).coerceAtLeast(0f)),
-                size = androidx.compose.ui.geometry.Size(size.width, band),
-            )
-            drawLine(
-                color = p.accent.copy(alpha = 0.18f),
-                start = androidx.compose.ui.geometry.Offset(0f, sy),
-                end = androidx.compose.ui.geometry.Offset(size.width, sy),
-                strokeWidth = 1.dp.toPx(),
-            )
-            // 四角刻线：与取景器同一套语言。
-            val inset = 18.dp.toPx()
-            val arm = 16.dp.toPx()
-            val c = Color.White.copy(alpha = 0.22f)
-            listOf(
-                androidx.compose.ui.geometry.Offset(inset, inset) to androidx.compose.ui.geometry.Offset(inset + arm, inset),
-                androidx.compose.ui.geometry.Offset(inset, inset) to androidx.compose.ui.geometry.Offset(inset, inset + arm),
-                androidx.compose.ui.geometry.Offset(size.width - inset, inset) to androidx.compose.ui.geometry.Offset(size.width - inset - arm, inset),
-                androidx.compose.ui.geometry.Offset(size.width - inset, inset) to androidx.compose.ui.geometry.Offset(size.width - inset, inset + arm),
-                androidx.compose.ui.geometry.Offset(inset, size.height - inset) to androidx.compose.ui.geometry.Offset(inset + arm, size.height - inset),
-                androidx.compose.ui.geometry.Offset(inset, size.height - inset) to androidx.compose.ui.geometry.Offset(inset, size.height - inset - arm),
-                androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset) to androidx.compose.ui.geometry.Offset(size.width - inset - arm, size.height - inset),
-                androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset) to androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset - arm),
-            ).forEach { (a, b) -> drawLine(c, a, b, 1.dp.toPx()) }
-        }
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = if (writing) "写入相册" else "显影中",
-                style = TextStyle(
-                    fontSize = spec.type.sheetTitle,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.06.em,
-                    color = p.inkStrong,
-                ),
-            )
-            Spacer(modifier = Modifier.height(7.dp))
-            Text(
-                text = stockLabel ?: "POCKET CCD",
-                style = MonoTag.copy(color = p.textTertiary),
-            )
-            Spacer(modifier = Modifier.height(18.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StageDot(label = "显影", active = !writing, done = writing, pulse = pulse)
-                Box(
-                    modifier = Modifier
-                        .width(26.dp)
-                        .height(1.dp)
-                        .background(p.hairline),
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = contentDescription,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                StageDot(label = "写入", active = writing, done = false, pulse = pulse)
+            } else if (emptyLabel != null) {
+                Text(
+                    text = emptyLabel,
+                    color = p.textSecondary,
+                    fontFamily = spec.type.bodyFamily,
+                    fontSize = spec.type.body,
+                    lineHeight = spec.type.bodyLineHeight,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = "已等待 ${elapsed}s",
-                style = MonoSmall.copy(color = p.textTertiary),
-            )
         }
     }
 }
 
-@Composable
-private fun StageDot(label: String, active: Boolean, done: Boolean, pulse: Float) {
-    val p = LocalFilmTheme.current.palette
-    val spec = LocalFilmTheme.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(5.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(
-                    when {
-                        active -> p.accent.copy(alpha = pulse)
-                        done -> p.accent.copy(alpha = 0.45f)
-                        else -> p.inkGhost
-                    },
-                ),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MonoSmall.copy(
-                color = if (active) p.inkStrong else p.textTertiary,
-            ),
-            fontSize = spec.type.label,
-        )
-    }
+/** 缩略图解码结果。用 null 表示"还没读完"的话，首帧就会闪一下「缩略图缺失」。 */
+private sealed interface PrintImage {
+    data object Loading : PrintImage
+    data object Missing : PrintImage
+    data class Ready(val bitmap: ImageBitmap) : PrintImage
 }
 
+/** 三行 colophon：DATE / EXPOSURE / FILM，值全是真实数据，缺项写 `—`。 */
 @Composable
-private fun MissingFrameNote(text: String) {
-    val p = LocalFilmTheme.current.palette
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(p.windowBg, p.appBg)),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MonoSmall.copy(color = p.textSecondary),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-    }
-}
-
-/** 画框右上角的像素尺寸角标。原型这里写的是 `3:2 · 6000×4000`，改成真实值。 */
-@Composable
-private fun FrameTag(text: String, modifier: Modifier = Modifier) {
-    val p = LocalFilmTheme.current.palette
-    Text(
-        text = text,
-        style = MonoTag.copy(color = p.ink),
-        modifier = modifier
-            .clip(RoundedCornerShape(3.dp))
-            .background(Color.Black.copy(alpha = 0.30f))
-            .border(1.dp, p.hairlineStrong, RoundedCornerShape(3.dp))
-            .padding(horizontal = 6.dp, vertical = 3.dp),
-    )
-}
-
-/**
- * `FRAME 03 / 36` + 本机标识。
- *
- * 原型写死 `01 / 24`、右边 `KODAK 135 · DNG + JPG`。我们不产 DNG，
- * 也不按 24 张成卷，所以左边用真实的卷内序号，右边只留本机标识。
- */
-@Composable
-private fun FrameCaption(
-    photo: SavedPhoto?,
-    frameIndex: Int,
-    rollCapacity: Int,
-) {
-    val p = LocalFilmTheme.current.palette
-    val hasIndex = photo != null && frameIndex > 0 && rollCapacity > 0
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // 只留真实片号。右侧原来写 `JPEG · 4:3` —— 两项都是固定值，用户改不了，
-        // 也就没有信息量。
-        Text(
-            text = if (hasIndex) {
-                "FRAME ${"%02d".format(frameIndex)} / $rollCapacity"
-            } else {
-                // 没有真实序号就不画片号，不拿 01 充数。
-                "POCKET CCD"
-            },
-            style = MonoSmall.copy(color = p.textTertiary),
-        )
-    }
-}
-
-/**
- * 三列参数网格。三个格子固定存在（缺项写 `—`），因为网格是三列布局，
- * 少一列会让整块塌掉；`—` 在等宽字体里读作"未知"，不是伪造的值。
- */
-@Composable
-private fun ParameterGrid(
+private fun Colophon(
     capturedAt: Long?,
     exif: PhotoExif,
     stockLabel: String?,
 ) {
-    val p = LocalFilmTheme.current.palette
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(p.controlFill)
-            .border(1.dp, p.hairline, shape)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        ParamCell(
+    Column(Modifier.fillMaxWidth()) {
+        ColophonRow(
             label = "DATE",
-            value = capturedAt?.let(::formatDateBlock) ?: "—",
-            modifier = Modifier.weight(1f),
+            value = capturedAt?.let(::formatCapturedAt) ?: "—",
         )
-        ParamCell(
+        ColophonRow(
+            // `1/125 · f/1.6` 已经是真实 EXIF 的两项；ISO 不单列一行 ——
+            // 设计稿里的 ISO/快门在这台机器上并不保证被写进文件（D-043）。
             label = "EXPOSURE",
-            value = buildString {
-                val line = exif.exposureLine()
-                if (line != null) append(line) else append("—")
-                exif.isoLabel()?.let { append("\n").append(it) }
-            },
-            modifier = Modifier.weight(1.5f),
+            value = exif.exposureLine() ?: "—",
         )
-        ParamCell(
+        ColophonRow(
             label = "FILM",
-            value = stockLabel?.split(' ')?.joinToString("\n") ?: "—",
-            modifier = Modifier.weight(1f),
+            value = stockLabel?.takeIf { it.isNotBlank() } ?: "—",
         )
     }
 }
 
+/** 一行 colophon：左 14sp 正文标签，右 14sp mono 值，底部 1px hairline（规格 §4）。 */
 @Composable
-private fun ParamCell(label: String, value: String, modifier: Modifier = Modifier) {
-    val p = LocalFilmTheme.current.palette
-    Column(modifier = modifier) {
-        Text(text = label, style = MonoLabel.copy(color = p.textTertiary))
-        Spacer(modifier = Modifier.height(6.dp))
+private fun ColophonRow(label: String, value: String) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                color = p.textSecondary,
+                fontFamily = spec.type.bodyFamily,
+                fontSize = spec.type.value,
+                lineHeight = spec.type.bodyLineHeight,
+            )
+            Text(
+                text = value,
+                color = p.textPrimary,
+                fontFamily = spec.type.monoFamily,
+                fontSize = spec.type.value,
+                lineHeight = spec.type.labelLineHeight,
+                letterSpacing = 0.02.em,
+                // 等宽数字：时间/快门在换照片时不会左右跳。
+                style = TextStyle(fontFeatureSettings = "tnum"),
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        PaperHairline()
+    }
+}
+
+/** `10.23 · 22:21`。真实拍摄时间，来自 [SavedPhoto.capturedAt]。 */
+private fun formatCapturedAt(epochMillis: Long): String {
+    val calendar = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    return "%02d.%02d · %02d:%02d".format(
+        calendar.get(Calendar.MONTH) + 1,
+        calendar.get(Calendar.DAY_OF_MONTH),
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 显影中：打字机状态 + 真实秒数
+// ---------------------------------------------------------------------------
+
+/**
+ * 显影态（规格 §5.2.4 / §6「显影」）：
+ *
+ * - 先摆一个**同尺寸的未显影片框**（88% 宽、纸色空窗），位置不跳；
+ * - 状态只有两段真实阶段：`显影中`（引擎渲染）→ `写入中`（JPEG/相册）；
+ * - `已等待 03s` 是真实墙钟，不是假进度：引擎不给百分比就不编百分比；
+ * - 阶段切换 200ms 淡入，文字用打字机逐字出现；**无扫描光带、无循环脉冲**。
+ */
+@Composable
+private fun DevelopingBody(
+    status: ResultStatus,
+    modifier: Modifier = Modifier,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val writing = status == ResultStatus.OUTPUT_WRITING
+
+    // 真实墙钟：起点是第一次组合的时刻，之后按 System.currentTimeMillis 求差，
+    // 而不是"每秒 +1"的计数器 —— 页面被系统停住再回来时数字不会落后。
+    val startedAt = remember { System.currentTimeMillis() }
+    var elapsedSeconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            elapsedSeconds = ((System.currentTimeMillis() - startedAt) / 1_000L).toInt()
+            delay(250L)
+        }
+    }
+
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            PrintFrame(
+                aspect = 4f / 3f,
+                // 未显影 = 纸色空窗，不画暗色灯箱、不画假画面。
+                modifier = Modifier.fillMaxWidth(0.88f),
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Crossfade(
+            targetState = writing,
+            animationSpec = tween(spec.motion.sheetEnterMs),
+            label = "developing-stage",
+        ) { isWriting ->
+            TypewriterLine(
+                text = if (isWriting) "写入中" else "显影中",
+                style = TextStyle(
+                    fontFamily = spec.type.monoFamily,
+                    fontSize = spec.type.optionTitle,
+                    lineHeight = spec.type.bodyLineHeight,
+                    letterSpacing = 0.10.em,
+                    color = p.textPrimary,
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
         Text(
-            text = value,
-            style = MonoValue.copy(color = p.ink),
+            text = "已等待 %02ds".format(elapsedSeconds),
+            color = p.textTertiary,
+            fontFamily = spec.type.monoFamily,
+            fontSize = spec.type.mono,
+            lineHeight = spec.type.monoLineHeight,
+            letterSpacing = 0.06.em,
         )
     }
 }
 
 /**
- * 底部状态行：只画「这张存到哪了」这一件事实。
+ * 打字机文字：逐字揭示，未打完时带一个 `|` 光标。
  *
- * **刻意不显示 [SavedPhoto.renderMillis] / [SavedPhoto.strips]**。这两个字段只有
- * 「刚拍完」的 SavedPhoto 是真的；历史照片来自 `PhotoStore.list()` 重建，两项都是 0。
- * 画出来就会变成 `0ms · 0 strips` —— 一个看起来像测量值的假数（review P3-14）。
- * 冲洗耗时只进日志（`AppViewModel.develop`），不进用户界面。
+ * 读屏拿的是**完整文案**（`contentDescription`），不会听到打了一半的状态。
  */
 @Composable
-private fun StatusRow(status: ResultStatus, stage: Stage, photo: SavedPhoto?) {
-    val p = LocalFilmTheme.current.palette
-    val dotColor = when (stage) {
-        Stage.SAVED -> p.accent
-        Stage.DEVELOPING -> p.inkMuted
-        Stage.FAILED -> p.error
-        Stage.EMPTY -> p.inkGhost
-    }
-    val label = when (stage) {
-        Stage.SAVED -> if (photo?.galleryUri != null) "已存入系统相册" else "已保存到本机"
-        Stage.DEVELOPING -> when (status) {
-            ResultStatus.OUTPUT_WRITING -> "正在写入相册"
-            else -> "正在冲洗"
-        }
-        Stage.FAILED -> "未产出照片"
-        Stage.EMPTY -> "等待拍摄"
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(dotColor),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, style = MonoSmall.copy(color = p.textTertiary))
-        Spacer(modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun ActionRow(
-    stage: Stage,
-    primaryLabel: String,
-    secondaryLabel: String,
-    onPrimary: () -> Unit,
-    onSecondary: () -> Unit,
+private fun TypewriterLine(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
 ) {
-    val p = LocalFilmTheme.current.palette
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    var visibleChars by remember(text) { mutableIntStateOf(0) }
+    LaunchedEffect(text) {
+        visibleChars = 0
+        while (visibleChars < text.length) {
+            delay(TypewriterCharMs)
+            visibleChars += 1
+        }
+    }
+    val shown = buildString {
+        append(text.take(visibleChars))
+        if (visibleChars < text.length) append('|')
+    }
+    Text(
+        text = shown,
+        style = style,
+        maxLines = 1,
+        textAlign = TextAlign.Center,
+        modifier = modifier.semantics { contentDescription = text },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 失败 / 空态 / 底部操作
+// ---------------------------------------------------------------------------
+
+/** 失败态：纸面说明 + 真实失败原因；「重试」在底部操作里（不另做描边卡片）。 */
+@Composable
+private fun FailedBody(
+    failureMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 40.dp, bottom = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        FilmButton(
-            label = secondaryLabel,
-            onClick = onSecondary,
-            style = FilmButtonStyle.Secondary,
-            modifier = Modifier.weight(1f),
+        Text(
+            text = "冲洗失败",
+            color = p.error,
+            fontFamily = spec.type.titleFamily,
+            fontSize = spec.type.sheetTitle,
+            lineHeight = spec.type.sheetTitleLineHeight,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
         )
-        FilmButton(
-            label = primaryLabel,
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = failureMessage ?: "这次没有产出照片，可以重试一次。",
+            color = p.textSecondary,
+            fontFamily = spec.type.bodyFamily,
+            fontSize = spec.type.body,
+            lineHeight = spec.type.bodyLineHeight,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** 主操作在右（墨底纸白字），次操作在左（1px 墨线透明底）；两者都是 48dp 高。 */
+@Composable
+private fun BottomActions(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    modifier: Modifier = Modifier,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
+) {
+    val spec = LocalFilmTheme.current
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(spec.metrics.gutter),
+    ) {
+        if (secondaryLabel != null && onSecondary != null) {
+            PaperButton(
+                text = secondaryLabel,
+                onClick = onSecondary,
+                modifier = Modifier.weight(1f),
+                primary = false,
+                secondary = true,
+            )
+        }
+        PaperButton(
+            text = primaryLabel,
             onClick = onPrimary,
-            style = FilmButtonStyle.Primary,
             modifier = Modifier.weight(1f),
         )
     }
 }
 
-private fun formatDateBlock(epochMillis: Long): String {
-    val calendar = Calendar.getInstance().apply { timeInMillis = epochMillis }
-    val month = calendar.get(Calendar.MONTH) + 1
-    val day = calendar.get(Calendar.DAY_OF_MONTH)
-    val hour = calendar.get(Calendar.HOUR_OF_DAY)
-    val minute = calendar.get(Calendar.MINUTE)
-    return "%02d.%02d\n%02d:%02d".format(month, day, hour, minute)
-}
+// ---------------------------------------------------------------------------
+// 预览
+// ---------------------------------------------------------------------------
 
-// 下面四个是模块私有的等宽样式：顶层 val 取不到 CompositionLocal，
-// 直接引用唯一一套 FilmDarkSpec。将来真要做第二套皮肤时改成 @Composable 函数。
-private val MonoSmall = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = FilmDarkSpec.type.label,
-    letterSpacing = 0.08.em,
-)
-
-private val MonoTag = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = FilmDarkSpec.type.label,
-    letterSpacing = 0.16.em,
-)
-
-private val MonoLabel = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = FilmDarkSpec.type.label,
-    letterSpacing = 0.12.em,
-)
-
-private val MonoValue = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = FilmDarkSpec.type.value,
-    lineHeight = 18.sp,
-    letterSpacing = 0.04.em,
-)
-
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = PreviewPaperBg)
 @Composable
 private fun ResultDevelopingPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         ResultScreen(
             status = ResultStatus.PROCESSING,
             onBackToCamera = {},
             onOpenPhotoWall = {},
             onRetry = {},
             stockLabel = "GOLD 200",
-            frameIndex = 3,
+            frameIndex = 5,
             rollCapacity = 36,
         )
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = PreviewPaperBg)
 @Composable
 private fun ResultFailedPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         ResultScreen(
             status = ResultStatus.FAILED,
             onBackToCamera = {},
@@ -745,10 +716,10 @@ private fun ResultFailedPreview() {
     }
 }
 
-@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = 0xFF0B0C0E)
+@Preview(widthDp = 360, heightDp = 800, showBackground = true, backgroundColor = PreviewPaperBg)
 @Composable
 private fun ResultEmptyPreview() {
-    FilmTheme {
+    FilmTheme(FilmPaperSpec) {
         ResultScreen(
             status = ResultStatus.SAVED,
             onBackToCamera = {},

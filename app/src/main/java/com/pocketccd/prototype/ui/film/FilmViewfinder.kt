@@ -2,26 +2,19 @@ package com.pocketccd.prototype.ui.film
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 
 /**
  * 取景器内的绘制层：金属外框（[FilmViewfinder]）、暗角、四角角标、九宫格、准星。
@@ -41,7 +34,7 @@ import androidx.compose.ui.unit.em
  *
  * 1. 窗口比页面底色更黑（[FilmPalette.windowBg] vs [FilmPalette.appBg]），
  *    边缘自然分界，不再画描边；
- * 2. 顶部 1px 白 8% 内高光 + 底部 1px 纯黑：光从上方来，窗口像被"切"进机身；
+ * 2. 顶部 1px 白 10% 内高光 + 底部 1px 纯黑：光从上方来，窗口像被"切"进机身；
  * 3. 全部内容裁进 16dp 圆角，不加任何外投影。
  *
  * 暗角（[ViewfinderVignette]）仍单独叠在画面之上，保证亮画面里角标/准星可读。
@@ -65,7 +58,8 @@ fun FilmViewfinder(
                 val r = m.viewfinderRadius.toPx()
                 val h = m.hairline.toPx()
                 drawLine(
-                    color = Color.White.copy(alpha = 0.08f),
+                    // D-063：闸门上的分隔线统一白 10%（hairline），不再是 8% 的"内高光"。
+                    color = p.hairline,
                     start = Offset(r, h / 2f),
                     end = Offset(size.width - r, h / 2f),
                     strokeWidth = h,
@@ -113,11 +107,10 @@ fun ViewfinderVignette(modifier: Modifier = Modifier) {
 }
 
 /**
- * 四角刻线（2026-10-23 重做）。
+ * 四角刻线（D-063「白纸档案」）。
  *
- * 旧版臂长 20dp、线宽 1dp，配 4x 黑描边，读起来像"相机的 UI 括号"。
- * 现在臂长 18dp、线宽 1.5dp、圆头笔帽、白 62% + 3dp 黑晕：
- * 更像光学取景器里刻在玻璃上的线，而不是一个装饰组件。
+ * 方向 C 只刻纸白线：臂长 16dp、线宽 1px、白 62%，黑晕仍垫在下面（2.5x 宽）
+ * 保证白墙背景上不会消失。不再有"UI 括号"的粗线，也没有任何颜色。
  */
 @Composable
 fun ViewfinderCorners(modifier: Modifier = Modifier) {
@@ -125,8 +118,9 @@ fun ViewfinderCorners(modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxSize()) {
         val ix = m.cornerInsetX.toPx()
         val iy = m.cornerInsetY.toPx()
-        val arm = m.cornerArm.toPx()
-        val w = 1.5.dp.toPx()
+        // 规格 §5.1：16dp 臂长、1px。FilmMetrics.cornerArm 是旧皮肤默认值，不跟这里改。
+        val arm = 16.dp.toPx()
+        val w = 1.dp.toPx()
         val right = size.width - ix
         val bottom = size.height - iy
 
@@ -143,7 +137,7 @@ fun ViewfinderCorners(modifier: Modifier = Modifier) {
 
         // 黑晕先画，白线后画：亮画面里白线不会消失，暗画面里黑晕也不会显形。
         segments.forEach { (a, b) ->
-            drawLine(Color.Black.copy(alpha = 0.35f), a, b, w * 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(Color.Black.copy(alpha = 0.35f), a, b, w * 2.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
         segments.forEach { (a, b) ->
             drawLine(Color.White.copy(alpha = 0.62f), a, b, w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
@@ -166,17 +160,21 @@ fun ViewfinderGrid(modifier: Modifier = Modifier) {
     }
 }
 
-/** Centre reticle: four 8dp ticks around a 1.6dp champagne dot, with a deliberate gap. */
+/**
+ * 中央准星（D-063）：20dp 四向刻线，纸白 62%，中心一颗 1.4dp 纸白点。
+ *
+ * 不再用 `palette.accent` 画中心点 —— 黑闸门里 accent 恰好就是纸白，但写成
+ * `palette.textPrimary` 才能保证换皮肤时不会又长出一颗彩色点。
+ */
 @Composable
 fun ViewfinderReticle(modifier: Modifier = Modifier) {
-    val m = LocalFilmTheme.current.metrics
-    val spec = LocalFilmTheme.current
-    Canvas(modifier.size(m.reticle)) {
+    val p = LocalFilmTheme.current.palette
+    Canvas(modifier.size(20.dp)) {
         val w = 1.dp.toPx()
         val cx = size.width / 2f
         val cy = size.height / 2f
         val inner = 4.dp.toPx()
-        val outer = 12.dp.toPx()
+        val outer = 10.dp.toPx()
 
         val segments = listOf(
             Offset(cx, cy - inner) to Offset(cx, cy - outer),
@@ -185,11 +183,10 @@ fun ViewfinderReticle(modifier: Modifier = Modifier) {
             Offset(cx + inner, cy) to Offset(cx + outer, cy),
         )
 
-        segments.forEach { (a, b) -> drawLine(Color.Black.copy(alpha = 0.30f), a, b, w * 3f) }
-        segments.forEach { (a, b) -> drawLine(Color.White.copy(alpha = 0.46f), a, b, w) }
+        segments.forEach { (a, b) -> drawLine(Color.Black.copy(alpha = 0.30f), a, b, w * 2.5f) }
+        segments.forEach { (a, b) -> drawLine(p.textPrimary.copy(alpha = 0.62f), a, b, w) }
 
-        drawCircle(Color.Black.copy(alpha = 0.30f), radius = 2.2.dp.toPx(), center = Offset(cx, cy))
-        drawCircle(spec.palette.accent, radius = 1.6.dp.toPx(), center = Offset(cx, cy))
+        drawCircle(p.textPrimary, radius = 1.4.dp.toPx(), center = Offset(cx, cy))
     }
 }
 
