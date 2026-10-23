@@ -26,9 +26,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -146,7 +148,7 @@ fun ResultScreen(
                 .weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            PhotoFrame(stage = stage, photo = photo, stockLabel = resolvedStock)
+            PhotoFrame(stage = stage, photo = photo, stockLabel = resolvedStock, status = status)
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -260,6 +262,7 @@ private fun PhotoFrame(
     stage: Stage,
     photo: SavedPhoto?,
     stockLabel: String?,
+    status: ResultStatus,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
@@ -320,7 +323,7 @@ private fun PhotoFrame(
                     }
                 }
 
-                Stage.DEVELOPING -> DevelopingFrame(stockLabel)
+                Stage.DEVELOPING -> DevelopingFrame(stockLabel, status)
                 Stage.FAILED -> MissingFrameNote("本次冲洗没有产出照片")
                 Stage.EMPTY -> MissingFrameNote("按快门开始拍摄")
             }
@@ -328,40 +331,158 @@ private fun PhotoFrame(
     }
 }
 
+/**
+ * 显影中的画框（2026-10-23 重做）。
+ *
+ * 旧版是"两行字 + 呼吸"，干巴且没有时间感。新版用**真实存在的东西**填满等待：
+ *
+ * - 画框里一条扫描光带从上到下扫过（显影槽里相纸被拎起来的意象），
+ *   叠一层固定的细横纹（胶片的物理纹理）；
+ * - 两段**真实的管线阶段**：显影（引擎渲染）→ 写入（JPEG/相册），当前段金点呼吸；
+ * - "已等待 Ns" 是真实墙钟时间，不是假进度；引擎不给百分比，就不编百分比。
+ * - 取景页同款四角刻线，让成片页与取景器是同一台机器。
+ */
 @Composable
-private fun DevelopingFrame(stockLabel: String?) {
-    val p = LocalFilmTheme.current.palette
+private fun DevelopingFrame(stockLabel: String?, status: ResultStatus) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
     val transition = rememberInfiniteTransition(label = "developing")
-    val pulse by transition.animateFloat(
-        initialValue = 0.30f,
+    val scan by transition.animateFloat(
+        initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse,
+            animation = tween(1_900, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = RepeatMode.Restart,
         ),
+        label = "developing-scan",
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(760), repeatMode = RepeatMode.Reverse),
         label = "developing-pulse",
     )
+    var elapsed by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1_000)
+            elapsed += 1
+        }
+    }
+    val writing = status == ResultStatus.OUTPUT_WRITING
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    listOf(p.windowBg, p.sheetBg, p.windowBg),
-                ),
+                Brush.verticalGradient(listOf(p.windowBg, p.sheetBg, p.windowBg)),
             ),
         contentAlignment = Alignment.Center,
     ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            // 胶片横纹（静态）：非常淡，只给"底片"的质感，不抢字。
+            val hair = Color.White.copy(alpha = 0.028f)
+            var y = 0f
+            while (y < size.height) {
+                drawLine(hair, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 1f)
+                y += 6.dp.toPx()
+            }
+            // 扫描带：一条 80dp 高的香槟金光带，在整块画框里循环走。
+            val band = 80.dp.toPx()
+            val sy = size.height * scan
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.5f to p.accent.copy(alpha = 0.10f),
+                    1f to Color.Transparent,
+                    startY = sy - band / 2f,
+                    endY = sy + band / 2f,
+                ),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, (sy - band / 2f).coerceAtLeast(0f)),
+                size = androidx.compose.ui.geometry.Size(size.width, band),
+            )
+            drawLine(
+                color = p.accent.copy(alpha = 0.18f),
+                start = androidx.compose.ui.geometry.Offset(0f, sy),
+                end = androidx.compose.ui.geometry.Offset(size.width, sy),
+                strokeWidth = 1.dp.toPx(),
+            )
+            // 四角刻线：与取景器同一套语言。
+            val inset = 18.dp.toPx()
+            val arm = 16.dp.toPx()
+            val c = Color.White.copy(alpha = 0.22f)
+            listOf(
+                androidx.compose.ui.geometry.Offset(inset, inset) to androidx.compose.ui.geometry.Offset(inset + arm, inset),
+                androidx.compose.ui.geometry.Offset(inset, inset) to androidx.compose.ui.geometry.Offset(inset, inset + arm),
+                androidx.compose.ui.geometry.Offset(size.width - inset, inset) to androidx.compose.ui.geometry.Offset(size.width - inset - arm, inset),
+                androidx.compose.ui.geometry.Offset(size.width - inset, inset) to androidx.compose.ui.geometry.Offset(size.width - inset, inset + arm),
+                androidx.compose.ui.geometry.Offset(inset, size.height - inset) to androidx.compose.ui.geometry.Offset(inset + arm, size.height - inset),
+                androidx.compose.ui.geometry.Offset(inset, size.height - inset) to androidx.compose.ui.geometry.Offset(inset, size.height - inset - arm),
+                androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset) to androidx.compose.ui.geometry.Offset(size.width - inset - arm, size.height - inset),
+                androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset) to androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset - arm),
+            ).forEach { (a, b) -> drawLine(c, a, b, 1.dp.toPx()) }
+        }
+
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "DEVELOPING",
-                style = MonoTag.copy(color = p.accent.copy(alpha = pulse)),
+                text = if (writing) "写入相册" else "显影中",
+                style = TextStyle(
+                    fontSize = spec.type.sheetTitle,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.06.em,
+                    color = p.inkStrong,
+                ),
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(7.dp))
             Text(
                 text = stockLabel ?: "POCKET CCD",
+                style = MonoTag.copy(color = p.textTertiary),
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StageDot(label = "显影", active = !writing, done = writing, pulse = pulse)
+                Box(
+                    modifier = Modifier
+                        .width(26.dp)
+                        .height(1.dp)
+                        .background(p.hairline),
+                )
+                StageDot(label = "写入", active = writing, done = false, pulse = pulse)
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "已等待 ${elapsed}s",
                 style = MonoSmall.copy(color = p.textTertiary),
             )
         }
+    }
+}
+
+@Composable
+private fun StageDot(label: String, active: Boolean, done: Boolean, pulse: Float) {
+    val p = LocalFilmTheme.current.palette
+    val spec = LocalFilmTheme.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(
+                    when {
+                        active -> p.accent.copy(alpha = pulse)
+                        done -> p.accent.copy(alpha = 0.45f)
+                        else -> p.inkGhost
+                    },
+                ),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MonoSmall.copy(
+                color = if (active) p.inkStrong else p.textTertiary,
+            ),
+            fontSize = spec.type.label,
+        )
     }
 }
 

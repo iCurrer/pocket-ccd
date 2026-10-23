@@ -150,43 +150,15 @@ fun FilmCaptureScreen(
             .background(p.appBg)
             .statusBarsPadding(),
     ) {
-        Row(
+        // 2026-10-23：顶栏只留胶卷 pill。闪光灯/九宫格/设置下移到取景窗下方的
+        // 工具条 —— 上方越空，取景窗越像"一台相机的窗"，而不是"一个带图标的页面"。
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(m.topBarHeight)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(44.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Row {
-                FilmRoundButton(
-                    icon = if (flashOn) FilmIconKind.Flash else FilmIconKind.FlashOff,
-                    onClick = {
-                        if (flashAvailable) {
-                            onToggleFlash()
-                            showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
-                        } else {
-                            // 没有闪光灯单元时不发 onToggleFlash：否则图标会亮、
-                            // 底层 setFlash 却静默降级，等于骗用户。
-                            showToast("这台设备没有闪光灯")
-                        }
-                    },
-                    active = flashOn && flashAvailable,
-                )
-                FilmRoundButton(
-                    icon = FilmIconKind.Grid,
-                    onClick = {
-                        onToggleGrid()
-                        showToast(if (gridOn) "九宫格参考线已关闭" else "九宫格参考线已开启")
-                    },
-                    active = gridOn,
-                )
-            }
             StockPill(name = stockName, onClick = onOpenFilms)
-            FilmRoundButton(
-                icon = FilmIconKind.Tune,
-                onClick = onOpenSettings,
-            )
         }
 
         BoxWithConstraints(
@@ -195,8 +167,9 @@ fun FilmCaptureScreen(
                 .fillMaxWidth()
                 // 不再加水平 padding：取景窗宽度已经在下面按 0.86 收过，
                 // 再加一层 12dp 会变成 0.86×(412−24)，等于缩两次。
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center,
+                .padding(top = 2.dp),
+            // 把取景窗顶到上方：重心上移之后，下面的工具条与底盖才有"机身"的层次。
+            contentAlignment = Alignment.TopCenter,
         ) {
             // 3:4 viewfinder, matching the design's 369x490 ratio. The preview
             // itself is FIT_CENTER inside (never cropped — a framed image must
@@ -298,6 +271,44 @@ fun FilmCaptureScreen(
             }
         }
 
+        // 取景窗下方的工具条：闪光灯 / 九宫格 / 设置。放在这里而不是顶栏，
+        // 一是把上方空间让给取景窗，二是这三颗都在拇指弧内。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilmRoundButton(
+                icon = if (flashOn) FilmIconKind.Flash else FilmIconKind.FlashOff,
+                onClick = {
+                    if (flashAvailable) {
+                        onToggleFlash()
+                        showToast(if (flashOn) "闪光灯已关闭" else "闪光灯已开启")
+                    } else {
+                        // 没有闪光灯单元时不发 onToggleFlash：否则图标会亮、
+                        // 底层 setFlash 却静默降级，等于骗用户。
+                        showToast("这台设备没有闪光灯")
+                    }
+                },
+                active = flashOn && flashAvailable,
+            )
+            FilmRoundButton(
+                icon = FilmIconKind.Grid,
+                onClick = {
+                    onToggleGrid()
+                    showToast(if (gridOn) "九宫格参考线已关闭" else "九宫格参考线已开启")
+                },
+                active = gridOn,
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            FilmRoundButton(
+                icon = FilmIconKind.Tune,
+                onClick = onOpenSettings,
+            )
+        }
+
         // 底部整块是机身底盖（D-051）：计数、快门（嵌在凹槽里）、副键（嵌在面板上）、
         // 曝光刻度槽，全部装在这一块上。导航栏的空白由面板自己吃下，否则金属板
         // 会在手势条上方断掉，露出底下的 #0B0C0E。
@@ -341,26 +352,22 @@ fun FilmCaptureScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FilmPanelKey(label = "相册", onClick = onOpenGallery) {
-                    FilmIcon(
-                        kind = FilmIconKind.ImageMultiple,
-                        tint = p.inkMuted,
-                        iconSize = 20.dp,
-                    )
-                }
+                FilmBodyKey(
+                    label = "相册",
+                    icon = FilmIconKind.ImageMultiple,
+                    onClick = onOpenGallery,
+                )
 
                 FilmShutter(
                     onClick = onShutter,
                     enabled = canShoot,
                 )
 
-                FilmPanelKey(label = "换卷", onClick = onNewRoll) {
-                    FilmIcon(
-                        kind = FilmIconKind.Filmstrip,
-                        tint = p.inkMuted,
-                        iconSize = 20.dp,
-                    )
-                }
+                FilmBodyKey(
+                    label = "换卷",
+                    icon = FilmIconKind.Filmstrip,
+                    onClick = onNewRoll,
+                )
             }
 
             FilmExposureSlot(

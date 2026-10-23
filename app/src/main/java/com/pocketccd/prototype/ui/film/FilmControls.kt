@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -471,6 +473,110 @@ fun FilmRoundButton(
             contentAlignment = Alignment.Center,
         ) {
             FilmIcon(kind = icon, tint = tint, iconSize = iconSize)
+        }
+    }
+}
+
+/**
+ * 底盖上的**凹凸实体键**（相册 / 换卷，2026-10-23 第三版）。
+ *
+ * 前两版都错：第一版是"凹槽里的圆键"（第三套圆形控件），第二版是"幽灵图标"
+ * （只剩文字，失去实体感）。相机机身上的键应该是**凸起的块**：
+ *
+ * - 面上竖直渐变（顶受光 → 底沉），顶边 1px 高光、底边 1px 暗线；
+ * - 键下方 2dp 黑影，让它"坐"在机身上而不是贴上去；
+ * - 按下时整体**下沉 1.6dp**、渐变压平、顶边高光消失、底影收缩 —— 这是"按进去"的全部；
+ * - 图标 + 丝印标签都刻在键面上。
+ */
+@Composable
+fun FilmBodyKey(
+    label: String,
+    icon: FilmIconKind,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accessibilityLabel: String = label,
+    actionLabel: String = "打开$label",
+) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val travel by animateFloatAsState(
+        targetValue = if (pressed) 1.6f else 0f,
+        animationSpec = spring(dampingRatio = 0.62f, stiffness = 760f),
+        label = "body-key-travel",
+    )
+    val view = LocalView.current
+    LaunchedEffect(pressed) {
+        if (pressed) {
+            runCatching { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+        }
+    }
+    val shape = RoundedCornerShape(14.dp)
+
+    Box(
+        modifier = modifier
+            .size(width = 84.dp, height = 54.dp)
+            .graphicsLayer { translationY = travel.dp.toPx() }
+            .clip(shape)
+            .drawBehind {
+                val r = CornerRadius(14.dp.toPx(), 14.dp.toPx())
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = if (pressed) 0.25f else 0.45f),
+                    topLeft = Offset(0f, 1.5.dp.toPx()),
+                    size = Size(size.width, size.height),
+                    cornerRadius = r,
+                )
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = if (pressed) {
+                            listOf(Color(0xFF151719), Color(0xFF101214))
+                        } else {
+                            listOf(Color(0xFF262A2E), Color(0xFF121416))
+                        },
+                        startY = 0f,
+                        endY = size.height,
+                    ),
+                    cornerRadius = r,
+                )
+                val w = 1.dp.toPx()
+                drawLine(
+                    color = Color.White.copy(alpha = if (pressed) 0.02f else 0.12f),
+                    start = Offset(14.dp.toPx(), w / 2f),
+                    end = Offset(size.width - 14.dp.toPx(), w / 2f),
+                    strokeWidth = w,
+                )
+                drawLine(
+                    color = Color.Black.copy(alpha = if (pressed) 0.75f else 0.55f),
+                    start = Offset(14.dp.toPx(), size.height - w / 2f),
+                    end = Offset(size.width - 14.dp.toPx(), size.height - w / 2f),
+                    strokeWidth = w,
+                )
+            }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = actionLabel,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = accessibilityLabel },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            FilmIcon(
+                kind = icon,
+                tint = if (pressed) p.inkStrong else p.inkMuted,
+                iconSize = 18.dp,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = label,
+                color = if (pressed) p.textSecondary else p.textTertiary,
+                fontSize = spec.type.label,
+                letterSpacing = 0.16.em,
+                fontFamily = FontFamily.Default,
+            )
         }
     }
 }

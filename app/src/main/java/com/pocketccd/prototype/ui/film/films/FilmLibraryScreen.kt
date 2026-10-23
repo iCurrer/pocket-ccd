@@ -24,8 +24,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +120,17 @@ fun FilmLibraryScreen(
     val p = spec.palette
     val active = stocks.firstOrNull { it.id == selectedStockId } ?: stocks.firstOrNull()
 
+    // 2026-10-23：点选胶卷**不再立刻切回取景器**。留在本页把"装卷"演完：
+    // 先让卡片进入「装卷中…」（900ms），已装卷大卡用滑入/淡入换卷，用户再自己
+    // 点「继续拍摄」回去。理由：换卷是有实体的动作，秒切等于什么都没发生。
+    var installingId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(installingId) {
+        if (installingId != null) {
+            kotlinx.coroutines.delay(900)
+            installingId = null
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -130,13 +156,26 @@ fun FilmLibraryScreen(
             contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
         ) {
             item(key = "loaded") {
-                LoadedPanel(
-                    stock = active,
-                    shotsTaken = shotsTaken,
-                    rollCapacity = rollCapacity,
-                    onResume = onBack,
-                    onNewRoll = onNewRoll,
-                )
+                // 换卷动画：旧卷淡出下滑、新卷淡入上滑。不是"卡片闪一下"。
+                AnimatedContent(
+                    targetState = active?.id,
+                    transitionSpec = {
+                        (fadeIn(tween(240)) + slideInVertically(tween(260)) { it / 8 }) togetherWith
+                            (fadeOut(tween(150)) + slideOutVertically(tween(180)) { -it / 10 })
+                    },
+                    label = "loaded-roll-change",
+                ) { id ->
+                    val shown = stocks.firstOrNull { it.id == id } ?: active
+                    if (shown != null) {
+                        LoadedPanel(
+                            stock = shown,
+                            shotsTaken = if (shown.id == active?.id) shotsTaken else 0,
+                            rollCapacity = rollCapacity,
+                            onResume = onBack,
+                            onNewRoll = onNewRoll,
+                        )
+                    }
+                }
             }
 
             item(key = "all-head") {
@@ -169,11 +208,14 @@ fun FilmLibraryScreen(
                     usage = usage[stock.id],
                     rollCapacity = rollCapacity,
                     onClick = {
-                        // 装卷后立刻回取景器：换卷的目的就是接着拍，
-                        // 留在库里看一遍列表没有意义。
-                        onSelect(stock.id)
-                        onBack()
+                        // 只装卷，不跳页。装卷动画由下面的 installingId 驱动，
+                        // 回取景器留给「继续拍摄」—— 那是一次明确的用户动作。
+                        if (installingId == null && stock.id != active?.id) {
+                            installingId = stock.id
+                            onSelect(stock.id)
+                        }
                     },
+                    installing = installingId == stock.id,
                 )
             }
         }
@@ -693,6 +735,7 @@ private fun StockCard(
     usage: StockUsage?,
     rollCapacity: Int,
     onClick: () -> Unit,
+    installing: Boolean = false,
 ) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
@@ -772,7 +815,7 @@ private fun StockCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End,
             ) {
-                LoadPill(loaded = loaded)
+                LoadPill(loaded = loaded, installing = installing)
             }
         }
     }
@@ -797,22 +840,39 @@ private fun BorderPill(text: String, color: com.pocketccd.prototype.ui.film.Film
 }
 
 @Composable
-private fun LoadPill(loaded: Boolean) {
+private fun LoadPill(loaded: Boolean, installing: Boolean = false) {
     val spec = LocalFilmTheme.current
     val p = spec.palette
     val shape = RoundedCornerShape(999.dp)
+    // 「装卷中…」用呼吸动画：这是唯一一个"正在发生"的状态，需要一个时间维度。
+    val transition = rememberInfiniteTransition(label = "loading-pill")
+    val pulse by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(520), repeatMode = RepeatMode.Reverse),
+        label = "loading-pill-alpha",
+    )
+    val text = when {
+        installing -> "装卷中…"
+        loaded -> "已装卷"
+        else -> "装卷"
+    }
     Text(
-        text = if (loaded) "已装卷" else "装卷",
-        color = if (loaded) p.accent else Color(0xFFEDEFF2),
+        text = text,
+        color = when {
+            installing -> p.accent.copy(alpha = pulse)
+            loaded -> p.accent
+            else -> Color(0xFFEDEFF2)
+        },
         fontSize = spec.type.label,
         modifier = Modifier
             .clip(shape)
             .background(
-                if (loaded) p.accent.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.07f),
+                if (loaded || installing) p.accent.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.07f),
             )
             .border(
                 1.dp,
-                if (loaded) p.accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.12f),
+                if (loaded || installing) p.accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.12f),
                 shape,
             )
             .padding(horizontal = 11.dp, vertical = 4.dp),
