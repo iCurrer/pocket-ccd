@@ -589,21 +589,25 @@ fun PocketCcdApp(
             }
 
             // 底部 TabBar 是纸面页的共享壳：只叠在内容上，不改页面内部布局。
+            // 必须单独套纸面令牌：它在 AnimatedContent 的分支之外，默认 LocalFilmTheme
+            // 仍是 FilmDarkSpec，上一版因此出现了黑色 TabBar（真机反馈 2026-10-23）。
             if (showBottomNav) {
-                PaperNavBar(
-                    active = activePaperTab,
-                    onSelect = { tab ->
-                        onEvent(
-                            when (tab) {
-                                PaperTab.GALLERY -> AppEvent.OpenGallery
-                                PaperTab.FILMS -> AppEvent.OpenFilms
-                                PaperTab.DISCOVER -> AppEvent.OpenDiscover
-                                PaperTab.SETTINGS -> AppEvent.OpenSettings
-                            },
-                        )
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+                FilmTheme(FilmPaperSpec) {
+                    PaperNavBar(
+                        active = activePaperTab,
+                        onSelect = { tab ->
+                            onEvent(
+                                when (tab) {
+                                    PaperTab.GALLERY -> AppEvent.OpenGallery
+                                    PaperTab.FILMS -> AppEvent.OpenFilms
+                                    PaperTab.DISCOVER -> AppEvent.OpenDiscover
+                                    PaperTab.SETTINGS -> AppEvent.OpenSettings
+                                },
+                            )
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
 
             // 最上层：快门闪白盖住整屏（含状态栏、导航栏），成片页淡入时也在它下面。

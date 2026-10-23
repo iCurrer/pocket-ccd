@@ -36,23 +36,24 @@ class AppStateTest {
     }
 
     @Test
-    fun galleryOpensResultAndBackReturnsGallery() {
+    fun galleryOpensResultAndBackReturnsCamera() {
         val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
         val result = reduce(gallery, AppEvent.OpenResult)
         assertEquals(AppDestination.GALLERY, result.resultOrigin)
 
         val back = reduce(result, AppEvent.NavigateBack)
-        assertEquals(AppDestination.GALLERY, back.destination)
+        assertEquals(AppDestination.CAMERA, back.destination)
     }
 
     @Test
-    fun resultOpensGalleryAndBackReturnsResult() {
+    fun resultOpensGalleryAndBackReturnsCamera() {
         val result = reduce(AppUiState(), AppEvent.OpenResult)
         val gallery = reduce(result, AppEvent.OpenGallery)
         assertEquals(AppDestination.RESULT, gallery.galleryOrigin)
 
+        // D-064：底部 Tab 是平级目的地，返回统一回相机，不回上一个 Tab。
         val back = reduce(gallery, AppEvent.NavigateBack)
-        assertEquals(AppDestination.RESULT, back.destination)
+        assertEquals(AppDestination.CAMERA, back.destination)
     }
 
     @Test
@@ -114,13 +115,13 @@ class AppStateTest {
     }
 
     @Test
-    fun filmsOpensGalleryAndBackReturnsToFilms() {
-        // 库里顶部右侧是相册入口；返回要回到库，而不是掉回取景器。
+    fun filmsOpensGalleryAndBackReturnsCamera() {
+        // 库里顶部右侧是相册入口；D-064 之后返回统一回相机，不回上一个 Tab。
         val films = reduce(AppUiState(), AppEvent.OpenFilms)
         val gallery = reduce(films, AppEvent.OpenGallery)
         assertEquals(AppDestination.GALLERY, gallery.destination)
 
-        assertEquals(AppDestination.FILMS, reduce(gallery, AppEvent.NavigateBack).destination)
+        assertEquals(AppDestination.CAMERA, reduce(gallery, AppEvent.NavigateBack).destination)
     }
 
     @Test

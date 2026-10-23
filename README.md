@@ -34,7 +34,7 @@
 
 ---
 
-## 当前状态（2026-10-23 23:00，夜间包 v0.6.0）
+## 当前状态（2026-10-23 23:12，夜间包 v0.6.1）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
@@ -416,10 +416,10 @@ release 变体 + debug 签名，非 debuggable）。当前夜间包指纹：
 
 | 项 | 值 |
 |---|---|
-| versionCode / versionName | `9` / `0.6.0` |
-| 构建时间 | 2026-10-23 23:03（Asia/Shanghai） |
-| SHA-256 | `F3ADB212ECF8A48AD82F5515D65307DE504EEBBAB936F0BC31E59F493128CD32` |
-| 便利副本 | `dist/pocketccd-0.6.0-paper-archive-1to1.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
+| versionCode / versionName | `10` / `0.6.1` |
+| 构建时间 | 2026-10-23 23:12（Asia/Shanghai） |
+| SHA-256 | `9B284E70BBA3124113739B65D87F167A3BBE543F6652E0D916B389890526B865` |
+| 便利副本 | `dist/pocketccd-0.6.1-paper-archive-1to1.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
 
 对方不需要电脑、不需要 adb、不需要 root：
 

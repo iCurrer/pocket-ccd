@@ -1599,3 +1599,24 @@
 - **待办（其他智能体）：** 保存/收藏/分享/更多动作、发现页内容、滤镜/拍摄模式、
   新胶卷 pack、设置子页/账户、App 内删除。UI 侧已留回调与 48dp 触控位。
 - **验证：** `assembleDebug` + `:app:testDebugUnitTest`（64 例）；**真机未验**。
+
+## D-065 — 1:1 版面反馈修正：TabBar 底色 / 返回路径 / 成片页 / 版本页脚（v0.6.1）
+
+- **日期：** 2026-10-23
+- **状态：** ACCEPTED（用户反馈 v0.6.0 实机效果）
+- **反馈：** ① 底部四 Tab 仍是黑色背景；② 返回可能回上一个 Tab 而不是相机；
+  ③ 成片页"差点意思"；④ 设置页底部版本信息布局不对。
+- **原因与修正：**
+  1. **TabBar 黑底**：`PaperNavBar` 位于 `AnimatedContent` 的 `FilmTheme(FilmPaperSpec)` 分支之外，
+     读到的 `LocalFilmTheme` 是默认 `FilmDarkSpec`。已给 TabBar 单独套 `FilmTheme(FilmPaperSpec)`。
+  2. **返回路径**：`NavigateBack` 原来按 `galleryOrigin/resultOrigin` 回上一个 Tab。Tab 是平级目的地，
+     改为**纸面页返回统一回 CAMERA**；`galleryOrigin/resultOrigin` 仅保留字段、不再参与返回。
+     相册查看器仍由内层 BackHandler 先关；声明覆盖层仍先关。
+  3. **成片页**：印相从 86%→92%、纸边 6→8dp、加 2dp 极轻投影；元数据第二行改为
+     `ISO 100 · 1/60s · f/1.8`（只拼真实 EXIF，缺项自动省略）；底部预留 88→64dp。
+  4. **设置页脚**：从"单行居中版本号"改为设计板的左对齐三行
+     `Version / Build / Author`，标签左、值右（mono）；作者无真实来源显示 `—`。
+  5. 各纸面页底部留白 88→64dp（TabBar 56 + 8 呼吸），与设计板更接近。
+- **不变：** 相机/冲洗/落盘/EXIF/卷计数逻辑；无新依赖/字体；无虚构数据；
+  保存/收藏/分享/更多/发现内容仍为待接入回调。
+- **验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；**真机未验**。

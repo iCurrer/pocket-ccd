@@ -70,7 +70,7 @@ fun DiscoverScreen(
         )
 
         // 底部 TabBar 是 AppRoot 的覆盖层，这里留出 88dp 不让内容被压住。
-        Spacer(Modifier.height(88.dp))
+        Spacer(Modifier.height(64.dp))
     }
 }
 

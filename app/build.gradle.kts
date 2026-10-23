@@ -24,8 +24,10 @@ android {
         // 0.6.0（D-064）：B 方案 1:1 版面——底部四 Tab（相册/胶卷/发现/设置）、
         // 成片页 1:1、照片墙 Photo Wall、胶卷库 Film Library 黑色 CURRENT 卡、
         // 设置四分类手风琴、发现页真实统计脚手架。新功能回调待其他智能体接入。
-        versionCode = 9
-        versionName = "0.6.0"
+        // 0.6.1：真机反馈修正——TabBar 误用暗色令牌导致黑底；返回统一回相机；
+        // 成片页印相放大到 92%/8dp 纸边、ISO 行；设置页版本信息改左对齐三行。
+        versionCode = 10
+        versionName = "0.6.1"
     }
 
     buildTypes {

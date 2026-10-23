@@ -69,3 +69,20 @@ git checkout ef50bc1   # v0.5.0
 $env:JAVA_HOME='D:\software\Android\Android Studio\jbr'
 .\gradlew.bat :app:assembleDebug
 ```
+
+## 7. v0.6.1 反馈修正（2026-10-23 23:12）
+
+用户安装 v0.6.0 后反馈四项，已修：
+
+1. **TabBar 黑底**：`PaperNavBar` 在 `FilmTheme(FilmPaperSpec)` 分支之外，读到了默认暗色令牌；
+   已单独包 `FilmTheme(FilmPaperSpec)`。
+2. **返回逻辑**：纸面页 `NavigateBack` 统一回 CAMERA，不再回上一个 Tab；查看器/声明覆盖层仍先关。
+3. **成片页**：印相 86%→92%、纸边 6→8dp、加 2dp 极轻投影；EXIF 行拼成
+   `ISO · 快门 · 光圈`（只拼真实项）；底部预留 88→64dp。
+4. **设置页脚**：改成设计板的左对齐 `Version / Build / Author` 三行，标签左、值右（mono）；
+   作者无真实来源显示 `—`。
+5. 各纸面页底部留白统一 88→64dp。
+
+**包：** `dist/pocketccd-0.6.1-paper-archive-1to1.apk`（41,023,826 B，
+SHA-256 `9B284E70…26B865`，versionCode 10 / 0.6.1，debug 签名）。
+**验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；**真机仍未验**（无设备）。

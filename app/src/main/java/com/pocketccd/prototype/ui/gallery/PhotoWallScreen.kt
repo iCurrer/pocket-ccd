@@ -529,7 +529,7 @@ private val ROW_GAP = 14.dp
  * 页面底部留白：56dp TabBar + 24dp 呼吸 + 余量。
  * AppRoot 的 `PaperNavBar` 是覆盖层，页面内容必须自己让开这一段（1:1 版面规格 §1）。
  */
-private val BOTTOM_CONTENT_INSET = 88.dp
+private val BOTTOM_CONTENT_INSET = 64.dp
 
 // ---------------------------------------------------------------- preview
 

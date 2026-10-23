@@ -89,7 +89,7 @@ data class StockUsage(
  *
  * AppRoot 把 TabBar 叠在内容之上，页面不自己留白的话最后一行会被压住。
  */
-private val BOTTOM_CONTENT_INSET = 88.dp
+private val BOTTOM_CONTENT_INSET = 64.dp
 
 /**
  * 胶卷库：方向 C「白纸档案」1:1 版面（B 方案，`docs/paper-archive-1to1-layout.md` §2/§5）。

@@ -61,7 +61,7 @@ fun LicensesScreen(
                 .weight(1f),
             // 底部 TabBar 由 AppRoot 叠在页面之上（覆盖层不会自动隐藏它），
             // 留 88dp 保证最后一条合规说明滚到底时不被压住。
-            contentPadding = PaddingValues(bottom = 88.dp),
+            contentPadding = PaddingValues(bottom = 64.dp),
         ) {
             item {
                 Text(

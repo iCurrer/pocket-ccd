@@ -15,7 +15,7 @@
 - 选中 = 墨色图标 + 墨色标签 + 字重 Medium；未选中 = `textTertiary`。不做胶囊、不做填底。
 - 相机页（CAMERA）不显示 TabBar：启动即全屏取景的硬约束不变。
 - 相册查看器（黑底灯箱）打开时隐藏 TabBar，关闭后恢复。
-- 页面内容底部统一留 `88dp`（56 导航 + 24 呼吸 + 系统栏），避免被 TabBar 压住。
+- 页面内容底部统一留 `64dp`（56 导航 + 8 呼吸 + 系统栏），避免被 TabBar 压住。
 
 ## 2. 页面头部
 
@@ -63,7 +63,7 @@
 3. 列表行：56×72 真实缩略图 + 卷名 14sp + `36 张 · 2026.10.20` 10sp mono + 右侧箭头；
    行高 ≥72dp、hairline 分隔、无卡片底。
 4. 只列真实 pack 里的胶卷；没有 Fuji/Ilford pack 就不显示，不造假。
-5. 装卷 900ms 动画、真实点击装卷保留；底部 88dp。
+5. 装卷 900ms 动画、真实点击装卷保留；底部 64dp。
 
 ## 6. 设置（Settings）
 
@@ -106,11 +106,21 @@
 | 导航壳 | `AppDestination` 新增 `DISCOVER`；`AppEvent.OpenDiscover`；纸面页平级 Tab 切换；相机页仍无 TabBar；查看器打开时隐藏 |
 | 组件 | 新增 `ui/film/PaperNavBar.kt`（4 Tab）、`PaperTab`；`FilmIcons` 新增 `ArrowLeft / More / Heart / Share / Save / Compass` |
 | 成片页 | 1:1 页头（返回 + `05/36` + More）、86% 印相、卷名 + `P-05`、真实元数据、状态行、4 动作行（保存/收藏/分享/更多，回调默认空） |
-| 照片墙 | `Photo Wall` 标题 + 档案图标、索引页签、3 列（列距 8 / 行距 14 / 帧号 11sp）、石板蓝收藏方块、88dp 底部 |
-| 胶卷库 | `Film Library` + `+`（真实重扫）、墨黑 CURRENT 卡、56×72 缩略图索引行、88dp 底部 |
-| 设置 | 四分类手风琴、真实权限/卷数/版本/声明、`Pocket-CCD` 页脚、88dp 底部 |
+| 照片墙 | `Photo Wall` 标题 + 档案图标、索引页签、3 列（列距 8 / 行距 14 / 帧号 11sp）、石板蓝收藏方块、64dp 底部 |
+| 胶卷库 | `Film Library` + `+`（真实重扫）、墨黑 CURRENT 卡、56×72 缩略图索引行、64dp 底部 |
+| 设置 | 四分类手风琴、真实权限/卷数/版本/声明、`Pocket-CCD` 页脚、64dp 底部 |
 | 发现 | 脚手架：真实照片数/胶卷数/本卷进度；无预置内容 |
 | 主题 | `FilmPaperSpec.sheetTitle` 26sp / 32 行高（页头 1:1） |
 | 验证 | `assembleDebug` + 64/64 JVM 单测；**真机未验** |
 | 待接入（其他智能体） | `ResultScreen.onSave/onToggleFavorite/onShare/onMore`、发现页内容、滤镜/拍摄模式、新胶卷 pack、设置子页/账户、分享/删除、App 内删除 |
 | 已知偏差 | 设计板 10sp 落 11sp（字号地板）；26sp 已用令牌；CURRENT 卡无「继续拍摄」按钮（系统返回回取景）；取景页未按设计板 01 重排 |
+
+### 10.1 v0.6.1 反馈修正
+
+- **TabBar 黑底**：`PaperNavBar` 已单独包 `FilmTheme(FilmPaperSpec)`（它在 AnimatedContent 分支外，
+  默认令牌是暗色）。
+- **返回**：纸面页 `NavigateBack` 统一回 CAMERA，不再回上一个 Tab。
+- **成片页**：印相 92% / 纸边 8dp / 2dp 极轻投影；EXIF 行 = `ISO · 快门 · 光圈`（真实项）；
+  底部预留 64dp。
+- **设置页脚**：左对齐 `Version / Build / Author` 三行，值右对齐 mono。
+- **底部留白**：各纸面页 88→64dp（TabBar 56 + 8 呼吸）。

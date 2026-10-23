@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -145,7 +146,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 64.dp),
             ) {
                 item {
                     CategorySection(
@@ -544,10 +545,10 @@ private fun ColophonHairline() {
 }
 
 /**
- * 页脚（§6.3）：`Pocket-CCD` Serif + 英文副题 + 真实版本/构建号。
+ * 页脚（§6.3）：`Pocket-CCD` Serif + 英文副题 + Version / Build / Author 三行。
  *
- * 作者字段不写：版式规格要求"无真实来源就不写"（D-002），这里没有作者数据源。
- * 页脚之后由 LazyColumn 的 bottom contentPadding 留出 88dp，避开底部 TabBar。
+ * 版式按设计板：左对齐、标签左 / 值右对齐（mono），不是把版本号塞成一行居中。
+ * 作者字段没有真实来源，显示 `—`（D-002），不写死设计板上的名字。
  */
 @Composable
 private fun ColophonFooter() {
@@ -557,7 +558,6 @@ private fun ColophonFooter() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = spec.metrics.pageMargin),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(40.dp))
         PaperHairline()
@@ -566,29 +566,52 @@ private fun ColophonFooter() {
             text = "Pocket-CCD",
             color = p.textPrimary,
             fontFamily = spec.type.titleFamily,
-            fontSize = spec.type.optionTitle,
-            lineHeight = spec.type.bodyLineHeight,
+            fontSize = spec.type.optionTitle * 1.125f,
+            lineHeight = 26.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = "A Camera App for Film Lovers",
             color = p.textSecondary,
             fontFamily = spec.type.monoFamily,
             fontSize = spec.type.monoSmall,
             lineHeight = spec.type.labelLineHeight,
-            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(18.dp))
+        FooterMetaRow(label = "Version", value = BuildConfig.VERSION_NAME)
+        FooterMetaRow(label = "Build", value = BuildConfig.VERSION_CODE.toString())
+        FooterMetaRow(label = "Author", value = "—")
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** 页脚一行：左 11sp mono 标签，右 11sp mono 值。 */
+@Composable
+private fun FooterMetaRow(label: String, value: String) {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            text = "Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
+            text = label,
+            modifier = Modifier.weight(1f),
             color = p.textTertiary,
             fontFamily = spec.type.monoFamily,
             fontSize = spec.type.monoSmall,
             lineHeight = spec.type.labelLineHeight,
-            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(24.dp))
+        Text(
+            text = value,
+            color = p.textPrimary,
+            fontFamily = spec.type.monoFamily,
+            fontSize = spec.type.monoSmall,
+            lineHeight = spec.type.labelLineHeight,
+        )
     }
 }
 

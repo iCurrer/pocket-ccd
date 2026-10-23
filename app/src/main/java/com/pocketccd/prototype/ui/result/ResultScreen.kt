@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -78,7 +80,7 @@ enum class ResultStatus {
 private enum class Stage { SAVED, DEVELOPING, FAILED, EMPTY }
 
 /** 印相纸边：印相框内窗四周的纸白留边（1:1 规格 §3.2）。 */
-private val PrintEdge = 6.dp
+private val PrintEdge = 8.dp
 
 /**
  * 设计板卷名 18sp。共享字阶里没有 18sp 档（最接近的是 16sp `optionTitle`），
@@ -94,7 +96,7 @@ private const val TypewriterCharMs = 70L
  * 页面底部留白：56dp 全局 TabBar + 32dp 呼吸。
  * 系统栏 inset 已由 AppRoot 统一让开，所以这里只补 TabBar 盖住的高度。
  */
-private val BottomNavReserve = 88.dp
+private val BottomNavReserve = 64.dp
 
 /** 只给 `@Preview` 画布铺纸底用；界面取色一律走 `LocalFilmTheme`，不读这个常量。 */
 private const val PreviewPaperBg = 0xFFECEAE4L
@@ -424,35 +426,40 @@ private fun ResultBody(
             .fillMaxWidth()
             .padding(horizontal = spec.metrics.pageMargin),
     ) {
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // 印相：内容宽 86%，居中；6dp 纸边 + 1px 墨线 + 2dp 圆角、无阴影。
+        // 印相：内容宽 92%，居中；8dp 纸边 + 1px 墨线 + 2dp 圆角 + 极轻投影。
+        // 比 v0.5.0 的 86% 更接近设计板：24dp 页边距 + 92% 后，照片两侧只剩约 36dp。
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             PrintFrame(
                 aspect = aspect,
                 bitmap = (image as? PrintImage.Ready)?.bitmap,
                 contentDescription = stockLabel?.let { "成片：$it" },
                 emptyLabel = if (image is PrintImage.Missing) "缩略图缺失" else null,
-                modifier = Modifier.fillMaxWidth(0.86f),
+                modifier = Modifier.fillMaxWidth(0.92f),
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         PrintCaption(
             stockLabel = stockLabel,
             printFrameLabel = printFrameNumber(photo, frameIndex),
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         MetadataLines(
             dateText = formatCapturedAt(capturedAt) ?: "—",
-            exposureText = exif.exposureLine() ?: "—",
+            // 设计板是三段式 `ISO 100 · 1/60s · f/1.8`。只拼真实读到的项；
+            // CameraX/历史照片缺 ISO 时自动退化成 `1/60s · f/1.8`，一项都没有才写 `—`。
+            exposureText = listOfNotNull(exif.isoLabel(), exif.exposureLine())
+                .joinToString(" · ")
+                .ifEmpty { "—" },
             deviceModel = deviceModel,
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         StatusLine(
             stage = stage,
@@ -649,7 +656,9 @@ private fun TypewriterLine(
 // ---------------------------------------------------------------------------
 
 /**
- * 印相框（1:1 规格 §3.2）：图片外 6dp 纸白边 + 1px 墨线，圆角 2dp，**无阴影**。
+ * 印相框（1:1 规格 §3.2）：图片外 8dp 纸白边 + 1px 墨线，圆角 2dp。
+ * 只加一层 2dp 的极轻投影：相纸是实体印刷物，完全无影会贴在纸面上读成一块白框；
+ * 投影只属于"这张照片"，不属于任何卡片/按钮。
  *
  * 没有成片（冲洗中）或缩略图丢了时，内窗是一块**纸色空窗**，不是灯箱黑块：
  * 纸面页上唯一允许出现的黑色是照片本身，空窗不替照片占位成假画面。
@@ -668,6 +677,13 @@ private fun PrintFrame(
 
     Box(
         modifier = modifier
+            .shadow(
+                elevation = 2.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = 0.14f),
+            )
             .clip(shape)
             .background(p.sheetBg)
             .border(spec.metrics.hairline, p.hairline, shape)

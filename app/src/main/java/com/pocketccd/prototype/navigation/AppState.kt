@@ -94,12 +94,8 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         // CAMERA is the root: [BackHandler] stays disabled so the system can
         // finish the activity instead of looping inside the app.
         AppDestination.CAMERA -> state
-        AppDestination.SETTINGS -> state.copy(destination = AppDestination.CAMERA)
-        AppDestination.GALLERY -> state.copy(destination = state.galleryOrigin)
-        AppDestination.RESULT -> state.copy(destination = state.resultOrigin)
-        // 装卷/不装卷都回取景器：换完卷就该继续拍。
-        AppDestination.FILMS -> state.copy(destination = AppDestination.CAMERA)
-        // 发现页是 Tab 之一：返回回取景器，而不是在 Tab 间循环。
-        AppDestination.DISCOVER -> state.copy(destination = AppDestination.CAMERA)
+        // D-064 修正：底部 Tab 是平级目的地，返回统一回相机，而不是回上一个 Tab。
+        // 否则从设置切到相册再按返回，会回到设置，用户永远退不出纸面页。
+        else -> state.copy(destination = AppDestination.CAMERA)
     }
 }
