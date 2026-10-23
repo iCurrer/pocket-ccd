@@ -36,6 +36,24 @@ enum class FilmIconKind {
 
     /** 相机机身 + 镜头，用于「继续拍摄」。原型取自 mdi:camera-outline。 */
     Camera,
+
+    /** 返回箭头（D-063 1:1 版面）。 */
+    ArrowLeft,
+
+    /** 更多（三点）。 */
+    More,
+
+    /** 收藏（空心心形）。 */
+    Heart,
+
+    /** 分享（托盘 + 上箭头）。 */
+    Share,
+
+    /** 保存（托盘 + 下箭头）。 */
+    Save,
+
+    /** 发现（罗盘）。 */
+    Compass,
 }
 
 /**
@@ -63,6 +81,12 @@ fun FilmIconKind.accessibilityLabel(active: Boolean): String = when (this) {
     FilmIconKind.Check -> "确认"
     FilmIconKind.ChevronRight -> "进入"
     FilmIconKind.Camera -> "继续拍摄"
+    FilmIconKind.ArrowLeft -> "返回"
+    FilmIconKind.More -> "更多"
+    FilmIconKind.Heart -> if (active) "已收藏" else "收藏"
+    FilmIconKind.Share -> "分享"
+    FilmIconKind.Save -> "保存"
+    FilmIconKind.Compass -> "发现"
 }
 
 /**
@@ -82,6 +106,12 @@ fun FilmIconKind.actionLabel(): String = when (this) {
     FilmIconKind.Check -> "确认"
     FilmIconKind.ChevronRight -> "进入"
     FilmIconKind.Camera -> "继续拍摄"
+    FilmIconKind.ArrowLeft -> "返回上一页"
+    FilmIconKind.More -> "更多操作"
+    FilmIconKind.Heart -> "切换收藏"
+    FilmIconKind.Share -> "分享照片"
+    FilmIconKind.Save -> "保存照片"
+    FilmIconKind.Compass -> "打开发现"
 }
 
 /**
@@ -232,6 +262,66 @@ fun FilmIcon(
                     center = o(12f, 13.5f),
                     style = Stroke(width = w),
                 )
+            }
+
+            FilmIconKind.ArrowLeft -> {
+                drawLine(tint, o(19f, 12f), o(6f, 12f), w)
+                drawLine(tint, o(6f, 12f), o(11f, 7f), w)
+                drawLine(tint, o(6f, 12f), o(11f, 17f), w)
+            }
+
+            FilmIconKind.More -> {
+                drawCircle(tint, radius = 1.8f * s, center = o(6f, 12f))
+                drawCircle(tint, radius = 1.8f * s, center = o(12f, 12f))
+                drawCircle(tint, radius = 1.8f * s, center = o(18f, 12f))
+            }
+
+            FilmIconKind.Heart -> {
+                val path = Path().apply {
+                    moveTo(12f * s, 20f * s)
+                    lineTo(4.6f * s, 12.2f * s)
+                    cubicTo(2.2f * s, 9.6f * s, 3.4f * s, 5.2f * s, 7.2f * s, 5.2f * s)
+                    cubicTo(9.4f * s, 5.2f * s, 11.1f * s, 6.5f * s, 12f * s, 8.1f * s)
+                    cubicTo(12.9f * s, 6.5f * s, 14.6f * s, 5.2f * s, 16.8f * s, 5.2f * s)
+                    cubicTo(20.6f * s, 5.2f * s, 21.8f * s, 9.6f * s, 19.4f * s, 12.2f * s)
+                    close()
+                }
+                drawPath(path, tint, style = Stroke(width = w))
+            }
+
+            FilmIconKind.Share -> {
+                drawLine(tint, o(12f, 3.5f), o(12f, 14.5f), w)
+                drawLine(tint, o(12f, 3.5f), o(8f, 7.5f), w)
+                drawLine(tint, o(12f, 3.5f), o(16f, 7.5f), w)
+                drawLine(tint, o(5f, 12f), o(5f, 20.5f), w)
+                drawLine(tint, o(5f, 20.5f), o(19f, 20.5f), w)
+                drawLine(tint, o(19f, 20.5f), o(19f, 12f), w)
+            }
+
+            FilmIconKind.Save -> {
+                drawLine(tint, o(12f, 3.5f), o(12f, 14.5f), w)
+                drawLine(tint, o(12f, 14.5f), o(8f, 10.5f), w)
+                drawLine(tint, o(12f, 14.5f), o(16f, 10.5f), w)
+                drawLine(tint, o(5f, 17.5f), o(5f, 20.5f), w)
+                drawLine(tint, o(5f, 20.5f), o(19f, 20.5f), w)
+                drawLine(tint, o(19f, 20.5f), o(19f, 17.5f), w)
+            }
+
+            FilmIconKind.Compass -> {
+                drawCircle(
+                    color = tint,
+                    radius = 8.5f * s,
+                    center = o(12f, 12f),
+                    style = Stroke(width = w),
+                )
+                val needle = Path().apply {
+                    moveTo(15.6f * s, 8.4f * s)
+                    lineTo(13.2f * s, 13.2f * s)
+                    lineTo(8.4f * s, 15.6f * s)
+                    lineTo(10.8f * s, 10.8f * s)
+                    close()
+                }
+                drawPath(needle, tint, style = Stroke(width = w * 0.9f))
             }
         }
     }

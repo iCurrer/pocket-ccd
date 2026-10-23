@@ -34,7 +34,7 @@
 
 ---
 
-## 当前状态（2026-10-23 09:47，夜间包 v0.4.1）
+## 当前状态（2026-10-23 23:00，夜间包 v0.6.0）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
@@ -58,11 +58,13 @@
 | App 内删除照片 | 未开始 | 做的时候必须同时删 MediaStore 条目，否则会制造反向分叉 |
 | Rec.2020 色彩口径 | 未开始 | 当前为线性光 + sRGB 基色（FOT-006） |
 | 冲洗进度条 / 取景框比例 | 未开始 | FOT-009 |
+| **视觉方向 C「白纸档案」** | **代码完成，待真机** | D-063 / v0.5.0：取景页黑闸门 + 纸白刻字；成片/照片墙/胶卷库/设置/声明相纸化 |
+| **B 方案 1:1 版面 + 底部四 Tab** | **UI 完成，功能待接入，待真机** | D-064 / v0.6.0：相册/胶卷/发现/设置 TabBar、成片页 1:1、Photo Wall、Film Library 黑色 CURRENT 卡、设置四分类、发现页真实统计脚手架；保存/分享/更多/发现内容等回调默认空，待其他智能体接入 |
 
 > 构建通过不等于已验证。未在真机执行过的项一律标 `NOT_RUN` / `BLOCKED`。
 > 上面几行"待真机"就是字面意思：代码编译过、单测过，但**没人在手机上看过**。
 > 2026-10-23 夜间包的逐项验收清单与权限审计见
-> [`docs/handoff/2026-10-23-morning.md`](docs/handoff/2026-10-23-morning.md)。
+> [`docs/handoff/2026-10-23-paper-archive-1to1.md`](docs/handoff/2026-10-23-paper-archive-1to1.md)。
 
 ---
 
@@ -409,15 +411,15 @@ App 透过 FUSE 列不出内容且**不报错**（表现为 `packCount=0`）。
 
 ### 把包发给别人
 
-只有一个文件：`app/build/outputs/apk/benchmark/app-benchmark.apk`（**40,925,042 B ≈ 39.0 MiB**，
+只有一个文件：`app/build/outputs/apk/benchmark/app-benchmark.apk`（**41,023,826 B ≈ 39.1 MiB**，
 release 变体 + debug 签名，非 debuggable）。当前夜间包指纹：
 
 | 项 | 值 |
 |---|---|
-| versionCode / versionName | `7` / `0.4.1` |
-| 构建时间 | 2026-10-23 09:46（Asia/Shanghai） |
-| SHA-256 | `72B58F9611B4EADEF577F0DFBB665D34FC1FA5C8AA0124C7DF50CDEE5B0C2608` |
-| 便利副本 | `dist/pocketccd-0.4.1-benchmark.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
+| versionCode / versionName | `9` / `0.6.0` |
+| 构建时间 | 2026-10-23 23:03（Asia/Shanghai） |
+| SHA-256 | `F3ADB212ECF8A48AD82F5515D65307DE504EEBBAB936F0BC31E59F493128CD32` |
+| 便利副本 | `dist/pocketccd-0.6.0-paper-archive-1to1.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
 
 对方不需要电脑、不需要 adb、不需要 root：
 

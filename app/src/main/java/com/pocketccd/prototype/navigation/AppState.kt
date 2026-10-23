@@ -19,6 +19,14 @@ enum class AppDestination {
      * 所以这页的数量永远是运行时读出来的，不写死。
      */
     FILMS,
+
+    /**
+     * 发现页（D-063 1:1 版面新增，B 方案）。
+     *
+     * 目前只展示真实统计（照片数 / 胶卷数 / 本卷进度）；内容由后续智能体接入，
+     * 这里先保留独立目的地，避免底部 Tab 变成一个死按钮。
+     */
+    DISCOVER,
 }
 
 sealed interface AppEvent {
@@ -29,6 +37,7 @@ sealed interface AppEvent {
     data object OpenSettings : AppEvent
     data object OpenResult : AppEvent
     data object OpenFilms : AppEvent
+    data object OpenDiscover : AppEvent
     data object NavigateBack : AppEvent
 }
 
@@ -49,19 +58,18 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         else -> state
     }
 
+    // 底部 Tab 是平级切换：从任何纸面页都能去另外三个 Tab（相机页仍只从取景页进）。
     AppEvent.OpenGallery -> when (state.destination) {
         AppDestination.GALLERY -> state
-        AppDestination.CAMERA, AppDestination.RESULT, AppDestination.FILMS -> state.copy(
+        else -> state.copy(
             destination = AppDestination.GALLERY,
             galleryOrigin = state.destination,
         )
-        AppDestination.SETTINGS -> state
     }
 
     AppEvent.OpenSettings -> when (state.destination) {
-        // Settings is reachable from the viewfinder's top bar, not from home.
-        AppDestination.CAMERA -> state.copy(destination = AppDestination.SETTINGS)
-        else -> state
+        AppDestination.SETTINGS -> state
+        else -> state.copy(destination = AppDestination.SETTINGS)
     }
 
     AppEvent.OpenResult -> when (state.destination) {
@@ -72,10 +80,14 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         else -> state
     }
 
-    // 只从取景页进：换卷是"拍之前"的动作，从相册或成片页进去没有意义。
     AppEvent.OpenFilms -> when (state.destination) {
-        AppDestination.CAMERA -> state.copy(destination = AppDestination.FILMS)
-        else -> state
+        AppDestination.FILMS -> state
+        else -> state.copy(destination = AppDestination.FILMS)
+    }
+
+    AppEvent.OpenDiscover -> when (state.destination) {
+        AppDestination.DISCOVER -> state
+        else -> state.copy(destination = AppDestination.DISCOVER)
     }
 
     AppEvent.NavigateBack -> when (state.destination) {
@@ -87,5 +99,7 @@ fun reduce(state: AppUiState, event: AppEvent): AppUiState = when (event) {
         AppDestination.RESULT -> state.copy(destination = state.resultOrigin)
         // 装卷/不装卷都回取景器：换完卷就该继续拍。
         AppDestination.FILMS -> state.copy(destination = AppDestination.CAMERA)
+        // 发现页是 Tab 之一：返回回取景器，而不是在 Tab 间循环。
+        AppDestination.DISCOVER -> state.copy(destination = AppDestination.CAMERA)
     }
 }

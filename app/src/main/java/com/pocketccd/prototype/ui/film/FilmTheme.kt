@@ -365,8 +365,9 @@ val FilmPaperSpec = FilmThemeSpec(
     type = FilmType(
         titleFamily = FontFamily.Serif,
         display = 32.sp,
-        sheetTitle = 24.sp,
-        sheetTitleLineHeight = 30.sp,
+        // D-063 1:1 版面：纸面页标题按设计板 26sp（行高 32），不再停在 24sp。
+        sheetTitle = 26.sp,
+        sheetTitleLineHeight = 32.sp,
         optionTitle = 16.sp,
         value = 14.sp,
         body = 14.sp,

@@ -5,8 +5,8 @@ import org.junit.Test
 
 /**
  * D-039 removed HOME: the app starts on the viewfinder and CAMERA is the root.
- * These cases pin that down, plus the four overlay destinations that can still
- * be entered from it.
+ * D-063 1:1 版面又加了底部 4 Tab（相册/胶卷/发现/设置），所以纸面页之间现在是
+ * **平级切换**：从任何纸面页都能去另外三个 Tab；相机页仍然只从取景页进。
  */
 class AppStateTest {
 
@@ -72,17 +72,17 @@ class AppStateTest {
     }
 
     @Test
-    fun settingsCannotOpenGallery() {
+    fun settingsTabCanOpenGallery() {
         val settings = reduce(AppUiState(), AppEvent.OpenSettings)
         val next = reduce(settings, AppEvent.OpenGallery)
-        assertEquals(AppDestination.SETTINGS, next.destination)
+        assertEquals(AppDestination.GALLERY, next.destination)
     }
 
     @Test
-    fun openSettingsFromGalleryIsIgnored() {
+    fun galleryTabCanOpenSettings() {
         val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
         val next = reduce(gallery, AppEvent.OpenSettings)
-        assertEquals(AppDestination.GALLERY, next.destination)
+        assertEquals(AppDestination.SETTINGS, next.destination)
     }
 
     @Test
@@ -115,8 +115,7 @@ class AppStateTest {
 
     @Test
     fun filmsOpensGalleryAndBackReturnsToFilms() {
-        // 库里顶栏右侧就是相册入口（原型 films.html 的 image-multiple 按钮），
-        // 所以这里必须能进相册；返回要回到库，而不是掉回取景器。
+        // 库里顶部右侧是相册入口；返回要回到库，而不是掉回取景器。
         val films = reduce(AppUiState(), AppEvent.OpenFilms)
         val gallery = reduce(films, AppEvent.OpenGallery)
         assertEquals(AppDestination.GALLERY, gallery.destination)
@@ -125,17 +124,39 @@ class AppStateTest {
     }
 
     @Test
-    fun filmsIgnoresSettings() {
+    fun filmsTabCanOpenSettings() {
         val films = reduce(AppUiState(), AppEvent.OpenFilms)
-        assertEquals(AppDestination.FILMS, reduce(films, AppEvent.OpenSettings).destination)
+        assertEquals(AppDestination.SETTINGS, reduce(films, AppEvent.OpenSettings).destination)
     }
 
     @Test
-    fun openFilmsOnlyFromCamera() {
+    fun paperTabsCanOpenFilms() {
         val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
-        assertEquals(AppDestination.GALLERY, reduce(gallery, AppEvent.OpenFilms).destination)
+        assertEquals(AppDestination.FILMS, reduce(gallery, AppEvent.OpenFilms).destination)
 
         val result = reduce(AppUiState(), AppEvent.OpenResult)
-        assertEquals(AppDestination.RESULT, reduce(result, AppEvent.OpenFilms).destination)
+        assertEquals(AppDestination.FILMS, reduce(result, AppEvent.OpenFilms).destination)
+    }
+
+    @Test
+    fun cameraOpensDiscoverAndBackReturnsCamera() {
+        val discover = reduce(AppUiState(), AppEvent.OpenDiscover)
+        assertEquals(AppDestination.DISCOVER, discover.destination)
+        assertEquals(AppDestination.CAMERA, reduce(discover, AppEvent.NavigateBack).destination)
+    }
+
+    @Test
+    fun discoverTabIsReachableFromPaperPages() {
+        val gallery = reduce(AppUiState(), AppEvent.OpenGallery)
+        assertEquals(AppDestination.DISCOVER, reduce(gallery, AppEvent.OpenDiscover).destination)
+
+        val settings = reduce(AppUiState(), AppEvent.OpenSettings)
+        assertEquals(AppDestination.DISCOVER, reduce(settings, AppEvent.OpenDiscover).destination)
+    }
+
+    @Test
+    fun duplicateDiscoverEventIsIgnored() {
+        val discover = reduce(AppUiState(), AppEvent.OpenDiscover)
+        assertEquals(discover, reduce(discover, AppEvent.OpenDiscover))
     }
 }

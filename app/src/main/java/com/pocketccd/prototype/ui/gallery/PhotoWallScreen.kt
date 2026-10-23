@@ -1,6 +1,7 @@
 package com.pocketccd.prototype.ui.gallery
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.pocketccd.prototype.camera.FavoritesStore
+import com.pocketccd.prototype.ui.film.FilmIcon
+import com.pocketccd.prototype.ui.film.FilmIconKind
 import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
 import com.pocketccd.prototype.ui.film.FilmThemeSpec
@@ -63,41 +65,38 @@ import com.pocketccd.prototype.ui.film.LocalFilmTheme
 import com.pocketccd.prototype.ui.film.PaperEmptyState
 import com.pocketccd.prototype.ui.film.PaperHairline
 import com.pocketccd.prototype.ui.film.PaperIndexTab
-import com.pocketccd.prototype.ui.film.PaperPageHeader
 import com.pocketccd.prototype.ui.film.filmClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 胶片相册（D-063「白纸档案」C 方向：接触印相页）。
+ * 照片墙（D-063「白纸档案」1:1 版面 / B 方案 §4）。
  *
- * **版式**：纸面整页。页头（Serif「胶片相册」+ mono `ARCHIVE` + 返回键）、
- * 一行索引页签（`全部` / `★ 收藏` / 每个真实卷名）、按卷分组的 3 列接触印相网格。
- * 组头是 `ROLL 02 / GOLD 200 / 10.20 / 05 / 36` 形式的档案行，下面 1px hairline；
- * 每格是图片 + 图下 11sp mono 帧号，收藏用石板蓝小方块角标（不做金色）。
+ * **版式**：纸面整页。页头是英文 `Photo Wall`（Serif）+ 右侧档案图标；下面是索引页签
+ * （`全部` / `★ 收藏` / 每个真实卷名）；再下面是 3 列 1:1 接触印相网格。
+ * 底部由 AppRoot 的 `PaperNavBar` 覆盖，所以页面内容统一留 88dp（见 [BOTTOM_CONTENT_INSET]）。
  *
- * **分组口径**：按胶卷名分组，组内按拍摄时间倒序。这是能对得上数据的唯一分法 ——
- * 历史照片没有持久化「第几卷」的边界，按时间间隔猜一个新卷属于编造。
- * 因此同一款卷换两次卷会合成一组。
+ * **导航**：页头**没有**返回箭头 —— 纸面页之间由底部 TabBar 切换。系统返回由本页的
+ * `BackHandler` 接住并转给 [onBack]（→ `NavigateBack`），因此 [onBack] 参数保留；
+ * 本页另外把它用在空态的「去取景」动作上。
  *
  * **筛选**：`全部` / `★ 收藏` / 每个真实出现过的胶卷名（动态生成，没有照片的卷不出现）。
- * 筛选与分组联动 —— 筛"收藏"时组内一张不剩的卷整组隐藏（逻辑在
- * `GalleryLogic.applyGalleryFilter` / `toRollGroups`，有 JVM 单测）。这里只负责画页签，
- * 不重新实现任何一条判断。
+ * 筛选与分组仍由 `GalleryLogic` 决定（`galleryFilters` / `applyGalleryFilter` /
+ * `toRollGroups`），这里只画页签和网格，不重新实现任何一条判断。
  *
  * **帧号**：照片没有持久化的「卷内第几张」，所以帧号是**组内曝光顺序**：
- * 组内最早的一张是 `01`，最新一张等于组内张数。组内按时间倒序展示，因此首格的
- * 帧号是组内最大值；号在组内稳定，加新片子只会让新片拿到更大的号。
+ * 组内最早的一张是 `01`，最新一张等于组内张数。查看器里的帧号用同一口径
+ * （`archiveFrameNumber`），两边不会打架。
  *
- * **点开大图**：格子可点，进入 `PhotoViewer`。查看器拿的是「筛选后的扁平列表」的拷贝
- * 和当前索引 —— 查看器开着的时候用户切收藏，背后的列表会变，但查看器里左右滑的顺序
- * 不能跟着跳，否则 `HorizontalPager` 的当前位置会莫名其妙换人。
+ * **点开大图**：格子可点，进入 `PhotoViewer`（v0.5.0 的黑底灯箱，本文件未改）。
+ * 查看器拿的是「筛选后的扁平列表」的拷贝和当前索引 —— 查看器开着的时候用户切收藏，
+ * 背后的列表会变，但查看器里左右滑的顺序不能跟着跳。
  *
  * **缩略图**：`produceState` + `Dispatchers.IO`，按格子实际像素算 `inSampleSize`，
  * 并进 `GalleryBitmapCache`。主线程只做 `Bitmap → ImageBitmap` 的包装。
  * 缩略图文件缺失时回退到全尺寸原图，但仍按格子尺寸采样。
  *
- * **不画的**：金色星、圆角白卡、卡片阴影/渐变、原型顶部的「冲扫 72% / 已扫描 18/36」
+ * **不画的**：金色星、白色卡片底、阴影/渐变；原型顶部的「冲扫 72% / 已扫描 18/36」
  * 假进度（本项目没有外部冲扫服务，D-042）。
  */
 @Composable
@@ -107,8 +106,7 @@ fun PhotoWallScreen(
     /** 查看器是黑底灯箱，打开时系统栏图标要换成浅色；由 AppRoot 统一改。 */
     onViewerOpenChange: (Boolean) -> Unit = {},
 ) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
+    val p = LocalFilmTheme.current.palette
     val context = LocalContext.current
 
     // 收藏是本地状态：从 SharedPreferences 读一次，之后由 viewer 的回调维护。
@@ -118,6 +116,10 @@ fun PhotoWallScreen(
 
     var filter by remember { mutableStateOf<GalleryFilter>(GalleryFilter.All) }
     var viewerRequest by remember { mutableStateOf<ViewerRequest?>(null) }
+
+    // 系统返回走本页：纸面页之间是 TabBar 平级切换，返回交给 route 级导航（onBack）。
+    // 查看器打开时 PhotoViewer 自己的 BackHandler 更靠内，会先关查看器再轮到这一条。
+    BackHandler { onBack() }
 
     LaunchedEffect(viewerRequest != null) {
         onViewerOpenChange(viewerRequest != null)
@@ -134,12 +136,17 @@ fun PhotoWallScreen(
     val visiblePhotos = remember(photos, activeFilter, favoriteIds) {
         applyGalleryFilter(photos, activeFilter, favoriteIds)
     }
-    val groups = remember(visiblePhotos) { toRollGroups(visiblePhotos) }
 
-    // 卷号按「全部照片」的组序算，不是按当前筛选后的可见组序：切到某一卷时，
-    // 它的 ROLL 号不应该从 02 变成 01。组序本身来自 GalleryLogic，不在这里另排。
-    val rollNumbers = remember(photos) {
-        toRollGroups(photos).mapIndexed { index, group -> group.label to index + 1 }.toMap()
+    // 帧号按「真实卷分组」算，和查看器的 archiveFrameNumber 同一口径：
+    // 组内按拍摄时间倒序，最旧的一张 = 01。
+    val frameNumbers = remember(visiblePhotos) {
+        buildMap {
+            toRollGroups(visiblePhotos).forEach { group ->
+                group.photos.forEachIndexed { index, photo ->
+                    put(photo.id, group.photos.size - index)
+                }
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -151,18 +158,7 @@ fun PhotoWallScreen(
                 // （AppRoot 对 GALLERY 不再统一吃 safeDrawing）。
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            PaperPageHeader(
-                title = "胶片相册",
-                subtitle = "ARCHIVE",
-                onBack = onBack,
-                trailing = {
-                    // 页头右下角只放一个真实数字：当前相册总张数。
-                    Text(
-                        text = photos.size.toString().padStart(2, '0'),
-                        style = paperMonoStyle(spec, p.textTertiary),
-                    )
-                },
-            )
+            PhotoWallHeader()
 
             if (photos.isNotEmpty()) {
                 FilterTabs(
@@ -178,7 +174,8 @@ fun PhotoWallScreen(
                     body = "按下快门，第一卷会从这里开始。",
                     action = "去取景",
                     onAction = onBack,
-                    modifier = Modifier.weight(1f),
+                    // 底部 TabBar 是覆盖层，空态也要让开 88dp，否则按钮会被压住。
+                    modifier = Modifier.weight(1f).padding(bottom = BOTTOM_CONTENT_INSET),
                 )
 
                 // 只有「收藏」筛选能走到这里：卷页签都由现存照片生成，筛完至少剩一张。
@@ -188,13 +185,12 @@ fun PhotoWallScreen(
                     body = "打开任意一张底片，点底部的「收藏」，它就会出现在这里。",
                     action = "看全部底片",
                     onAction = { filter = GalleryFilter.All },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).padding(bottom = BOTTOM_CONTENT_INSET),
                 )
 
                 else -> ContactSheet(
-                    groups = groups,
-                    flatPhotos = visiblePhotos,
-                    rollNumbers = rollNumbers,
+                    photos = visiblePhotos,
+                    frameNumbers = frameNumbers,
                     favoriteIds = favoriteIds,
                     onOpenPhoto = { index -> viewerRequest = ViewerRequest(visiblePhotos, index) },
                     modifier = Modifier.weight(1f),
@@ -202,7 +198,7 @@ fun PhotoWallScreen(
             }
         }
 
-        // 查看器盖在照片墙之上；关闭后 disposes，返回键重新交给 AppRoot 的 BackHandler。
+        // 查看器盖在照片墙之上；关闭后 disposes，返回键重新交给本页的 BackHandler。
         viewerRequest?.let { request ->
             PhotoViewer(
                 photos = request.photos,
@@ -217,10 +213,60 @@ fun PhotoWallScreen(
 }
 
 /**
+ * 1:1 页头：`Photo Wall`（Serif）+ 右侧档案图标。
+ *
+ * 不画返回箭头：纸面页之间由 TabBar 切换。
+ *
+ * 标题设计值是 26sp；当前 `FilmType` 没有 26sp 令牌，而 `NoBareFontSizeTest` 禁止裸字号，
+ * 所以取最接近的 `sheetTitle`（24sp）。要精确 26sp 需要在 FilmTheme.kt 新增页面标题令牌。
+ *
+ * 右侧档案图标只占 48dp 槽位、不接点击：相册本身就是这一页，做成按钮会是一个
+ * 「点了没反应」的假控件（本轮没有第二个入口可接）。
+ */
+@Composable
+private fun PhotoWallHeader() {
+    val spec = LocalFilmTheme.current
+    val p = spec.palette
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = spec.metrics.pageMargin),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Photo Wall",
+                color = p.textPrimary,
+                fontFamily = spec.type.titleFamily,
+                fontSize = spec.type.sheetTitle,
+                lineHeight = spec.type.sheetTitleLineHeight,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier.size(48.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                FilmIcon(
+                    kind = FilmIconKind.ImageMultiple,
+                    tint = p.textPrimary,
+                    iconSize = 18.dp,
+                    strokeWidth = 1.5.dp,
+                )
+            }
+        }
+        PaperHairline()
+    }
+}
+
+/**
  * 索引页签行。横向可滚，避免卷多时把「收藏」挤出屏幕。
  *
- * 数量角标不画在页签上：全部/收藏的张数在页头与空态里已有交代，胶卷张数在组头
- * `05 / 36` 里写了，同一屏重复两次没有信息增量。
+ * 页签只负责筛选，不画数量角标：张数不是这一行要回答的问题，查看器的 `03 / 12`
+ * 才是「当前这张在列表里的位置」。
  */
 @Composable
 private fun FilterTabs(
@@ -260,16 +306,15 @@ private fun GalleryFilter.tabLabel(): String = when (this) {
 }
 
 /**
- * 接触印相网格：3 列、列间距 12dp、行间距 20dp。组头跨整行。
+ * 1:1 接触印相网格：3 列、列距 8dp、行距 14dp、页边距 24dp，底部留 88dp 给 TabBar。
  *
- * [flatPhotos] 是同一份筛选结果的扁平顺序（`applyGalleryFilter` 的输出）——
- * 查看器吃的就是它，所以格子上点开的是哪张、左右滑的下一张是哪张，两边永远一致。
+ * 照片按 `applyGalleryFilter` 的输出顺序铺进网格（内部仍按真实卷分组），
+ * 和查看器的左右滑顺序同源：格子上点开的是哪张、下一张是哪张，两边永远一致。
  */
 @Composable
 private fun ContactSheet(
-    groups: List<PhotoGroup>,
-    flatPhotos: List<PhotoWallItem>,
-    rollNumbers: Map<String, Int>,
+    photos: List<PhotoWallItem>,
+    frameNumbers: Map<String, Int>,
     favoriteIds: Set<String>,
     onOpenPhoto: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -287,101 +332,29 @@ private fun ContactSheet(
             contentPadding = PaddingValues(
                 start = spec.metrics.pageMargin,
                 end = spec.metrics.pageMargin,
-                top = 4.dp,
-                bottom = 32.dp,
+                top = 8.dp,
+                bottom = BOTTOM_CONTENT_INSET,
             ),
             horizontalArrangement = Arrangement.spacedBy(TILE_GAP),
             verticalArrangement = Arrangement.spacedBy(ROW_GAP),
         ) {
-            groups.forEachIndexed { groupIndex, group ->
-                item(
-                    key = "header-${group.label}",
-                    span = { GridItemSpan(maxLineSpan) },
-                ) {
-                    RollHeader(
-                        group = group,
-                        rollNumber = rollNumbers[group.label] ?: (groupIndex + 1),
-                    )
-                }
-                itemsIndexed(items = group.photos, key = { _, item -> item.id }) { index, item ->
-                    PhotoTile(
-                        item = item,
-                        // 组内按时间倒序展示，帧号按拍摄顺序从 01 起算：最旧的一张是 01。
-                        frameNumber = group.photos.size - index,
-                        isFavorite = item.id in favoriteIds,
-                        targetPx = cellWidthPx,
-                        onClick = {
-                            // 索引按「筛选后的展示顺序」算，和查看器吃的列表同源。
-                            val flatIndex = flatPhotos.indexOfFirst { it.id == item.id }
-                            if (flatIndex >= 0) onOpenPhoto(flatIndex)
-                        },
-                    )
-                }
+            itemsIndexed(items = photos, key = { _, item -> item.id }) { index, item ->
+                PhotoTile(
+                    item = item,
+                    frameNumber = frameNumbers[item.id] ?: (index + 1),
+                    isFavorite = item.id in favoriteIds,
+                    targetPx = cellWidthPx,
+                    onClick = { onOpenPhoto(index) },
+                )
             }
         }
     }
 }
 
 /**
- * 卷头：`ROLL 02 / GOLD 200 / 10.20 / 05 / 36` + 下方 1px hairline。
+ * 一格接触印相：1:1 图片 + 图下 mono 帧号 + 收藏角标。
  *
- * 五个字段全部来自真实数据：卷号 = 该卷在「全部照片」里的组序；卷名 = `stockLabel`；
- * 日期 = 组内最新一张的 `formatDay`（截成 `10.20`）；`05` = 本组张数。
- * `36` 是一卷的真实容量。
- *
- * 张数超过 36 时不画 `/ 36`：`GalleryLogic` 把同款卷的多次换卷合成一组，
- * 这时写「47 / 36」是自相矛盾的假数字。
- */
-@Composable
-private fun RollHeader(group: PhotoGroup, rollNumber: Int) {
-    val spec = LocalFilmTheme.current
-    val p = spec.palette
-    val count = group.photos.size
-    val latestDay = formatDay(group.photos.first().capturedAt).takeLast(5)
-    val meta = paperMonoStyle(spec, p.textTertiary)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 28.dp, bottom = 4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "ROLL ${rollNumber.toString().padStart(2, '0')}", style = meta)
-            MetaSeparator(style = meta)
-            Text(
-                text = group.label,
-                style = meta.copy(color = p.textPrimary, fontWeight = FontWeight.Medium),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            MetaSeparator(style = meta)
-            Text(text = latestDay, style = meta.copy(color = p.textSecondary))
-            MetaSeparator(style = meta)
-            Text(
-                text = count.toString().padStart(2, '0'),
-                style = meta.copy(color = p.textPrimary),
-            )
-            if (count <= ROLL_CAPACITY) {
-                MetaSeparator(style = meta)
-                Text(text = ROLL_CAPACITY.toString(), style = meta)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        PaperHairline()
-    }
-}
-
-/** 卷头字段之间的分隔符。等宽字体里 ` / ` 本身就是档案表的标点。 */
-@Composable
-private fun MetaSeparator(style: TextStyle) {
-    Text(text = " / ", style = style)
-}
-
-/**
- * 一格接触印相：图片 + 图下 11sp mono 帧号 + 收藏角标。
- *
- * 无卡片背景、无阴影、无渐变：图片本身只有 2dp 圆角 + 1px hairline 描边。
+ * 无卡片底、无阴影、无渐变：图片本身只有 2dp 圆角 + 1px hairline 描边。
  * [targetPx] 由调用方按格宽算好；解码在 `produceState` 的 IO 线程上做，
  * 主线程只把 `Bitmap` 包成 `ImageBitmap`。
  *
@@ -472,15 +445,13 @@ private fun PhotoTile(
                 )
             }
             if (isFavorite) {
-                // 石板蓝小方块 = 收藏角标。1px 纸色描边保证它在暗照片上也读得出来；
-                // 不做金色星、不做红心（D-063）。
+                // 石板蓝 6dp 方块 = 收藏角标（B 版面 §4.3）。不做金色星、不做红心。
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(8.dp)
-                        .background(p.accent, RoundedCornerShape(1.dp))
-                        .border(1.dp, p.appBg, RoundedCornerShape(1.dp)),
+                        .padding(5.dp)
+                        .size(6.dp)
+                        .background(p.accent),
                 )
             }
         }
@@ -492,9 +463,10 @@ private fun PhotoTile(
                 // 这里清掉重复的「05」，避免 TalkBack 连读两遍。
                 .clearAndSetSemantics { },
         ) {
+            // 设计值 10sp；字阶下限是 11sp 且禁止裸字号，取 monoSmall（11sp）。
             Text(
                 text = frameLabel,
-                style = paperMonoStyle(spec, p.textTertiary),
+                style = paperMonoStyle(spec, p.textTertiary, size = spec.type.monoSmall),
             )
         }
     }
@@ -532,9 +504,7 @@ internal fun archiveFrameNumber(photos: List<PhotoWallItem>, index: Int): Int {
 /**
  * 纸面页的等宽小字（帧号 / 日期 / 元数据）。
  *
- * 之前这里是顶层 `TextStyle`，字号写死取自旧暗色主题的令牌 —— 纸面页换成 C 方向后
- * 字号来源会和页面令牌分叉。现在字族、字号、行高都取当前 spec，并打开等宽数字
- * （`tnum`），避免帧号在滚动时抖动。
+ * 字族、字号、行高都取当前 spec，并打开等宽数字（`tnum`），避免帧号在滚动时抖动。
  */
 internal fun paperMonoStyle(
     spec: FilmThemeSpec,
@@ -550,16 +520,16 @@ internal fun paperMonoStyle(
 )
 
 /** 网格列间距。解码目标宽度计算与 LazyVerticalGrid 的实际间距必须用同一个值。 */
-private val TILE_GAP = 12.dp
+private val TILE_GAP = 8.dp
 
 /** 接触印相的行间距。 */
-private val ROW_GAP = 20.dp
+private val ROW_GAP = 14.dp
 
 /**
- * 一卷 36 张。**必须与 `AppRoot.ROLL_CAPACITY` 一致** —— 照片墙的公开签名拿不到它，
- * 也没有第二个可引用的来源，改动时两边要一起改。
+ * 页面底部留白：56dp TabBar + 24dp 呼吸 + 余量。
+ * AppRoot 的 `PaperNavBar` 是覆盖层，页面内容必须自己让开这一段（1:1 版面规格 §1）。
  */
-private const val ROLL_CAPACITY = 36
+private val BOTTOM_CONTENT_INSET = 88.dp
 
 // ---------------------------------------------------------------- preview
 

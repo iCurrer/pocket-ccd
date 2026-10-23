@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -56,10 +57,13 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppUiState
 import com.pocketccd.prototype.navigation.AppViewModel
+import com.pocketccd.prototype.ui.discover.DiscoverScreen
 import com.pocketccd.prototype.ui.film.FilmCaptureScreen
 import com.pocketccd.prototype.ui.film.FilmGateSpec
 import com.pocketccd.prototype.ui.film.FilmPaperSpec
 import com.pocketccd.prototype.ui.film.FilmTheme
+import com.pocketccd.prototype.ui.film.PaperNavBar
+import com.pocketccd.prototype.ui.film.PaperTab
 import com.pocketccd.prototype.ui.film.ShutterFlash
 import com.pocketccd.prototype.ui.film.films.FilmLibraryScreen
 import com.pocketccd.prototype.ui.film.films.StockUsage
@@ -405,6 +409,16 @@ fun PocketCcdApp(
     // D-063：取景页是黑闸门（系统栏浅色图标），其余四页是相纸（系统栏深色图标）；
     // 相册查看器的黑底灯箱是例外，需要浅色图标。
     val paperPage = destination != AppDestination.CAMERA
+    val activePaperTab = when (destination) {
+        AppDestination.GALLERY, AppDestination.RESULT -> PaperTab.GALLERY
+        AppDestination.FILMS -> PaperTab.FILMS
+        AppDestination.DISCOVER -> PaperTab.DISCOVER
+        AppDestination.SETTINGS -> PaperTab.SETTINGS
+        AppDestination.CAMERA -> PaperTab.GALLERY
+    }
+    // 相册查看器的黑底灯箱打开时隐藏 TabBar；相机页永远没有 TabBar。
+    val showBottomNav = paperPage &&
+        !(destination == AppDestination.GALLERY && galleryViewerOpen)
     // 纸面页要深色系统栏图标；黑闸门与相册灯箱要浅色图标。
     val darkSystemBarIcons = paperPage && !(destination == AppDestination.GALLERY && galleryViewerOpen)
     SideEffect {
@@ -559,12 +573,37 @@ fun PocketCcdApp(
                                 )
                             }
 
+                            AppDestination.DISCOVER -> DiscoverScreen(
+                                photoCount = roll.size,
+                                stockCount = cameraUi.stocks.size,
+                                rollShots = rollShots,
+                                rollCapacity = ROLL_CAPACITY,
+                            )
+
                             AppDestination.CAMERA -> Unit
                         }
                     }
                 }
             }
                 }
+            }
+
+            // 底部 TabBar 是纸面页的共享壳：只叠在内容上，不改页面内部布局。
+            if (showBottomNav) {
+                PaperNavBar(
+                    active = activePaperTab,
+                    onSelect = { tab ->
+                        onEvent(
+                            when (tab) {
+                                PaperTab.GALLERY -> AppEvent.OpenGallery
+                                PaperTab.FILMS -> AppEvent.OpenFilms
+                                PaperTab.DISCOVER -> AppEvent.OpenDiscover
+                                PaperTab.SETTINGS -> AppEvent.OpenSettings
+                            },
+                        )
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
 
             // 最上层：快门闪白盖住整屏（含状态栏、导航栏），成片页淡入时也在它下面。
