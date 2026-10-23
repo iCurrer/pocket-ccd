@@ -39,3 +39,6 @@ Thumbs.db
 
 # 夜间/交付用的 APK 副本（二进制，不进仓库；正式产物在 app/build/outputs/apk/）
 dist/
+
+# 截图裁切只用于本地测量，不把主人照片带进仓库
+docs/design/camera-preview-crop.jpg
