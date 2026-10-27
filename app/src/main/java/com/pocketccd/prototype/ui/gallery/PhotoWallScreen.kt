@@ -137,14 +137,12 @@ fun PhotoWallScreen(
         applyGalleryFilter(photos, activeFilter, favoriteIds)
     }
 
-    // 帧号按「真实卷分组」算，和查看器的 archiveFrameNumber 同一口径：
-    // 组内按拍摄时间倒序，最旧的一张 = 01。
+    // 帧号按**当前可见列表的展示顺序**算（真机反馈：按卷分组编号会出现
+    // `02 / 01 / 01` 这种跳号，接触印相读起来像 bug）。设计板也是 01..09 连续编号。
     val frameNumbers = remember(visiblePhotos) {
         buildMap {
-            toRollGroups(visiblePhotos).forEach { group ->
-                group.photos.forEachIndexed { index, photo ->
-                    put(photo.id, group.photos.size - index)
-                }
+            visiblePhotos.forEachIndexed { index, photo ->
+                put(photo.id, index + 1)
             }
         }
     }
@@ -485,20 +483,15 @@ private data class ViewerRequest(
 )
 
 /**
- * 扁平列表里某一张照片的**组内帧号**（查看器 caption 用）。
+ * 扁平列表里某一张照片的**展示序号**（查看器 caption 用）。
  *
- * 同卷照片在 `applyGalleryFilter` 的结果里是连续的一段；组内按拍摄时间倒序，
- * 所以帧号从组内最旧的一张算 01，最新一张等于组内张数。照片没有持久化的
- * 「卷内第几张」，这里不假装有 —— 显示的是这组照片内部的曝光顺序。
+ * 真机反馈：按卷分组的帧号会显示成 `02 / 01 / 01`，读起来像 bug；设计板的
+ * 接触印相也是 01..N 连续编号。所以这里统一用当前筛选列表里的位置（1 起），
+ * 不再假装有持久化的「卷内第几张」。
  */
 internal fun archiveFrameNumber(photos: List<PhotoWallItem>, index: Int): Int {
     if (index !in photos.indices) return 1
-    val stock = photos[index].stockLabel
-    var first = index
-    while (first > 0 && photos[first - 1].stockLabel == stock) first--
-    var last = index
-    while (last < photos.lastIndex && photos[last + 1].stockLabel == stock) last++
-    return last - index + 1
+    return index + 1
 }
 
 /**

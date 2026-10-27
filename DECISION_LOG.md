@@ -1620,3 +1620,30 @@
 - **不变：** 相机/冲洗/落盘/EXIF/卷计数逻辑；无新依赖/字体；无虚构数据；
   保存/收藏/分享/更多/发现内容仍为待接入回调。
 - **验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；**真机未验**。
+
+## D-066 — 真机 UI 排查与修复（v0.6.2，nova 11 / FOA-AL00）
+
+- **日期：** 2026-10-27
+- **状态：** ACCEPTED（真机反馈："这套 UI bug 好多"）
+- **设备：** Huawei nova 11（FOA-AL00，1084×2412@480dpi ≈ 361×804dp，Android 12 / HarmonyOS 4.2.0）
+- **真机发现与修复：**
+  1. **成片页状态栏黑条**：RESULT 期间相机页仍挂载（保活预览），而纸面页的 AnimatedContent
+     让开了 `safeDrawing`，状态栏区域透出下面黑闸门。已加一层全屏纸底。
+  2. **底部 TabBar 黑底**：D-065 的令牌问题已修；本轮真机确认纸色正确。
+  3. **帧号跳号**：照片墙按卷分组编号出现 `02 / 01 / 01`，查看器 `FRAME` 与索引不一致；
+     改为当前可见列表的连续序号（01..N），查看器同源。
+  4. **"发现"图标像禁止符号**：圆 + 斜线在 20dp 下读成 prohibition sign；改成实心四角星。
+  5. **横屏取景窗消失**：未锁方向时 `frameWidth` 会算成负值；MainActivity 锁 `portrait`。
+  6. **成片页动作是死按钮**：保存 / 收藏 / 分享 / 更多接真实行为——保存提示实际落点；
+     收藏写 `FavoritesStore` 并回显；分享走系统 `ACTION_SEND`；更多打开系统相册。
+  7. **换卷误触归零**：换卷键紧邻快门，补 AlertDialog 确认（本卷已拍张数 / 照片保留 / 计数归零）。
+  8. **发现页未完成感**：改为真实事实"数据只来自本机，App 没有网络权限"；标题左对齐。
+  9. **设置页脚**：去掉重复 hairline，版本信息保持左对齐三行。
+  10. **无障碍**：成片页盖住相机时，相机层 `hideFromAccessibility()`，避免 TalkBack 读到
+      纸面页下面的快门 / 换卷。
+- **不变：** 相机/冲洗/落盘/EXIF/卷计数逻辑；无新依赖/字体；不伪造数据。
+- **真机证据：** `docs/screenshots/2026-10-27/`（camera / result / gallery / films / settings /
+  discover / viewer / roll-confirm）。
+- **验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；
+  安装到 FOA-AL00 逐页截图核对。仍在真机确认：TabBar 文字标签点击热区、
+  200% 字体、低亮度纸面对比度、取景页 1:1（本轮未重排）。

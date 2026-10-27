@@ -81,7 +81,7 @@ fun PaperPageHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (onBack == null) {
-                Spacer(Modifier.width(48.dp))
+                // 无返回键的页面（发现）标题左对齐到 24dp 页边距，不留 48dp 空槽。
             } else {
                 Box(
                     modifier = Modifier
@@ -130,7 +130,7 @@ fun PaperPageHeader(
                 }
             }
             if (trailing == null) {
-                Spacer(Modifier.width(48.dp))
+                // 无右侧动作时不占 48dp，让标题可以用到右边距。
             } else {
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { trailing() }
             }

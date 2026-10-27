@@ -86,3 +86,35 @@ $env:JAVA_HOME='D:\software\Android\Android Studio\jbr'
 **包：** `dist/pocketccd-0.6.1-paper-archive-1to1.apk`（41,023,826 B，
 SHA-256 `9B284E70…26B865`，versionCode 10 / 0.6.1，debug 签名）。
 **验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；**真机仍未验**（无设备）。
+
+## 8. v0.6.2 真机排查与修复（2026-10-27，nova 11 / FOA-AL00）
+
+设备连接后逐页截图，修了 10 处：
+
+1. **成片页状态栏黑条**：RESULT 期间相机页仍挂载，纸面页让开 safeDrawing 后状态栏透出黑闸门；
+   已加全屏纸底。
+2. **底部 TabBar**：真机确认纸色正确（D-065 已修）；文字标签区域点击仍偏窄，继续观察。
+3. **帧号**：照片墙按卷编号出现 `02 / 01 / 01`，查看器 FRAME 与索引不一致；改为可见列表连续序号。
+4. **发现图标**：圆 + 斜线在 20dp 下像禁止符号；改实心四角星。
+5. **横屏**：取景窗消失（宽度算成负值）；MainActivity 锁竖屏。
+6. **成片页动作**：保存提示实际落点；收藏写 `FavoritesStore` 并回显；分享走 `ACTION_SEND`；
+   更多打开系统相册。
+7. **换卷**：补确认框（本卷已拍张数 / 照片保留 / 计数归零）。
+8. **发现页文案**：改成真实事实（数据只来自本机、无网络权限）；标题左对齐。
+9. **设置页脚**：去掉重复 hairline。
+10. **无障碍**：成片页盖住相机时 `hideFromAccessibility()`，避免 TalkBack 读到下面的快门/换卷。
+
+**真机证据（docs/screenshots/2026-10-27/）：**
+[camera](../screenshots/2026-10-27/camera.png) ·
+[result](../screenshots/2026-10-27/result.png) ·
+[gallery](../screenshots/2026-10-27/gallery.png) ·
+[films](../screenshots/2026-10-27/films.png) ·
+[settings](../screenshots/2026-10-27/settings.png) ·
+[discover](../screenshots/2026-10-27/discover.png) ·
+[viewer](../screenshots/2026-10-27/viewer.png) ·
+[roll-confirm](../screenshots/2026-10-27/roll-confirm.png)
+
+**包：** `dist/pocketccd-0.6.2-paper-archive-1to1.apk`（41,040,226 B，
+SHA-256 `A1C714C9…9AC678`，versionCode 11 / 0.6.2，debug 签名）。
+**验证：** 真机安装 FOA-AL00 + 逐页截图；`assembleDebug` / `assembleBenchmark` / 64/64 单测。
+**仍待真机：** TabBar 文字标签热区、200% 字体、低亮度纸面对比度、取景页 1:1（本轮未重排）。

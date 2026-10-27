@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -143,6 +145,8 @@ fun FilmCaptureScreen(
 
     // EV 刻度不再常驻取景画面：工具条里的 EV 键点开后，在取景窗底部展开 4 秒。
     var evExpanded by remember { mutableStateOf(false) }
+    // 换卷会把本卷计数归零，紧挨快门很容易误触（D-060 已知债）。加一次明确确认。
+    var showNewRollConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(evExpanded, evIndex) {
         if (evExpanded) {
             delay(4000)
@@ -382,7 +386,7 @@ fun FilmCaptureScreen(
                             FilmBodyKey(
                                 label = "换卷",
                                 icon = FilmIconKind.Filmstrip,
-                                onClick = onNewRoll,
+                                onClick = { showNewRollConfirm = true },
                             )
                         }
 
@@ -400,6 +404,36 @@ fun FilmCaptureScreen(
                     }
                 }
             }
+        }
+
+        // 换卷确认：换卷键紧挨快门，误触一次就归零（D-060 已知债）。
+        // 确认框只说事实：本卷已拍多少张、照片会保留、计数归零。
+        if (showNewRollConfirm) {
+            AlertDialog(
+                onDismissRequest = { showNewRollConfirm = false },
+                containerColor = spec.palette.panelMetal.last(),
+                titleContentColor = spec.palette.textPrimary,
+                textContentColor = spec.palette.textSecondary,
+                title = { Text("结束本卷？") },
+                text = {
+                    Text("本卷已拍 $shotsTaken 张。照片会保留在相册，计数器归零。")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showNewRollConfirm = false
+                            onNewRoll()
+                        },
+                    ) {
+                        Text("换卷", color = spec.palette.textPrimary)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNewRollConfirm = false }) {
+                        Text("取消", color = spec.palette.textSecondary)
+                    }
+                },
+            )
         }
 
         // 快门闪白不在取景页内部（会被成片页盖住）；Toast 挂在页面最外层。

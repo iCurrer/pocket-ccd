@@ -559,8 +559,7 @@ private fun ColophonFooter() {
             .fillMaxWidth()
             .padding(horizontal = spec.metrics.pageMargin),
     ) {
-        Spacer(Modifier.height(40.dp))
-        PaperHairline()
+        // 04 分类行自己已经有一条 hairline；页脚不再重复画第二条线。
         Spacer(Modifier.height(24.dp))
         Text(
             text = "Pocket-CCD",

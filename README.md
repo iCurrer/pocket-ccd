@@ -34,7 +34,7 @@
 
 ---
 
-## 当前状态（2026-10-23 23:12，夜间包 v0.6.1）
+## 当前状态（2026-10-27 13:20，真机修复包 v0.6.2）
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
@@ -411,15 +411,15 @@ App 透过 FUSE 列不出内容且**不报错**（表现为 `packCount=0`）。
 
 ### 把包发给别人
 
-只有一个文件：`app/build/outputs/apk/benchmark/app-benchmark.apk`（**41,023,826 B ≈ 39.1 MiB**，
+只有一个文件：`app/build/outputs/apk/benchmark/app-benchmark.apk`（**41,040,226 B ≈ 39.1 MiB**，
 release 变体 + debug 签名，非 debuggable）。当前夜间包指纹：
 
 | 项 | 值 |
 |---|---|
-| versionCode / versionName | `10` / `0.6.1` |
-| 构建时间 | 2026-10-23 23:12（Asia/Shanghai） |
-| SHA-256 | `9B284E70BBA3124113739B65D87F167A3BBE543F6652E0D916B389890526B865` |
-| 便利副本 | `dist/pocketccd-0.6.1-paper-archive-1to1.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
+| versionCode / versionName | `11` / `0.6.2` |
+| 构建时间 | 2026-10-27 13:20（Asia/Shanghai） |
+| SHA-256 | `A1C714C9D9AA0372708E22E69EFFED77A4CC7746DB7AC446110C7C992E9AC678` |
+| 便利副本 | `dist/pocketccd-0.6.2-paper-archive-1to1.apk`（`.gitignore` 忽略，只是同一文件的拷贝） |
 
 对方不需要电脑、不需要 adb、不需要 root：
 

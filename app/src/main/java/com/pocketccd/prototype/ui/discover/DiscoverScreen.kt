@@ -61,7 +61,7 @@ fun DiscoverScreen(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = "这里将接入创作者的胶片档案与拍摄记录；当前只显示本机已有数据，不预置内容。",
+            text = "以上数据只来自本机：照片与胶卷都不上传，App 没有网络权限。",
             modifier = Modifier.padding(horizontal = spec.metrics.pageMargin),
             color = p.textSecondary,
             fontFamily = spec.type.bodyFamily,

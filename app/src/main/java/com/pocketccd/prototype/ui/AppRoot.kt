@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -51,6 +55,7 @@ import com.pocketccd.prototype.camera.CameraPreview
 import com.pocketccd.prototype.camera.CameraUiState
 import com.pocketccd.prototype.camera.CaptureState
 import com.pocketccd.prototype.camera.ExposureProfile
+import com.pocketccd.prototype.camera.FavoritesStore
 import com.pocketccd.prototype.camera.LensStop
 import com.pocketccd.prototype.camera.SavedPhoto
 import com.pocketccd.prototype.navigation.AppDestination
@@ -376,6 +381,7 @@ fun PocketCcdApp(
     onEvChange: (Int) -> Int = { it },
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
     val destination = state.destination
     val shooting = destination == AppDestination.CAMERA
     val stock = cameraUi.activeStock
@@ -402,8 +408,13 @@ fun PocketCcdApp(
     var shutterFlash by remember { mutableIntStateOf(0) }
     // 相册查看器是黑底灯箱：它打开时系统栏要换成浅色图标，关闭后恢复纸面页的深色图标。
     var galleryViewerOpen by remember { mutableStateOf(false) }
+    // 成片页的收藏状态与照片一起放在这一层：查看器里改过收藏，回到成片页要能看到。
+    val favoritesStore = remember(context) { FavoritesStore(context) }
+    var favoriteIds by remember { mutableStateOf(favoritesStore.ids()) }
+    val currentPhoto = (capture as? CaptureState.Done)?.photo
     LaunchedEffect(destination) {
         if (destination != AppDestination.GALLERY) galleryViewerOpen = false
+        favoriteIds = favoritesStore.ids()
     }
 
     // D-063：取景页是黑闸门（系统栏浅色图标），其余四页是相纸（系统栏深色图标）；
@@ -451,6 +462,19 @@ fun PocketCcdApp(
                     // 快门不会被 PreviewView 的销毁连带 unbind 掉。
                     val rollFull = rollShots >= ROLL_CAPACITY
                     // 取景页单独套黑闸门令牌：成片页淡入时下面的相机页不会被纸色翻白。
+                    // 成片页盖住相机时，相机仍挂载（保活预览），但必须从无障碍树里隐藏：
+                    // 否则 TalkBack 会读到纸面页下面的“快门/换卷/相册”。
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (destination == AppDestination.RESULT) {
+                                    Modifier.semantics { hideFromAccessibility() }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
                     FilmTheme(FilmGateSpec) {
                         FilmCaptureScreen(
                         stockName = stock?.label ?: "无胶卷",
@@ -489,6 +513,18 @@ fun PocketCcdApp(
                         onEvChange = onEvChange,
                         )
                     }
+                    }
+                }
+
+                // 纸面页的纸底必须铺到状态栏/导航栏：成片页期间相机仍挂载，
+                // AnimatedContent 又让开了 safeDrawing，若不铺这一层，
+                // 状态栏区域会透出下面黑闸门的取景页（真机 v0.6.1 反馈）。
+                if (destination != AppDestination.CAMERA) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(FilmPaperSpec.palette.appBg),
+                    )
                 }
 
                 if (destination != AppDestination.CAMERA) {
@@ -548,6 +584,60 @@ fun PocketCcdApp(
                                 // 换卷即归零，所以它同时就是这张的片号。
                                 frameIndex = rollShots,
                                 rollCapacity = ROLL_CAPACITY,
+                                isFavorite = currentPhoto?.id?.let { it in favoriteIds } ?: false,
+                                onSave = {
+                                    Toast.makeText(
+                                        context,
+                                        if (currentPhoto?.galleryUri != null) "已保存到系统相册" else "已保存到本机",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                },
+                                onToggleFavorite = {
+                                    val photo = currentPhoto
+                                    if (photo == null) {
+                                        Toast.makeText(context, "成片还没准备好", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        favoriteIds = favoritesStore.toggle(photo.id)
+                                        Toast.makeText(
+                                            context,
+                                            if (photo.id in favoriteIds) "已收藏" else "已取消收藏",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                },
+                                onShare = {
+                                    val uri = currentPhoto?.galleryUri
+                                    if (uri == null) {
+                                        Toast.makeText(context, "成片还没写入系统相册", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent.createChooser(
+                                                    Intent(Intent.ACTION_SEND).apply {
+                                                        type = "image/jpeg"
+                                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    },
+                                                    "分享成片",
+                                                ),
+                                            )
+                                        }.onFailure {
+                                            Toast.makeText(context, "没有可用的分享应用", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onMore = {
+                                    val uri = currentPhoto?.galleryUri
+                                    if (uri == null) {
+                                        Toast.makeText(context, "成片还没写入系统相册", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        }.onFailure {
+                                            Toast.makeText(context, "没有可用的相册应用", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
                             )
 
                             AppDestination.SETTINGS -> SettingsScreen(

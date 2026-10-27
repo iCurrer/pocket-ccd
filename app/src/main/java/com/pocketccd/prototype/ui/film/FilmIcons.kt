@@ -308,20 +308,20 @@ fun FilmIcon(
             }
 
             FilmIconKind.Compass -> {
-                drawCircle(
-                    color = tint,
-                    radius = 8.5f * s,
-                    center = o(12f, 12f),
-                    style = Stroke(width = w),
-                )
-                val needle = Path().apply {
-                    moveTo(15.6f * s, 8.4f * s)
-                    lineTo(13.2f * s, 13.2f * s)
-                    lineTo(8.4f * s, 15.6f * s)
-                    lineTo(10.8f * s, 10.8f * s)
+                // 四角罗盘星。旧版是圆 + 斜线在 20dp 下读成“禁止”图标
+                // （真机 v0.6.1 反馈），改用整块实心星，远看也不会变成一个斜杠。
+                val star = Path().apply {
+                    moveTo(12f * s, 3f * s)
+                    lineTo(14.1f * s, 9.9f * s)
+                    lineTo(21f * s, 12f * s)
+                    lineTo(14.1f * s, 14.1f * s)
+                    lineTo(12f * s, 21f * s)
+                    lineTo(9.9f * s, 14.1f * s)
+                    lineTo(3f * s, 12f * s)
+                    lineTo(9.9f * s, 9.9f * s)
                     close()
                 }
-                drawPath(needle, tint, style = Stroke(width = w * 0.9f))
+                drawPath(star, tint)
             }
         }
     }
