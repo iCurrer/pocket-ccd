@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
+import android.graphics.ColorSpace
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
@@ -22,6 +23,7 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.MeteringPointFactory
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -29,8 +31,11 @@ import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -74,6 +79,13 @@ data class CapturedFrame(
     val jpeg: ByteArray,
     val rotationDegrees: Int,
     val exif: PhotoExif? = null,
+    /**
+     * **按下快门那一刻**的墙钟时间（毫秒）。
+     *
+     * 不能在落盘时取 `System.currentTimeMillis()`：冲洗要 2–4 秒，那个时间戳会同时
+     * 变成文件名、`DATE_TAKEN`、详情页的"拍摄时间"，跨分钟/跨天时用户能看出来。
+     */
+    val takenAt: Long = System.currentTimeMillis(),
 )
 
 /**
@@ -151,9 +163,10 @@ class CameraHandle internal constructor(
     suspend fun takeJpeg(): CapturedFrame {
         val frame = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
             suspendCancellableCoroutine<CapturedFrame> { continuation ->
-                // 角度必须在按下快门的瞬间取：用户可能拍完就转手机，
-                // 冲洗要 2–3 秒，等到那时再读 display 会拿到错的姿势。
+                // 角度和时间都必须在按下快门的瞬间取：用户可能拍完就转手机，
+                // 冲洗要 2–3 秒，等到那时再读 display / 墙钟，拿到的是错的姿势和时间。
                 val rotation = rotationDegrees()
+                val takenAt = System.currentTimeMillis()
                 imageCapture.takePicture(
                     // 专用后台线程，不是主线程：这里要做 3–5MB 的字节拷贝 + EXIF 解析，
                     // 挂在主线程会正好落在快门闪白那一帧（review 第二轮 P2#2）。
@@ -175,7 +188,7 @@ class CameraHandle internal constructor(
                                     Log.i(TAG, "拍摄帧没有可读 EXIF，成片页参数将显示 —")
                                 }
                                 if (continuation.isActive) {
-                                    continuation.resume(CapturedFrame(bytes, rotation, exif))
+                                    continuation.resume(CapturedFrame(bytes, rotation, exif, takenAt))
                                 }
                             } catch (error: Throwable) {
                                 if (continuation.isActive) continuation.resumeWithException(error)
@@ -401,8 +414,7 @@ fun CameraPreview(
     val errorState = rememberUpdatedState(onError)
 
     val previewView = remember {
-        PreviewView(context).apply {
-            // FIT_CENTER：完整显示 4:3 传感器画面。取景框比 4:3 高，所以上下会留一点
+        PreviewView(context).apply {            // FIT_CENTER：完整显示 4:3 传感器画面。取景框比 4:3 高，所以上下会留一点
             // 边 —— 这是刻意的。用 FILL_CENTER 虽然铺满好看，但会裁掉左右，导致
             // "看到的构图"和"拍到的画面"不一致，而 FOT-009 的要求正是不许预览冒充成片。
             scaleType = PreviewView.ScaleType.FIT_CENTER
@@ -415,6 +427,15 @@ fun CameraPreview(
     }
 
     AndroidView(factory = { previewView }, modifier = modifier)
+
+    /**
+     * 上一次真正 attach 成功的采集尺寸。
+     *
+     * `attachedSurfaceResolution` 只给 40×25ms 的窗口，慢机/相机服务刚启动时会超时；
+     * 超时后如果退回 `null`，[CameraHandle.supportedSizes] 就是空集，快门**永久**置灰
+     * 且本轮页面不会再重试。留一份上次的值，至少让"上次能拍、这次也能拍"。
+     */
+    var lastAttached by remember { mutableStateOf<Size?>(null) }
 
     LaunchedEffect(lensFacing, targetSize, rebindNonce) {
         readyState.value(null)
@@ -433,9 +454,21 @@ fun CameraPreview(
                 )
             }
 
-            val preview = Preview.Builder().build().apply {
-                surfaceProvider = previewView.surfaceProvider
-            }
+            // 取景窗是 3:4（成片比例），所以预览流必须是 **4:3**：传感器横置、
+            // 显示时转 90°，4:3 的流正好铺满 3:4 的窗，窗里不会再留一层黑边（D-080）。
+            // 不写这一行，CameraX 可能给 16:9，窗里就会上下各切一条。
+            val preview = Preview.Builder()
+                .setResolutionSelector(
+                    ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(
+                            AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY,
+                        )
+                        .build(),
+                )
+                .build()
+                .apply {
+                    surfaceProvider = previewView.surfaceProvider
+                }
 
             val capture = ImageCapture.Builder()
                 // MAXIMIZE_QUALITY：这个模式不会在内存里长期保留一帧全尺寸缓冲，
@@ -483,7 +516,11 @@ fun CameraPreview(
                 }
             }
 
-            val attachedSize = attached ?: targetSize
+            val attachedSize = attached ?: targetSize ?: lastAttached
+                // 三条都拿不到就别发布一个空尺寸集合：那会让快门永久置灰且本轮页面
+                // 再也不会重试（LaunchedEffect 的 key 没变）。抛出去交给上层重绑。
+                ?: error("相机没有报告可用的采集尺寸")
+            lastAttached = attachedSize
 
             // 传感器安装角。这是硬件事实（通常 90 或 270），成片方向补偿全靠它 ——
             // CameraX 的 sensorRotationDegrees 在 targetRotation=ROTATION_0 时给 0，
@@ -497,7 +534,7 @@ fun CameraPreview(
                 TAG,
                 "camera bound: lens=$lensFacing target=${targetSize?.let { "${it.width}x${it.height}" }} " +
                     "attached=${attached?.let { "${it.width}x${it.height}" }} " +
-                    "effective=${attachedSize?.let { "${it.width}x${it.height}" }} " +
+                    "effective=${attachedSize.width}x${attachedSize.height} " +
                     "sensorOrientation=$sensorOrientation " +
                     "flash=${camera.cameraInfo.hasFlashUnit()} waited=${attempts * 25}ms",
             )
@@ -583,6 +620,14 @@ data class DecodedFrame(
     val bitmap: Bitmap,
     val sourceWidth: Int,
     val sourceHeight: Int,
+    /**
+     * 解码阶段**已经**替成品转过的角度（0/90/180/270）。
+     *
+     * 只有"采集尺寸是 pack 的转置"那条分支会非 0：它先把图转成横向，冲洗完再按
+     * sensor 角转一次就等于转了两遍。调用方必须把落盘旋转减去这个值
+     * （见 `AppViewModel.capture`）。
+     */
+    val appliedRotationDegrees: Int = 0,
 ) {
     val cropped: Boolean
         get() = sourceWidth != bitmap.width || sourceHeight != bitmap.height
@@ -634,11 +679,14 @@ fun decodeJpeg(bytes: ByteArray, target: Size, stockLabel: String): DecodedFrame
     // 情况 2：竖置。只在两个方向恰好互换时才尝试，避免把 16:9 之类的
     // 非常规尺寸误当成"转一下就行"。
     if (rawWidth == target.height && rawHeight == target.width) {
+        val orientation = exifOrientation(bytes)
         val rotated = decodeFull(bytes)
-        val upright = applyExifOrientation(rotated, exifOrientation(bytes))
+        val upright = applyExifOrientation(rotated, orientation)
         if (upright !== rotated) rotated.recycle()
         if (upright.width == target.width && upright.height == target.height) {
-            return DecodedFrame(upright, rawWidth, rawHeight)
+            // 这里已经替成品转过了：把实际转过的角度带回去，否则落盘时还会再转一次
+            // （两处都声称"转到正立"，叠起来就是多转 90/180°）。
+            return DecodedFrame(upright, rawWidth, rawHeight, appliedRotationOf(orientation))
         }
         upright.recycle()
     }
@@ -650,11 +698,33 @@ fun decodeJpeg(bytes: ByteArray, target: Size, stockLabel: String): DecodedFrame
         return DecodedFrame(cropped, rawWidth, rawHeight)
     }
 
+    // 尺寸不够。转置后若够（例如这台机器给 3000×4000、卷要 4000×3000），
+    // 说明问题是"方向"不是"分辨率"，别让用户去换卷。
+    val transposedFits = rawHeight >= target.width && rawWidth >= target.height
     error(
-        "「$stockLabel」需要 ${target.width}×${target.height}，" +
-            "这台设备的采集尺寸只有 ${rawWidth}×${rawHeight}。" +
-            "请换一卷尺寸更小的胶卷。",
+        if (transposedFits) {
+            "这台设备给的是 ${rawWidth}×${rawHeight}（竖置），" +
+                "与「$stockLabel」需要的 ${target.width}×${target.height} 是转置关系，" +
+                "但这一帧没有可用的方向标记，无法转正。请重启相机后再试。"
+        } else {
+            "「$stockLabel」需要 ${target.width}×${target.height}，" +
+                "这台设备的采集尺寸只有 ${rawWidth}×${rawHeight}。" +
+                "请换一卷尺寸更小的胶卷。"
+        },
     )
+}
+
+/**
+ * EXIF 方向标记 → 解码阶段实际转过的角度。
+ *
+ * 只统计**纯旋转**：TRANSPOSE / TRANSVERSE 还带镜像，落盘那一步表达不了，
+ * 记 0 让调用方按 sensor 角处理（现状），并留一条日志。
+ */
+private fun appliedRotationOf(orientation: Int): Int = when (orientation) {
+    ExifInterface.ORIENTATION_ROTATE_90 -> 90
+    ExifInterface.ORIENTATION_ROTATE_180 -> 180
+    ExifInterface.ORIENTATION_ROTATE_270 -> 270
+    else -> 0
 }
 
 private fun decodeFull(bytes: ByteArray): Bitmap =
@@ -662,6 +732,10 @@ private fun decodeFull(bytes: ByteArray): Bitmap =
         bytes, 0, bytes.size,
         BitmapFactory.Options().apply {
             inPreferredConfig = Bitmap.Config.ARGB_8888
+            // 固定按 sRGB 解码：`LinearColor.decodeInto` 的反 gamma 表就是 sRGB 表。
+            // 不写这一行，带 Display P3 ICC 的 JPEG 会被解成 P3 位图，P3 的码值当成
+            // sRGB 喂进 sRGB→Rec.2020，整条精确色彩链从第一步就错了。
+            inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
             inScaled = false
         },
     ) ?: error("JPEG 解码失败（${bytes.size} 字节）")
@@ -687,6 +761,8 @@ private fun cropCenter(bytes: ByteArray, sourceWidth: Int, sourceHeight: Int, ta
                 Rect(left, top, left + target.width, top + target.height),
                 BitmapFactory.Options().apply {
                     inPreferredConfig = Bitmap.Config.ARGB_8888
+                    // 与 decodeFull 同一个理由：解码必须先落到 sRGB，否则色彩链第一步就错。
+                    inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
                     inScaled = false
                 },
             )
@@ -727,5 +803,7 @@ private fun applyExifOrientation(source: Bitmap, orientation: Int): Bitmap {
         }
         else -> return source
     }
-    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    // filter = false：这里全是 90° 倍数 + 镜像，像素一一对应，不需要重采样。
+    // 开滤波会白糊一层（D-074）。
+    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, false)
 }

@@ -1,6 +1,7 @@
 package com.pocketccd.prototype.fotufilm
 
 import android.graphics.Bitmap
+import android.util.Log
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -16,7 +17,17 @@ import java.nio.ByteOrder
  * [FilmPack.maxHalo] 给出，它在 native 侧用与内核**同一个** `ResolvedFrameParams`
  * 推出来，不是宿主重算的一套公式。
  */
-class FilmEngine(private val pack: FilmPack) {
+class FilmEngine(
+    private val pack: FilmPack,
+    /**
+     * SDR 交付肩部的拐点，由**胶卷类型**决定，不是由 pack 决定（见 [LinearColor] 的类注释）。
+     *
+     * pack 的头部没有这个字段 —— 它是宿主侧的交付参数（上游 `FilmSDRDelivery`），
+     * 所以只能从 [FilmStock] 带进来。默认 [LinearColor.KNEE_BOUNDED] = 纯 clip，
+     * 即负片/印相的行为，也是所有历史调用的行为：不传等于不变。
+     */
+    private val shoulderKnee: Float = LinearColor.KNEE_BOUNDED,
+) {
 
     /** 引擎是否真的能跑。库没载入或内核不可用时返回 false，调用方应降级而不是崩。 */
     fun isUsable(): Boolean =
@@ -29,7 +40,9 @@ class FilmEngine(private val pack: FilmPack) {
      * 换尺寸等于换了光学系统，效果会整体跑偏。所以这里宁可抛异常也不静默缩放。
      *
      * @param stripRows 每条带子真正输出的行数。越小峰值内存越低、但 halo 重叠越多、
-     *   总耗时越高。128 行在 halo 几十像素时重叠率约 30%，是内存与速度的折中。
+     *   总耗时越高。128 行的真实重叠是 `2×halo/stripRows` —— 实测 halo 55–62，
+     *   也就是 **86–97%** 的行算是重复的（不是旧注释写的 30%）。所以这个值实际上是
+     *   单张耗时的最大旋钮：抬到 384 行能把内核工作量从 1.9× 降到 1.31×。
      */
     fun render(
         source: Bitmap,
@@ -51,7 +64,10 @@ class FilmEngine(private val pack: FilmPack) {
 
     /**
      * 用确定性程序纹理跑一遍，不依赖相机。用于真机基准：内容、尺寸、种子全固定，
-     * 两次运行可以逐像素比对，也能量出稳定的耗时。
+     * 同一进程内同一档 [stripRows] 跑两次可以逐像素比对，也能量出稳定的耗时。
+     *
+     * 换 [stripRows] 就不保证逐像素相同：内核的颗粒相位是**按调用次数**推进的
+     * （见 docs/fotufilm-device-benchmark.md 的 FOT-015），带子数一变相位就变。
      */
     fun renderSynthetic(
         destination: Bitmap? = null,
@@ -127,7 +143,11 @@ class FilmEngine(private val pack: FilmPack) {
             buffer.get(staging[c], 0, count)
         }
         val encoded = IntArray(count)
-        LinearColor.encodeInto(staging[0], staging[1], staging[2], count, encoded)
+        LinearColor.encodeInto(
+            staging[0], staging[1], staging[2], count, encoded,
+            seed = pack.seed.toInt(),
+            knee = shoulderKnee,
+        )
 
         val target = destination ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         target.setPixels(encoded, 0, w, 0, 0, w, h)
@@ -189,9 +209,12 @@ class FilmEngine(private val pack: FilmPack) {
         var sumR = 0.0
         var sumG = 0.0
         var sumB = 0.0
+        // 抖动状态跨带子连续推进：每条带子重置会让接缝处出现可预测的重复纹理。
+        // seed 取 pack 的，同一张图两次冲洗逐像素相同（基准/交叉验证依赖这点）。
+        val dither = LinearColor.Dither(pack.seed.toInt())
+        val ditherOffsets = FloatArray(3)
 
         val started = System.nanoTime()
-
         var top = 0
         while (top < height) {
             val interiorRows = minOf(effectiveStripRows, height - top)
@@ -264,10 +287,7 @@ class FilmEngine(private val pack: FilmPack) {
                     sumG += g
                     sumB += b
                 }
-                pixels[i] = (0xFF shl 24) or
-                    (LinearColor.encode(r) shl 16) or
-                    (LinearColor.encode(g) shl 8) or
-                    LinearColor.encode(b)
+                pixels[i] = LinearColor.encodeRgb(r, g, b, dither, ditherOffsets, shoulderKnee)
             }
             statsNanos += System.nanoTime() - statsStart
 
@@ -279,6 +299,21 @@ class FilmEngine(private val pack: FilmPack) {
             peakRss = maxOf(peakRss, readPeakRssKb())
             strips++
             top += interiorRows
+        }
+
+        // 内核吐 NaN/Inf 不是"可以忽略的噪声"：编码端会把 NaN 静默写成黑、把 Inf 写成白，
+        // 用户拿到的是一张**状态为"已保存"的坏照片**，界面上没有任何提示。
+        // 超过 0.1% 像素就直接失败，让上层走 Failed + 重试；少量则记一条日志。
+        val totalPixels = width.toLong() * height
+        if (nonFinite > 0L) {
+            val percent = nonFinite * 100.0 / totalPixels
+            if (nonFinite * 1000L >= totalPixels) {
+                throw IllegalStateException(
+                    "冲洗输出有 $nonFinite 个非有限值（%.2f%%），内核在这一帧上出错了，不保存"
+                        .format(percent),
+                )
+            }
+            Log.w(TAG, "冲洗输出有 $nonFinite 个非有限值（%.3f%%），已按黑/白编码".format(percent))
         }
 
         return RenderResult(
@@ -357,8 +392,18 @@ class FilmEngine(private val pack: FilmPack) {
     }
 
     companion object {
-        const val DEFAULT_STRIP_ROWS = 128
+        /**
+         * 每条带子真正输出的行数。
+         *
+         * 128 → 256（D-074）：实测 halo 55–62，带子高度 128 时内核要算
+         * `(128 + 2×58)/128 ≈ 1.9×` 的行，一半时间花在重叠区。256 行降到 1.48×，
+         * 单张能省约 20% 时间 —— 手持拍摄里少两三百毫秒就是少一点糊。
+         * 代价是单条带子的平面缓冲从约 49MB 涨到约 75MB，仍在 256MB 预算内。
+         */
+        const val DEFAULT_STRIP_ROWS = 256
         const val FULL_FRAME_PIXEL_LIMIT = 4_000_000L
+
+        private const val TAG = "FilmEngine"
 
         /** 一条带子允许占用的平面缓冲上限。256MB 在 12GB 设备上仍有足够余量。 */
         private const val TILE_BUDGET_BYTES = 256L * 1024 * 1024

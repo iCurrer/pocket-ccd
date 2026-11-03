@@ -1647,3 +1647,665 @@
 - **验证：** `assembleDebug` + `assembleBenchmark` + 64/64 JVM 单测；
   安装到 FOA-AL00 逐页截图核对。仍在真机确认：TabBar 文字标签点击热区、
   200% 字体、低亮度纸面对比度、取景页 1:1（本轮未重排）。
+
+---
+
+## D-067 — 宿主侧补齐基色链与抖动：sRGB ↔ Rec.2020 ↔ Display P3（FOT-006 第一批）
+
+- **日期：** 2026-10-27
+- **状态：** ACCEPTED（代码已落地、72/72 单测通过；**真机观感未验**）
+- **背景：** 真机反馈"白天三卷都过曝、天空出现特别亮的蓝"。抽设备样片发现两张都是
+  **翻拍屏幕**（笔记本 / OPPO 手机屏），不能作为白天判断依据（屏幕是窄带光谱，而引擎
+  按光谱算——越物理正确的引擎翻拍屏幕越离谱）。但顺着查代码，发现宿主侧编码链确实缺环节。
+- **证据 `[F]`：**
+  - 上游 `FotufilmCore/ColorScience.swift`：**"The engine works in linear Rec.2020"**；
+    `displayP3LuminanceWeights` 注释："The finished print is integrated and output in P3"。
+  - 上游 `DisplayEncoding.swift`：8bit 输出的定义是 "the SDR delivery shoulder, the sRGB
+    transfer, and **triangular dither of one quantizer step**"。
+  - 上游 `FotufilmHalide/Stages/Transfer.h`：宿主最后一步是 "out of the print's Display P3
+    delivery basis **into the host's primaries**, through the SDR shoulder, and into the
+    host's transfer"。
+  - 本项目 `native/fotufilm_jni.cpp` 头注释自述："Android AOT 的 5 个 kernel 都不是 encode
+    变体……所以 sRGB 编码必须由宿主完成"。
+  - 本项目 `LinearColor.kt` 旧注释自述："**没有**做 Rec.2020 / Rec.709 基色矩阵换算"。
+- **故障机制 `[I]`：** 输入把 sRGB 线性值直接当 Rec.2020 喂，等于宣称"这束光比实际更纯"
+  （Rec.2020 基色坐在光谱轨迹上）。以天空 `sRGB(122,189,245)` 为例：正确转 Rec.2020 是
+  `(0.325, 0.478, 0.864)`，不转是 `(0.196, 0.494, 0.912)` —— **R 少 40%、B 多 5.6%**，
+  引擎因此认为这束光更蓝更暗。输出侧再把 P3 的饱和色当 sRGB 硬裁。两个错误**只随饱和度
+  放大、不影响中性灰**（矩阵行和均为 1、白点同为 D65），所以症状集中在天空，灰阶正常。
+- **选项：**
+  - A 不动 —— 继续系统性偏色，且拿不到上游的显示链，不可接受。
+  - **B（采纳）** 宿主补齐 `linearSRGBToRec2020`（输入）+ `linearDisplayP3ToSRGB`（输出）
+    + 三角抖动。数值逐位抄上游，不自创。
+  - C 输出 Bitmap 直接声明 Display P3 —— 省掉一次矩阵，但 JPEG 必须带 P3 ICC、且多数
+    看图软件按 sRGB 显示会偏色，跨端一致性问题更大。
+  - D 直接调上游 `fotufilm_render()` C API —— Android 上没有 Swift 运行时，走不通。
+- **结论：** `LinearColor` 变成完整色彩链：`sRGB8 →线性 sRGB →Rec.2020（引擎）→
+  线性 P3 →线性 sRGB →sRGB 编码 →三角抖动 →8bit`。抖动用 xorshift32、seed 取 `pack.seed`，
+  **确定性**（同一张图两次冲洗逐像素相同，`renderSynthetic` 的交叉验证依赖这点），
+  状态跨行带连续推进（每条带子重置会在接缝处留可预测纹理）。
+- **后果：**
+  - 成片观感会变：高饱和区（天空、霓虹）饱和度下降、R 通道抬升。这是修正而非风格调整。
+  - 渲染耗时上升：输入多 9 次乘加/像素、输出多 9 次乘加 + 3 次抖动。单帧增量待真机基准。
+  - 超色域仍走 **clip**（上游把 gamut mapping 责任留给调用方）——饱和色会丢色相梯度，
+    属已知局限，补真正的 mapping 是后续独立决策。
+- **未纳入本批（FOT-006 剩余）：**
+  - **SDR shoulder**：`highlightShoulder(x, ceiling, knee) = knee + room·over/(over+room)`。
+    负片/印相 `boundedShoulderKnee = 1` → 退化为纯 clip（相纸曲线自带肩部），现役三卷不受
+    影响；**反转片 `transparencyShoulderKnee = 0.7` 必须补**，否则高光硬切。加 velvia50 等
+    反转片前必须先做。
+- **验证：** 新增 `LinearColorTest`（8 例：灰阶中性守恒、纯红落在 Rec.2020 基色、灰阶往返、
+  白以上 clip、P3 纯蓝超色域裁切、NaN 归零、抖动确定性/边界/无偏、抖动打散纯色）。
+  全量 JVM 单测 **72/72**，`assembleBenchmark` 通过。**真机未验**（设备离线）。
+- **复审触发：** 出现"整体发灰/发闷"新反馈；上游 `ColorScience` 矩阵变更；接入反转片。
+
+
+---
+
+## D-068 — 反转片必须先补 SDR 肩部（FOT-006 第二批）
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地，79/79 单测通过；**真机观感未验**）
+- **背景：** D-067 收尾时留了一条硬前提：「反转片 `transparencyShoulderKnee = 0.7` 必须补，
+  否则高光硬切；**加 velvia50 等反转片前必须先做**」。本轮要把内置卷从 3 支扩到 8 支，
+  精选里包含 `velvia50` / `provia100f` 这类正片，所以这条前提到了兑现的时候。
+- **证据 `[F]`：**
+  - 上游 `ColorScience.highlightShoulder(_:ceiling:knee:)`：
+    `knee = clamp(knee,0,ceiling)`；`x <= knee → x`；否则 `knee + room·over/(over+room)`，
+    其中 `over = x-knee`，`room = ceiling-knee`；`room <= 0 → ceiling`。
+  - 上游 `FilmSDRDelivery`：`boundedShoulderKnee = 1`、`transparencyShoulderKnee = 0.7`，
+    注释写明「a directly viewed transparency has no print stage to absorb its long physical
+    shoulder and carries light above display white」。
+  - 上游 `main.swift` 的交付路径是 `options.sdrShoulderKnee(for: stock)` —— **按 stock 决定**，
+    不是 CLI 开关。
+  - 本项目 `FilmPack` 头部只有 `(width, height, featureMask, seed)`，**没有**肩部字段。
+- **故障机制 `[I]`：** knee = 1 时 `room = 0` → 直接返回 ceiling，等价于 clamp。所以现役
+  三支负片的行为**一个字节都不会变**；而正片如果继续走 knee = 1，0.7–1.0 之间的高光会被
+  压成同一个码值 255，多个不同的高光曝光挤在一起，天空/灯箱/水面高光成片就是一片死白。
+- **选项：**
+  - A 这轮不装正片，只扩负片/黑白 —— 不改色彩链，但产品上丢掉最有辨识度的一类卷。
+  - **B（采纳）** 实现 `highlightShoulder`（knee 由胶卷类型给），正片用 0.7、负片保持 1.0。
+  - C 让 knee 也进 pack 头部 —— 要重产所有 pack，且肩部本质是**交付侧**参数，放错层。
+- **结论：** `LinearColor.shoulder(x, knee)` + `KNEE_BOUNDED = 1f` / `KNEE_TRANSPARENCY = 0.7f`；
+  `encodeCode` 在反 gamma **之前**过肩部（与上游 `linearToSrgb(displayShoulder(x,knee))` 顺序一致）；
+  `FilmStock.shoulderKnee` 由 `FilmStockCatalog.isTransparency(id)` 决定。
+- **判据只收没有歧义的正片：** velvia50 / provia100f / astia100f / ektachromee100 /
+  kodachrome25·64·200 / agfachrome50·100·200 / aerochrome1443。**漏判**的后果是这支卷高光硬切
+  （与现状一致，无回归）；**误判**的后果是负片高光被提前滚降（观感直接变）。宁可漏，不可错。
+- **后果：** 负片输出逐像素不变（`KNEE_BOUNDED` 是恒等）；正片高光从"硬切"变成"渐近"，
+  且无限亮的高光之间仍保持区分度。
+- **验证：** `LinearColorTest` 新增 4 例：knee=1 是恒等、knee=0.7 单调且恒 < 1（且 shoulder(1)=0.85）、
+  knee 越界夹取、`encodeRgb` 真的按 knee 分支。全量 JVM 单测 **79/79**。
+
+---
+
+## D-069 — UI 全面替换：玻璃拟态 + Material You（废弃 D-027..D-066 的纸面/机身体系）
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地、打包通过；**真机未验**）
+- **背景：** 用户要求「添加其他胶卷并且换一套 UI —— 完全撇弃当前 UI 设计和元素以及框架结构，
+  在功能的基础上重新做一套」。口头确认了四条：玻璃拟态 Material You / **重做**底部 Tab /
+  内置 8 支胶卷 / 去掉卷概念。
+- **结论：**
+  - `ui/film/` **整包删除**（FilmTheme / FilmControls / FilmIcons / FilmInteractions /
+    FilmViewfinder / FilmCaptureScreen / PaperComponents / PaperNavBar / FilmPreviewActivity），
+    不是"留一层兼容"。旧的 `FilmPalette`、`FilmMetrics`、`PaperNavBar` 一并消失。
+  - 主题换 `PocketCcdTheme(dynamic = …)`：API 31+ 走 `dynamicDarkColorScheme`（跟随壁纸），
+    29/30 回退一组冷蓝种子色。**只有深色一套基底** —— 白底看照片永远是错的。
+  - 新增 `ui/glass/`：`GlassSurface` / `GlassIconButton` / `GlassChip` / `GlassButton` /
+    `GlassBackdrop` / `GlassNavBar` / 18 个手绘 `GlassIconKind`。
+  - 令牌换 `GlassShape`（pill/chip 18/card 24/panel 32/image 20）与 `GlassSpace`
+    （page 20 / inner 16 / gap 12 / tight 8 / dockReserve 108）；字阶换 `GlassType`
+    （title 24 / cardTitle 16 / body 14 / caption 12 / label 12 / numeric 12 / badge 11）。
+    **11sp 地板不变**，`NoBareFontSizeTest` 继续盯着。
+  - 页面重写：`ui/camera/CameraScreen`（预览即全屏，控件全是浮层）、`ui/gallery/GalleryScreen`
+    + `PhotoViewer`、`ui/films/FilmLibraryScreen`（新包）、`ui/detail/PhotoDetailScreen`
+    （**刚拍完与历史照片共用一屏**）、`ui/settings/SettingsScreen`（含开源声明页）、
+    `ui/discover/DiscoverScreen`、以及重写的 `ui/AppRoot.kt`。
+- **"真玻璃"做不到，说明书要写清楚：** Compose 没有背景模糊 API（`Modifier.blur` 糊的是自己），
+  且 `PreviewView` 是 SurfaceView，像素根本不进 Compose 管线。所以玻璃 = 低透明度白填充 +
+  1px 高光描边 + 顶部渐亮，全部矢量绘制、零回读。写清这一点，比做一个"半糊不糊"的假效果诚实。
+- **被删掉的组件契约：** `InteractiveIconLabelsTest` 扫的是已删除的 `ui/film/FilmControls.kt`。
+  新体系把"图标钮必须有读屏文案"交给**类型系统**（`GlassIconButton(label: String)` 必填、无默认值），
+  静态扫描因此不再必要。替换成 `GlassComponentContractTest`：守住「label 不许被加回默认值」
+  与「每个 `GlassIconKind` 都有绘制分支」（漏画只会在深色玻璃上留一块空白，肉眼难发现）。
+- **后果：** 旧文档/截图里的 UI 参考（`docs/reference/film-dark-home-2026-10-19.html`、
+  `docs/film-dark-ui-spec.md`）对当前界面**不再适用**，仅供追溯。
+
+---
+
+## D-070 — 移除"一卷 36 张"整套卷模型
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地；单测覆盖导航，真机未验）
+- **背景：** 2026-11-01 的完成流程复审（`docs/reviews/2026-11-01-finish-flow-review.md`）指出，
+  36 格计数实际上是"**存活照片数**"：用户从系统相册删一张，计数就倒退一格，而界面仍在暗示
+  "这一卷还没拍完"。用户同轮决定去掉卷概念。
+- **结论：** `rollStartedAt` / `startNewRoll` / `rollShots` / `KEY_ROLL_STARTED_AT`、
+  36 格刻度、满卷禁快门、"换卷"确认框**全部删除**。计数只剩一种口径：
+  **这一支胶卷在本机累计拍过多少张**（`filmCards` 里按 `stockId` 从现存成片聚合），
+  以及本机总张数。
+- **为什么不"留着格子但不锁快门"：** 只要界面还有 36 个格子，它就在陈述一个不成立的事实。
+  去掉格子之后，进度只需要说"拍过几张"，这句话是真的（删了就少一张，符合"现存"语义）。
+- **换卷不再是一个动作：** `selectStock` 只换一个过滤器，不重置任何计数、不删任何照片。
+- **新增 `PhotoStore.usedBytes()`：** 发现页要显示真实占用，只统计 `full/` —— 缩略图是派生物，
+  算进去会让数字比用户以为的大一截。
+
+---
+
+## D-071 — 导航：`RESULT` → `DETAIL`，详情页按来源返回
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地，`AppStateTest` 18 例通过）
+- **背景：** 旧 `RESULT` 只能从快门路径进入，**从照片墙点开一张历史照片没有任何参数、动作、
+  EXIF 可看**（复审 P1-4）。新界面把两条入口合并成一屏，旧名字就变成了错的名字。
+- **结论：**
+  - `AppDestination.RESULT` → `DETAIL`，`AppEvent.OpenResult` → `OpenDetail`，
+    `AppUiState.resultOrigin` → `detailOrigin`。
+  - `NavigateBack` 从 `DETAIL` 回 `detailOrigin`：从相册点开就回相册（继续翻），
+    从快门进来就回取景器（接着拍）。**旧代码记了 `resultOrigin` 却从不读它**，
+    于是在相册里看完一张按返回会直接掉回取景器、还要顺带重绑一次相机。
+  - `OpenCamera` 从"只处理 RESULT"改成**任何页面都回相机**：相机是根，底部 Tab 的
+    「拍摄」走的也是这条路。旧实现里从相册按「拍摄」是死键。
+  - 底部 Tab 的返回规则不变（D-064）：平级页的返回统一回相机。
+- **取景页在详情页期间仍然挂载**（仅当从快门进来）：`takePicture` 是异步的，
+  此时把 `PreviewView` 从组合里拿掉会让 CameraX `unbindAll`，**刚发起的采集直接被掐断**。
+  从相册点开的详情则**不绑相机** —— 看一眼老照片不该点亮摄像头指示灯。
+- **代价与补丁：** 取景页挂在详情页下面时仍能收到触摸，所以纸面层挂了一个无涟漪的空
+  `clickable` 把空白处的点击吃掉，否则"点详情页空白处，取景器对焦了"。
+
+---
+
+## D-072 —— 玻璃层改用 Kyant Backdrop（真模糊/折射），顺带修七处成像缺陷
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地；`compileDebugKotlin` + `testDebugUnitTest` 通过；**真机未验**）
+- **背景：** 用户判定现有玻璃"全是 bug"，要求**完全按** `Kyant0/AndroidLiquidGlass`
+  （Maven：`io.github.kyant0:backdrop:2.0.1`，Apache-2.0）重写，并顺手修成像链路的 bug。
+
+### 旧玻璃为什么"看起来像 bug"
+
+不是审美问题，是三处**会随设备/尺寸真的错**的写法：
+
+1. `GlassBackdrop` 的两颗光斑写死 `center = Offset(1080f, 2100f)` / `radius = 900f`
+   —— 只在 1080×2400 屏幕上成立，别的机器上偏出画面或糊成一团；
+2. `GlassSurface` 的"厚度感"是 `Brush.verticalGradient(endY = 220f)`：**像素**常量，
+   3x 屏上几乎看不见，高面板上变成一道硬边；
+3. 描边是恒定 1dp 实线、不带方向；按压反馈是 `scale` + 涟漪 —— 涟漪把玻璃糊成塑料。
+
+D-069 的结论"Compose 没有背景模糊 API，`Modifier.blur` 模糊的是自己"**只对 `Modifier.blur`
+成立**。Backdrop 的做法是：把元素背后的内容录进 `GraphicsLayer` → 对这张图层做
+`RenderEffect`（模糊/颜色矩阵）与 AGSL 着色器（折射、边缘高光）。没有 GPU→CPU 回读。
+
+### 结论
+
+- **依赖**：`io.github.kyant0:backdrop:2.0.1`（版本进 `libs.versions.toml`，离线缓存已有）。
+- **组件全部重写**：`GlassSurface` / `GlassIconButton` / `GlassChip` / `GlassButton` /
+  `GlassNavBar` 一律走 `Modifier.drawBackdrop(backdrop, shape, effects, highlight, shadow,
+  innerShadow, layerBlock, onDrawSurface)`。公开签名不变，调用点不动。
+  - `effects = { vibrancy(); blur(dp); lens(h, amount) }`；
+  - 按压 = `layerBlock` 里放大 2dp（库反向变换背景图层，玻璃"鼓"而背景不动），
+    涟漪全部去掉（`indication = null`）；
+  - 边缘高光用 `Highlight.Default.copy(width, alpha)`，不再手画 1px 实线。
+- **backdrop 的作用域是硬约束**：`GlassBackdrop(content, overlay)` 把 content 录成图层，
+  **只有 overlay 里的玻璃**能采样它。页面内部的玻璃一律拿 `null`（`GlassSurface` 主动清掉
+  这个 CompositionLocal）—— 否则玻璃会在录制同一图层时去采自己，属未定义行为。
+  代价：卡片/芯片走"静态玻璃"（着色 + 高光 + 阴影），只有 TabBar 真的糊内容。
+- **三级降级**（都由库内部判 capability，不做假效果）：33+ 模糊+折射+方向高光；
+  31/32 模糊+平涂高光；29/30 只有着色+高光描边。取景页的预览是独立 Surface、录不到像素，
+  所以取景页一律静态分支，**不伪造模糊**。
+- **详情页不录图层**（`captureContent = destination != DETAIL`）：没有 TabBar 采样，
+  白录一遍全屏是纯浪费。
+
+### 顺带修的成像缺陷
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| 1 | 冷启动/回取景页**绑定两次相机**，中间预览黑一下；`handle` 已置空而 `canShoot` 仍 true → 快门静默无反应 | `programmedSize` 只要知道是哪卷就下发；`activeStock == null` 时不挂 `CameraPreview`；快门条件加 `handle != null` 并提示"相机正在重连" |
+| 2 | attach 轮询 1s 超时 → `supportedSizes` 空集 → 快门**永久**置灰、本轮不重试 | `lastAttached` 兜底；三条都拿不到时抛错走有界重试，而不是发布空集合 |
+| 3 | 缩略图写失败被当成"冲洗失败"（照片已在盘上、也进了相册），且抛错路径漏回收位图 | 缩略图失败降级成"无缩略图"；`thumbBitmap` 放 `finally`；删半成品 |
+| 4 | 内核吐 NaN/Inf 时静默写成黑/白图，状态仍是"已保存" | `FilmEngine` 在 nonFinite ≥ 0.1% 像素时抛；少量记日志 |
+| 5 | 拍摄时间取的是**落盘**时间（晚 2–4 秒） | `CapturedFrame.takenAt` 在快门那一刻取，一路带到文件名/`DATE_TAKEN`/详情页 |
+| 6 | 采集尺寸是 pack 的转置时，解码先转正、落盘又按 sensor 角转 → 多转 90/180°；转置后本可拍却报"换更小的卷" | `DecodedFrame.appliedRotationDegrees` 带回解码转过的角度，落盘改为 `(sensor − applied) mod 360`；错误消息区分"转置"与"真的不够" |
+| 7 | 相机 JPEG 未固定色彩空间：带 Display P3 ICC 的帧会被当 sRGB 喂进 `sRGB→Rec.2020` | 三处解码都设 `inPreferredColorSpace = SRGB` |
+
+### 没做的事（写清楚，避免下次误读）
+
+- **`stripRows` 仍是 128**：实测 halo 55–62 → 内核工作量约 1.9×，抬到 384 行能省约 1/3；
+  但没有真机基准就改这个数，等于把"颗粒相位"和"内存峰值"一起换掉。本次只把两条**错误注释**
+  改成实测值。
+- **`FilmSelfTest` 仍用 `FilmEngine(pack)` 的默认肩部**（反转片自测跑的是负片曲线），
+  verdict 也不检查 bitmap 路径的 `nonFinite` —— 自测工具缺陷，不在产品链路上。
+- **`nativeMaxHalo` 对 diffusion 半径仍是截断而非 `ceil`**（`fotufilm_jni.cpp`），
+  需要重新编译 `.so`，本机没有 NDK 链路。
+
+---
+
+## D-073 —— 图标换成 Material Symbols；圆形按钮收成单一尺寸
+
+- **日期：** 2026-11-01
+- **状态：** ACCEPTED（代码落地；`assembleDebug` + 单测通过；真机未验）
+- **背景：** 用户反馈「里面的图标能换成 icon 吗 看着都是 ai 画出来的 好丑」以及
+  「圆形按钮 有的都是椭圆形了 大大小小的」。
+
+### 图标：手画 → Material Symbols Rounded
+
+旧 `GlassIcons.kt` 是照 24 格栅自己描的：齿轮 = 圆 + 6 条辐条、光圈 = 圆 + 3 条弦、
+胶片 = 方框 + 齿孔线。问题不是"画不出来"，而是**它不是任何一套成熟图标**：齿高不齐、
+圆角半径各自为政、同一视觉重量下笔画粗细不一 —— 放在玻璃上就是"AI 画的"那种脏。
+
+- 全部 21 个 `GlassIconKind` 换成 **Material Symbols Rounded**（Google，Apache-2.0）的
+  原始几何，以 `res/drawable/ic_glass_*.xml` 形式随包；
+- **不引 `material-icons-extended`**：那套包几十 MB，而本工程 release 未开 R8，
+  图标类会全量留下。这里只带用到的 24 个矢量（含 3 个 `_fill` 变体），每个 < 1.2KB；
+- 矢量由 [`tools/gen_glass_icons.py`](tools/gen_glass_icons.py) 从官方 SVG 直接生成
+  （脚本进仓库，图标不是手抄的，可复现、可替换）。Material Symbols 是 **960 视口**，
+  脚本按每个 SVG 自己的 `viewBox` 写入，不假设 24；
+- `filled` 只对 Heart / Sparkle / Aperture 有效（它们有 `_fill` 变体），其余忽略 ——
+  不拿描边图标冒充"已选中"；
+- `GlassComponentContractTest` 的解析目标从 `drawGlassIcon` 改成 `drawableOf`，
+  契约不变：每个枚举值必须有落点。
+
+### 圆形按钮：椭圆与尺寸不齐
+
+四处来源，逐个收掉：
+
+1. `GlassIconButton` 之前是 `size + 4.dp`（44 视觉 / 48 热区）两套尺寸并存，
+   调用点还能各自传 `size` → 屏幕上出现"大大小小的椭圆"。
+   现在**只有一个尺寸来源**：`size`（默认 48dp）同时是宽、高、直径，形状固定 `CircleShape`；
+2. 顶部 EV 按钮过去画的是**文字 `EV`**，EV 面板的加减画的是**文字 `−` / `+`** ——
+   文字字形和图标混排是"大小不一"的主要来源。改用 `exposure` / `add` / `remove` 图标；
+3. TabBar 里拍摄键单独用 26dp、其余 22dp → 统一 24dp；
+4. 变焦档过去是 `GlassChip`（胶囊，宽度随 `1×`/`3.2×` 变化），和旁边的圆形按钮是两套语言。
+   改成 44dp 圆钮（文案仍在钮内），并按新尺寸补 `contentDescription`。
+
+顺带：TabBar 单项之前 `.clip(GlassShape.pill)` 裁一个 44×60 的竖条，只会得到一个压扁的
+椭圆轮廓，已去掉。
+
+### 验证
+
+- `:app:assembleDebug`、`:app:testDebugUnitTest` 通过；
+- 24 个矢量与官方 SVG 的 `pathData` **逐字比对，0 处不一致**（脚本一次性核对）。
+
+---
+
+## D-074 —— 真机反馈第一轮：图标全白、去自动取色、拍摄页重排、成像链路
+
+- **日期：** 2026-11-01 夜
+- **状态：** ACCEPTED（代码落地；`assembleDebug` + 全量单测 + Robolectric 截图通过；**真机未验**）
+- **背景：** 用户装上 D-073 的包后给了五条反馈：①做成成熟安卓软件 ②图标不显示
+  ③不要自动取色 ④拍摄页布局要优化 ⑤成像效果要优化。并把手机插上电脑（ADB 未开）。
+
+### ① 图标为什么全都不显示（D-073 的回归）
+
+Material Symbols 的 SVG 是 `viewBox="0 0 -960 960 960"` —— **原点在负 Y 方向**。
+Android vector 的视口永远是 `(0,0)-(w,h)`，没有 viewBox 原点这一说。上一版照着抄了
+`viewportWidth/Height`，于是 24 个图标的路径全部画在画布**上方**：aapt2 不报错、
+编译不报错、运行时一片空白。
+
+- 生成脚本改为：负原点自动套 `<group android:translateX/Y>` 平移到 0,0，并读取每个
+  SVG 自己的 `viewBox`（Material Symbols 同时存在 960 和 48 两种网格）；
+- 脚本内置 **bbox 自检**：把路径上的点（含贝塞尔控制点）算成包围盒，断言落在视口内
+  —— 这条能直接抓住"画到视口外"这类错误，`python tools/gen_glass_icons.py --check`；
+- 另写了一次性光栅化核对（XOR 近似 even-odd），确认 24 个图标方向、形状都对。
+
+### ② 去掉"跟随壁纸取色"
+
+相机界面是照片的衬底，强调色跟着壁纸变 = 同一张照片在不同桌面下长得不一样；而取色
+只影响选中态和强调文字，收益远小于"不可预期"的代价。`PocketCcdTheme(dynamic)` 参数、
+`UiPrefs`、`SettingsScreen` 的「外观」组一并删除，色板固定为冷蓝种子色。
+
+### ③ 拍摄页布局
+
+| 问题 | 判据 | 修法 |
+|---|---|---|
+| 顶栏在 360dp 上溢出 | 胶卷芯片 + 计数芯片 + 3×48dp 按钮 + 间距 ≈ 414dp > 360dp，Row 不会换行，最右边的设置钮被推出屏幕 | 张数并进胶卷芯片（`GOLD 200 · 12`）；芯片放进 `weight(1f)` 的 Box，窄屏自己省略；按钮 44dp、间距 6dp |
+| 快门不是正中 | 左右两格 52dp / 48dp，`SpaceBetween` 让快门偏了 2dp | 左右各 `weight(1f)`，快门绝对居中 |
+| EV 面板压住变焦轨 | 面板居中、轨在 CenterEnd，360dp 上必然重叠 | 面板展开时收起变焦轨 |
+| 白墙/雪景上控件看不见 | 玻璃只有 6% 白，`veil` 0.34 太透 | `veil` 0.48 + 白 0.08；顶栏/底栏各加一层渐变压暗 |
+| 平板上被拉成两条边 | 800dp 宽屏上 dock 撑满 760dp、按钮贴屏幕两端 | 浮层宽度上限 560dp（`CameraChromeMaxWidth`），手机上等价于原来的 `fillMaxWidth` |
+
+320 / 411 / 480 / 800dp 四档都渲染核对过（`ScreenshotTest`）：320 上胶卷名省略但三个按钮
+完整可见；800 上 dock 收成居中的 560dp 面板。
+
+### ④ 成像链路
+
+- **JPEG 95 / 缩略图 90**（原 92 / 88）：颗粒与低反差渐变最先被 JPEG 吃掉；
+- **旋转不再开滤波**：90/180/270 是整像素变换，`filter = true` 会白走一遍双线性采样，
+  12MP 上就是白白糊掉一点锐度（`PhotoStore.rotate`、`applyExifOrientation`）；
+- **`stripRows` 128 → 256**：halo 实测 55–62，128 行时内核有约 1.9× 行是重复计算的，
+  256 行降到 1.48×，单张约省 20% 时间 —— 手持拍摄少两三百毫秒就是少一点糊；
+- **自测工具修正**：bitmap 路径改用胶卷真实的 SDR 肩部（之前反转片跑的是负片曲线）、
+  verdict 检查 bitmap 路径的 NaN（真机上吐 NaN 的正是这条产品路径）、
+  并把渲染结果存成 `fotufilm-selftest-render.jpg`，方便直接看观感。
+
+### ⑤ "成熟应用"的两件小事
+
+- 取景/详情期间 **屏幕常亮**（`view.keepScreenOn`），离开即撤销；
+- 快门 **触感反馈**：玻璃按键没有涟漪，闪白要等采集回来才看得到。
+
+### ⑥ 布局回归：Robolectric 截图测试
+
+这一轮全是"看"才能判断的改动，所以补了 `ScreenshotTest`：Robolectric + Compose 把
+相机页（411dp / 360dp）、相册、胶卷库、详情、设置渲染成 PNG 到
+`app/build/screenshots/`。
+
+- 跑在 **SDK 31**：库的 AGSL 高光用了 `layout(color) uniform`，Robolectric 的 Skia
+  不认这个限定符会直接抛异常；31 上走"模糊 + 平涂高光"分支，布局仍然可信；
+- **不是像素快照测试**：没有基准图断言，只产出图片供人看（玻璃的 RenderEffect
+  在模拟环境里不可靠）。
+
+### 没做的
+
+- **真机验证**：用户的手机以 MTP 连上，但没有开 USB 调试，`adb devices` 为空；
+  `Settings → 开发者选项 → USB 调试` 打开后即可安装、截图、拉成片。
+- **成像观感**：色彩/反差好不好，得看一张真实成片。自测样张已经落地，
+  但更直接的是把一张相册照片拉出来看。
+
+---
+
+## D-075 —— 把成像自测搬进设置页（不再依赖 adb）
+
+- **日期：** 2026-11-01 夜
+- **状态：** ACCEPTED（代码落地，`assembleDebug` + 单测通过；真机未验）
+- **背景：** 目标里"成像效果优化"要求**真机自测/成片对比**，但真机调试链路（adb）不在
+  手上。与其等，不如让应用自己能把这件事做完：用户在设置页点一下，就能看到自测结论
+  **和一张完整的渲染样张**。
+
+### 结论
+
+- 设置页新增「诊断 · 运行成像自测」（`SettingsScreen(onRunSelfTest = ...)`）；
+- `onRunSelfTest` 只在 **debug / benchmark** 包传入，发布包传 null → 这一组连标题都不出现，
+  不会把开发者工具泄漏给用户（`FilmSelfTestActivity` 自己在 release 里也会 finish）；
+- 自测页（`FilmSelfTestActivity`）改了两处：
+  1. **显示样张**：bitmap 路径的渲染结果按 1/4 采样解码后直接画在报告上方 ——
+     "成像效果"看这张比看一堆数字快；原图仍落盘成 `files/fotufilm-selftest-render.jpg`；
+  2. 报告里多一行 `样张:` 路径，便于按图索骥。
+- 自测页仍然是纯 `Activity` + `TextView`：它不属于产品界面，不需要玻璃，也不需要导航。
+
+### 为什么这么做比"等 adb"值
+
+- 用户不需要电脑、不需要开发者模式，就能拿到引擎在当前机型上的**真实数字 + 真实画面**；
+- 我这边即使拿不到 adb，也能让用户把自测页截个图发过来 —— 色彩/颗粒/反差的问题
+  一张图就能定位，比继续盲猜强。
+
+---
+
+## D-076 —— EV 面板挪出画面中心 + 给截图测试留一个状态接缝
+
+- **日期：** 2026-11-01 夜
+- **状态：** ACCEPTED（代码落地，`ScreenshotTest` 14 张图通过；真机未验）
+- **背景：** EV 面板展开时压在画面正中。用户调曝光的时候恰恰是在构图 ——
+  挡住中心等于挡住主体。之前一直没发现，是因为这个面板的状态（`evOpen`）是
+  Composable 内部状态，截图测试点不开，只能靠想象。
+
+### 结论
+
+- 面板从 `Alignment.Center` 挪到 **dock 上方**（`BottomCenter` + 132dp 底距），
+  手指够得着、又不挡画面；
+- 给 `CameraScreen` 加一个**只给测试用**的 `evInitiallyOpen: Boolean = false`，
+  截图测试因此能把"面板展开 + 变焦轨收起"这个组合真的渲染出来核对；
+- 顺带确认了另一个修法有效：面板展开时右侧变焦轨确实收起了（图里没有 1×/3×），
+  两个控件不再叠在一起。
+
+### 同一轮截图核对的第二个发现：没相机时的死按钮
+
+权限被拒 / 相机还没绑上时，右侧仍然画着 1×/2× 变焦轨 —— 那两个圆钮点了不会有任何
+反应（没有 `CameraHandle`，`onZoomChange` 落到默认实现），摆在那里就是在骗人。
+现在 `permissionGranted && viewfinder != null` 才画。
+
+这一轮补的三张状态截图（`camera-no-permission` / `gallery-empty` / `licenses`）
+正好把"第一次打开应用"的三条路径都覆盖了。
+
+---
+
+## D-077 —— 查看器盖住 TabBar：模态的层级必须是"外层说了算"
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（代码落地，`assembleDebug` + 97 项单测通过；**真机回归待用户确认**）
+- **背景：** 用户装 0.8.0 后报的唯一问题——"相册点开大图后导航栏和内容重叠"。
+
+### 根因（不是样式问题，是层级问题）
+
+`PhotoViewer` 画在 `GalleryScreen` 内部，而 `GalleryScreen` 在 `GlassBackdrop` 的
+**content** 槽；TabBar 在 **overlay** 槽。overlay 永远画在 content 之上，所以查看器
+再"全屏"也盖不住 TabBar。更糟的是：查看器的打开状态（`viewer`）藏在 `GalleryScreen`
+内部，外层**根本不知道**它开着，自然也没法让 TabBar 让位。
+
+### 结论
+
+- 查看器状态上提到 `AppRoot`（`viewerRequest`），查看器改画在 **overlay 槽、TabBar 之后**，
+  并用 `CompositionLocalProvider(LocalGlassBackdrop provides null)` 包住 ——
+  它背后是照片，采样页面图层只会把相册网格糊到工具栏上；
+- 新增纯函数 `showBottomTabs(destination, viewerOpen)`（`navigation/AppState.kt`）：
+  **详情页**与**查看器**是唯二不显示 TabBar 的情况。AppRoot 和截图测试共用它，
+  不再各写一份判断；
+- 换页时（`LaunchedEffect(destination)`）自动关掉查看器，避免"从详情页返回再进相册时
+  又弹出一张刚才看过的照片"；
+- 查看器打开时 `captureContent = false`：没有 TabBar 采样，就不白录一遍全屏图层。
+
+### 验证
+
+- `AppStateTest` 新增一条：四个平级页有 TabBar、查看器打开时**任何**页面都没有、
+  详情页没有（21 → 22 例）；
+- `ScreenshotTest` 的 `gallery-viewer` 用生产代码的同一个 `showBottomTabs` 渲染：
+  图里只有查看器，没有 TabBar；`gallery-with-tabbar` 仍然是"有 TabBar"的对照图。
+
+---
+
+## D-079 —— 拍摄页：dock 上滑打开"去哪儿"抽屉
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（代码落地，ssembleDebug + 98 项单测通过；**手势未真机验**，手机已从 USB 断开）
+- **背景：** 用户："默认拍照页面下方的 dock 栏做的不错，但是进入其他页面只能点击右上角设置，
+  能增加一个上滑 dock 栏就能打开其他页面的途径吗，感觉是最优解而且很好看。"
+
+### 问题
+
+相机页是**根页面**，没有底部 TabBar。四个目的地散在三个入口上：相册 → dock 缩略图；
+胶卷 → 顶部芯片；设置 → 右上角齿轮；**发现页在相机页根本进不去**。用户得记住"哪个入口在哪儿"。
+
+### 结论
+
+- 从 dock **垂直上滑**（阈值 48dp）打开一个抽屉，四个目的地一行摊开：
+  相册 / 胶卷 / 发现 / 设置，图标沿用 Material Symbols，圆钮沿用 48dp 规格 ——
+  它是 dock 的"向上展开态"，不是另起一套弹层；
+- 抽屉顶部有一条**抓手**（32×3dp 圆角条）：没有它，手势没有任何提示，没人会发现；
+- 展开时 **dock 淡出**、遮罩压暗取景画面；点遮罩 / 按返回关闭；
+  点中目的地直接走 AppEvent.OpenX，抽屉随页面切换自然销毁；
+- 手势挂在 **dock 面板**上而不是整屏：整屏会和取景器的点按对焦抢事件，
+  同一个区域里"上滑"和"点按"谁先吃到事件会变成玄学；
+- 触发时给一次触感反馈（和快门同一套 HapticFeedbackType.LongPress）。
+
+### 验证
+
+- ScreenshotTest.cameraSwitcher：抽屉展开态渲染（camera-switcher.png）——
+  第一版发现抽屉和 dock 叠在一起（快门从抽屉底下透出来），已改为展开时 dock 淡出；
+- switcherInitiallyOpen 是**只给测试用**的状态接缝，和 evInitiallyOpen 同一个思路。
+
+---
+
+## D-080 —— 取景框重做：3:4 带边框的取景窗
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（代码落地，ssembleDebug + 98 项单测通过；**真机未验**，手机已断开）
+- **背景：** 用户："这个取景框单独设计一下。1 不要当前这样的挨边全屏式的；2 缩小一点加上边框。"
+
+### 结论
+
+- **不再是"预览即屏幕"**：画面缩进一个居中的取景窗，四周留给控件。窗 = 3:4、
+  圆角 26dp、1dp 白 18% 描边、四角 L 形角标（12dp 内缩、16dp 长、2dp 粗、白 55%）；
+- **比例为什么是 3:4**：成片就是这个比例（传感器 4:3 横置，落盘旋转 90°），
+  所以窗里看到的就是最后那张照片的画幅 —— 以前全屏 FIT_CENTER 上下两条黑边，
+  其实是"屏幕比例 ≠ 照片比例"，现在这个矛盾被窗框本身消化掉了；
+- **预览流固定 4:3**（AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY）：
+  不写这一行 CameraX 可能给 16:9，窗里又会多出一层内黑边；
+- 取景窗的尺寸在 BoxWithConstraints 里算：宽 = min(可用宽, 560dp, 带高×3/4)，
+  带高 = 屏高 − 顶栏预留 96dp − dock 预留 152dp；320dp 小屏上也放得下
+  （280×373，剩余 392）；
+- 点按对焦层现在**就是取景窗本身**，点窗外的黑边不再触发对焦（坐标天然对齐
+  PreviewView，因为两者同尺寸；4:3 流在 3:4 窗里精确铺满，没有 FIT_CENTER 留边）；
+- 顺手删掉了顶/底两条压暗渐变：它们是"控件压在画面上"时代的产物，现在控件都在黑底上。
+
+---
+
+## D-081 —— 片边（135 半格）与日期后背（盖章）
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（v1 落地，117 项单测通过，截图产物可看；**真机未验**，手机已断开）
+- **背景：** 用户问 SpektraLab 上游的"胶卷锯齿 + 日期显影"能不能复刻。上游是 GPL-3.0，
+  只借规格不抄代码；设计见 docs/film-edge-and-date-back.md，用户选定"按建议做"：
+  **半格 135 + 盖章日期 + 不印格号**。
+
+### 结论
+
+- **画幅只做半格 135（24×18mm）**：它正好 4:3，与我们的成片相同 —— 不裁切、不补边。
+  全画幅 36×24 是 3:2，要裁 12.5%，v1 不做；
+- **日期是"盖章"不是"显影"**：画在**旋转之后**的成品上，所以不存在"字被转 90°"
+  的风险；上游是把日期曝进负片（会晕开），代价是必须按 -rotation 预旋转绘制，
+  算错就是每张照片角上一块橙色污渍 —— 留给 v2；
+- **片边在旋转之后合成**：胶片条横着走、齿孔在上下两排；若先合成再转，齿孔会变成
+  左右两排（错）；
+- **日期文本**照抄上游 captureDate()：` '26 11 2 `（年两位 + 单引号，月日不补零）；
+  时钟早于 2000 年视为"没同步"，**宁可不印**；
+- **片边字**目前是中性字 PC-135 HALF：按卷印（KODAK GB 200-7 之类）需要把
+  FilmStock 传进渲染器并维护一张表 —— 编造型号比不印更糟，所以 v1 不编；
+- **格号不印**：现在只有"存活照片数"，删照片会倒退，印出来就是假号。
+
+### 防 bug 的关键点（都写了测试）
+
+1. 开关在**快门那一刻快照**（AppViewModel.capture(taker, imprint)），冲洗中途改设置
+   不影响在途这张；「重试」复用上一次的设置（lastImprint），不读当时的当前值；
+2. **失败隔离**：PhotoStore.save 用 unCatching 包住贴花，任何异常（含 OOM）
+   只记日志、按未贴花的图保存 —— 快门永不因为装饰失败；
+3. **只贴一次**：只在 save 里发生，没有任何"重新导出"路径；
+4. **日期位置显式传矩形**：只开日期时画布是照片本身、开片边时是片门。第一版这里
+   写死用了片门坐标，900×1200 的图上日期被算到 (620,1395) —— **整张图一个字都没有**，
+   是渲染测试（imprint-date-only.png）抓到的，已补 dateOnBarePhotoStaysInsideThePhoto；
+5. **画布上限 24MP**：竖幅 12MP 成片的片边画布是 4000×5833 ≈ 23.3MP，1:1 不缩；
+   更大幅面整体缩到 24MP 以内（留 1% 余量防 roundToInt 越界）；
+6. 旋转改为"画进可变目标位图"（Canvas + 整数像素），省掉日期盖章时的一次 48MB copy。
+
+### 验证
+
+- ImprintTest（15 项）：日期格式/顺序/闰日/跨年/时钟不可信、画幅映射、片门居中、
+  齿孔节距与边界、24MP 上限、日期不出框；
+- ImprintRenderTest（4 项）：真渲染出 imprint-edge-date.png / imprint-date-only.png，
+  断言尺寸关系与"什么都没开时原样返回"；
+- settings.png 能看到"成像"分组两行开关；camera-411dp.png 能看到 dock 上方的
+  135 半格 · 日期 状态行。
+
+---
+
+## D-082 —— 片边/日期改成"曝光合成"（因为纯矢量画出来太假）
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（0.8.5，117 项单测通过；真机未验）
+- **背景：** 用户看完 D-081 的成品："你这个用纯代码做出来的边框和文字太假了 不能用上游的吗"。
+
+### 为什么不能"直接用上游的"
+
+扒了上游源码包（901 个文件）之后确认三件事：
+
+1. **它没有边框素材**。desktop/public/assets 只有 FilmCovers（卷样封面），
+   engine/resources* 里没有任何片边/齿孔贴图 —— 它的片边也是**算出来的**；
+2. **它算的方式我们接不上**。engine/src/pipeline/overscan.cpp（137KB）在**胶片毫米坐标**
+   里生成覆盖率掩膜，用 2700K/4500K 的灯透过 ilm_sensitivity_edge_ 积分，
+   把日期与片边字**曝进负片**，再随整条负片一起显影（imprint_raster 只负责字形光栅化）。
+   我们移植的是 otufilm_halide_process_strip（场景线性图 → 印相），
+   overscan/imprint 是**另一套 kernel**，从来没编进我们的 .so；
+3. **许可是 GPL-3.0**。抄代码会把整个 App 拖成 GPL。
+
+### 所以改的是"手法"，不是"素材"
+
+照上游的机制重做（D-082 的实质）：
+
+- **日期**：系统等宽字体 → **5×7 点阵字模**（DotMatrixFont），逐点画进覆盖率掩膜，
+  模糊后按 **88% 合成 + 一层晕光**（模拟光渗）。模糊半径只有点径的 14%；
+- **片基**：纯色 → 暖黑 + 纵向亮度梯度 + 128×128 确定性噪点（BitmapShader 平铺，23MP 也不慢）；
+- **齿孔**：完美圆孔 → 孔边一圈**光渗**（琥珀色外扩 0.06mm）+ **亚毫米抖动**（序号哈希，可复现）
+  + 孔内仍打穿成黑；
+- **片边字**：加一层偏移 1.2px 的低透明度"墨扩散"，字号 1.5mm → 1.15mm；
+- **片门**：加一圈 0.12mm 的暗边（乳剂在画门边的轻微遮光）。
+
+### 自己抓的两个 bug（都是渲染测试看出来的）
+
+1. 掩膜 blur 后写回时又 shl 24 了一次 → alpha 全变 255，日期成了一个**橙色实心矩形**；
+2. 模糊半径取到点径的 55% → 点溶成一片糊，日期读不出来。改成 14% 才保住了"点"。
+
+### 验证
+
+- imprint-edge-date.png / imprint-date-only.png 重新渲染，点阵、晕光、片基噪点、
+  齿孔光渗都在；ImprintTest / ImprintRenderTest 全绿。
+
+---
+
+## D-083 —— 拍摄页强制横屏（横版相机的排版）
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（0.8.6，119 项单测通过；**真机未验**，手机已断开）
+- **背景：** 片边是横的、竖版照片装进去违和。用户选择"强制横版"，并问"有难度吗"。
+
+### 结论
+
+拍摄页**强制横屏**，其它页面竖屏 —— 这就是一台横着拿的胶片相机。
+
+- manifest 去掉 screenOrientation="portrait"，并补 configChanges：
+  不加就会"一转屏 Activity 重建"，正在冲洗的那张（6 秒）和相机会话一起没掉；
+- PocketCcdRoute 按目的地设 equestedOrientation：
+  CAMERA → SCREEN_ORIENTATION_SENSOR_LANDSCAPE，其它 → PORTRAIT；
+- **方向一变就重绑相机**（cameraNonce++）：ImageCapture.targetRotation 只在绑定
+  那一刻取一次，不重绑的话横过来拍出来的照片会悄悄歪 90°（不报错，最阴的一类 bug）；
+- 横版排版重做：横屏只有 **361dp** 高，竖版那套"顶栏 + 495dp 窗 + dock"根本放不下。
+  现在控件挪到**左右两侧**（左：相册/闪光；右上：EV/九宫格/设置；右中：快门/变焦），
+  取景窗变 **4:3**、吃满高度（约 439 × 329dp），左上角只留胶卷芯片；
+- 落盘方向自动正确：横着拿拍出来 otationDegrees = 0 → 4000×3000 横版，
+  片边按横版合成（5833×4000 ≈ 23MP，1:1 不缩）。
+
+### 已知的代价
+
+1. 手机**竖着拿**时，拍摄页的字是**歪的** —— 这是"强制横版"的定义，不是 bug。
+   如果之后觉得劝退，可以加一条"请横过手机"的首启提示，或改成跟随重力；
+2. 横竖切换会触发配置变更（已禁止重建，但 Compose 要重排一帧），
+   从相册回拍摄页可能看到一次瞬间转向；
+3. EV 面板 / 上滑抽屉在横版下仍固定在底部中央，未逐项核对（真机要看）。
+
+### 验证
+
+- ScreenshotTest.cameraScreenLandscape（804×361dp，FOA-AL00 的真实横屏尺寸）：
+  窗 4:3 吃满高度、左右控件不重叠、快门在右中、变焦轨在快门下方；
+- 竖版 camera-411dp.png 未变；
+- ImprintRenderTest.rendersLandscapePhoto：横版成片的片边样子。
+
+---
+
+## D-084 —— 齿孔改到画布长边（上一版把两个轴搞反了）
+
+- **日期：** 2026-11-02
+- **状态：** ACCEPTED（0.8.7，118 项单测通过；真机未验）
+- **背景：** 用户："横屏的胶片锯齿不应该在长边吗 你搞反了。"
+
+### 错在哪
+
+第一版把**片宽 35mm 当成画布的短边**，一条"单帧 + 3mm 余量"的段落只有 24mm 长，
+于是画布永远比片宽窄，齿孔自然落在短边（横版成片是左右两列孔）。
+
+### 改法
+
+1. **胶片方向跟着照片走**：横幅 → 胶片横着走（齿孔上下）；竖幅 → 竖着走（齿孔左右）；
+2. **画门高度按 135 的真实规格取 24mm**（全画幅 36×24、半格 18×24 都是 24mm 跨片宽），
+   沿片长 = 24 × 照片长宽比（4:3 → 32mm）。这样照片**1:1 贴进画门**、画面占片宽 69%，
+   片基不会宽得像黑板；上一版按 18mm 取，画面只占 51%，还得整张缩到 7.4MP；
+3. **片头片尾各留 5mm**：沿片长 42mm > 片宽 35mm → 齿孔落在长边上；
+4. 片边字的位置也跟着修：竖片时它跑到画面里去了（居中轴和"距片边"两个值写反了）。
+
+### 现在的画布
+
+- 竖幅 3000×4000 → 4375 × 5250（23MP），照片 1:1；
+- 横幅 4000×3000 → 5250 × 4375（23MP），照片 1:1；
+- 都在 24MP 上限内，不缩放。
+
+### 验证
+
+ImprintTest.perforationsSitOnTheLongEdges 直接断言"每个孔都必须贴在画布长边 3mm 内"，
+横竖两种朝向都测；imprint-edge-landscape.png / imprint-edge-date.png 可肉眼核对。

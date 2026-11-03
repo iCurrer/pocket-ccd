@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 的暴露范围。
+
+  只开一个目录：应用外部私有目录下的 `Pictures/pocket-ccd/`，也就是成片的两份副本
+  所在的位置（`files/Pictures/pocket-ccd/full` 与 `/thumb`）。
+
+  用途只有一个：详情页的「分享」。`ACTION_SEND` 需要一个 `content://` URI，
+  直接把 `file://` 塞进 Intent 会在 API 24+ 抛 `FileUriExposedException`。
+  这里用 `path` 限定到 pocket-ccd 子树，而不是整个外部私有目录 —— 越窄越好。
+-->
+<paths>
+    <external-files-path
+        name="pocket_ccd"
+        path="Pictures/pocket-ccd/" />
+</paths>

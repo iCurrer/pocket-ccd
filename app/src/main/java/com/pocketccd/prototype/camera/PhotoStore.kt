@@ -1,9 +1,12 @@
 package com.pocketccd.prototype.camera
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Environment
@@ -98,7 +101,9 @@ class PhotoStore(context: Context) {
      *   pack 的扩散/晕光/颗粒半径已按 4096×3072 烘成像素数（D-037），先转成 3072×4096
      *   会让冲洗直接失败。所以冲洗永远按 pack 尺寸跑，效果烘焙完再转——
      *   此时像素只是换个摆法，颗粒尺度不受影响。
-     * @param quality JPEG 质量。92 是设计稿定的值（设置页「高 · 92」）。
+     * @param quality JPEG 质量。**95**（D-074）：胶片的颗粒与低反差渐变正好是 JPEG
+     *   最先糊掉的东西，92 在 12MP 上能看出"颗粒被压平、暗部成块"。多出来的体积
+     *   （约 +15%）换的是成片观感。
      * @param exif 相机原始帧里读到的四项硬件参数（P1-14）。null 表示没读到，
      *   这次就不写 EXIF —— 宁可不写，也不拿编造值填空。
      */
@@ -109,15 +114,28 @@ class PhotoStore(context: Context) {
         renderMillis: Long,
         strips: Int,
         rotationDegrees: Int = 0,
-        quality: Int = 92,
+        quality: Int = 95,
         exif: PhotoExif? = null,
+        /** 片边 / 日期后背。快门按下时快照，这里只负责执行（D-081）。 */
+        imprint: ImprintSettings = ImprintSettings(),
     ): SavedPhoto {
         val id = "film_${capturedAt}_${stock.id}"
         val upright = rotate(bitmap, rotationDegrees)
 
+        // 贴花：片边 / 日期。**失败绝不传播** —— 全尺寸照片已经在内存里，贴花只是
+        // 装饰；为了装饰让这张照片失败（用户还得重拍）是最差的取舍。
+        var decorated: Bitmap? = null
+        val final = runCatching {
+            if (imprint.any) ImprintRenderer.apply(upright, capturedAt, imprint) else upright
+        }.onFailure { error ->
+            ImprintRenderer.logFailure(error)
+        }.getOrDefault(upright).also { result ->
+            if (result !== upright) decorated = result
+        }
+
         try {
             val full = File(fullDir, "$id.jpg")
-            writeAtomically(full) { upright.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+            writeAtomically(full) { final.compress(Bitmap.CompressFormat.JPEG, quality, it) }
 
             // EXIF 必须补在 full 落盘之后、复制进相册之前：Bitmap.compress 不写 EXIF
             // （P1-14），而下面 publishToGallery 是**按字节复制 full**。顺序反了，
@@ -132,10 +150,27 @@ class PhotoStore(context: Context) {
 
             // 缩略图长边 1440：够成片页铺满、够照片墙网格，内存只有原图的 1/7。
             // 从**旋转之后**的图生成，否则会出现"大图正、小图躺"。
-            val thumbBitmap = scaleForThumbnail(upright)
+            //
+            // 这一步失败**不能算拍摄失败**：全尺寸已经在盘上、也已经进了系统相册。
+            // 把它报成 Failed，用户只会点"重试"再拍一张一模一样的，而照片墙要等到
+            // 下次 refresh 才看得见这张"失败"的照片。失败就退回"没有缩略图"——
+            // SavedPhoto.thumbnailFile 的契约本来就是"候选路径，调用方先 isFile"。
             val thumb = File(thumbDir, "$id.jpg")
-            writeAtomically(thumb) { thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-            if (thumbBitmap !== upright) thumbBitmap.recycle()
+            runCatching {
+                val thumbBitmap = scaleForThumbnail(final)
+                try {
+                    writeAtomically(thumb) {
+                        thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
+                    }
+                } finally {
+                    // 缩放出来的新位图必须回收；写盘抛错时也要 —— 旧代码把回收写在
+                    // 写盘之后，一次失败就漏掉一张 1440 长边（约 11MB）的位图。
+                    if (thumbBitmap !== final) thumbBitmap.recycle()
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "缩略图生成失败（成片与相册副本不受影响）：${thumb.name}", error)
+                thumb.delete()
+            }
 
             return SavedPhoto(
                 id = id,
@@ -143,25 +178,67 @@ class PhotoStore(context: Context) {
                 stockLabel = stock.label,
                 fullFile = full,
                 thumbnailFile = thumb,
-                width = upright.width,
-                height = upright.height,
+                width = final.width,
+                height = final.height,
                 capturedAt = capturedAt,
                 renderMillis = renderMillis,
                 strips = strips,
                 galleryUri = galleryUri,
             )
         } finally {
+            // 贴花的中间图（片边画布）先回收；它永远不是 upright 本身。
+            decorated?.recycle()
             // 只有真的转过才有新对象；没转时返回的就是入参，回收权仍归调用方。
             if (upright !== bitmap) upright.recycle()
         }
     }
 
-    /** 顺时针旋转。0° 时原样返回，不复制 —— 12MP 的 ARGB 复制一次就是 50MB。 */
+    /**
+     * 顺时针旋转。0° 时原样返回，不复制 —— 12MP 的 ARGB 复制一次就是 50MB。
+     *
+     * **`filter = false`**（D-074）：90/180/270 是整像素变换，不需要重采样。开着滤波
+     * 会让 Skia 走一遍双线性采样，12MP 上就是白白糊掉一点细节 —— 用户对"成像效果"
+     * 的第一感知就是锐度，这一步不该有损。
+     */
     private fun rotate(source: Bitmap, degrees: Int): Bitmap {
         val normalized = ((degrees % 360) + 360) % 360
         if (normalized == 0) return source
-        val matrix = Matrix().apply { postRotate(normalized.toFloat()) }
-        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+        // 自己画进一张**可变**目标位图，而不是 Bitmap.createBitmap(source, matrix)：
+        // 后者返回不可变位图，日期后背就得再 copy 一份（12MP 多 48MB）。旋转是 90° 的
+        // 整数倍，drawBitmap 关掉过滤后是精确的整像素搬家，和 matrix 造图等价（D-081）。
+        val swap = normalized == 90 || normalized == 270
+        val width = if (swap) source.height else source.width
+        val height = if (swap) source.width else source.height
+        val target = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(target)
+        canvas.save()
+        when (normalized) {
+            90 -> {
+                canvas.translate(width.toFloat(), 0f)
+                canvas.rotate(90f)
+            }
+
+            180 -> {
+                canvas.translate(width.toFloat(), height.toFloat())
+                canvas.rotate(180f)
+            }
+
+            270 -> {
+                canvas.translate(0f, height.toFloat())
+                canvas.rotate(270f)
+            }
+        }
+        canvas.drawBitmap(
+            source,
+            0f,
+            0f,
+            Paint().apply {
+                isFilterBitmap = false
+                isAntiAlias = false
+            },
+        )
+        canvas.restore()
+        return target
     }
 
     /**
@@ -450,6 +527,44 @@ class PhotoStore(context: Context) {
         val timestamps: Set<Long>,
     )
 
+    /**
+     * 这张成片是否已经写进系统相册。
+     *
+     * 判据是 `gallery_missing_ids` 这本账，**不是** `SavedPhoto.galleryUri`：
+     * 那个字段只在"刚拍完"这一次内存记录里有值，`list()` 从私有目录重建的记录一律为
+     * null。拿它当"未写入"的证据，详情页会对每一张历史照片写"相册未写入"—— 一句假话。
+     *
+     * 反过来，没记在缺少名单里就视为已写入：历史补齐（[syncToGallery]）跑过之后每张
+     * 都会 [markPublished]，补传失败的才留在名单上。
+     */
+    fun isPublished(id: String): Boolean =
+        id !in prefs.getStringSet(KEY_GALLERY_MISSING, emptySet()).orEmpty()
+
+    /**
+     * 用文件名反查相册里那条记录的 Uri，供"在相册中打开"使用。
+     *
+     * 查不到返回 null：用户在系统相册里删掉之后，私有副本可能还没被对账清掉，
+     * 这时按钮应该说明"不在相册里"，而不是抛一个 `ActivityNotFoundException`。
+     */
+    fun galleryUriOf(id: String): Uri? = runCatching {
+        resolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Images.Media._ID),
+            "${MediaStore.Images.Media.DISPLAY_NAME} = ?",
+            arrayOf("$id.jpg"),
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    cursor.getLong(0),
+                )
+            } else {
+                null
+            }
+        }
+    }.getOrNull()
+
     /** 记录一张成片的相册发布结果。见 [ReconcileReport] 的第三条安全阀。 */
     private fun markPublished(id: String, published: Boolean) {
         val current = prefs.getStringSet(KEY_GALLERY_MISSING, emptySet())?.toHashSet()
@@ -460,27 +575,15 @@ class PhotoStore(context: Context) {
     }
 
     /**
-     * 本卷的起始时间戳（毫秒）。
+     * 私有目录里 full 副本的总字节数。发现页要显示真实占用，不估。
      *
-     * 「一卷 36 张」要成立，计数就必须有起点——否则计数器显示的是整个照片库的
-     * 张数，那是在撒谎（库里有 35 张并不代表这卷只剩 1 张）。首次调用时把起点
-     * 落成"现在"：老照片属于之前的卷，不该算进新卷。
+     * 只统计 full：缩略图是派生物（长边 1440，约 400KB/张），把它算进"照片占用"
+     * 会让数字比用户以为的大一截。
      */
-    fun rollStartedAt(): Long {
-        val stored = prefs.getLong(KEY_ROLL_STARTED_AT, 0L)
-        if (stored > 0L) return stored
-        val now = System.currentTimeMillis()
-        prefs.edit().putLong(KEY_ROLL_STARTED_AT, now).apply()
-        return now
-    }
-
-    /** 换卷：把起点推到此刻，计数器归零。 */
-    fun startNewRoll(): Long {
-        val now = System.currentTimeMillis()
-        // 用 commit 而不是 apply：换卷后马上会读计数，异步落盘会有一次闪回旧值。
-        prefs.edit().putLong(KEY_ROLL_STARTED_AT, now).commit()
-        return now
-    }
+    fun usedBytes(): Long =
+        fullDir.listFiles { file -> file.isFile && file.name.endsWith(".jpg") }
+            ?.sumOf { it.length() }
+            ?: 0L
 
     /** 按拍摄时间倒序列出所有成片。解析不出卷名的文件跳过，不让坏文件污染列表。 */
     fun list(): List<SavedPhoto> {
@@ -567,9 +670,6 @@ class PhotoStore(context: Context) {
 
         /** 历史补齐的一次性标记。改名等于重新跑一次迁移。 */
         private const val KEY_BACKFILL_DONE = "gallery_backfill_done_v1"
-
-        /** 本卷起点。0 表示还没初始化过，首次读取时落成"现在"。 */
-        private const val KEY_ROLL_STARTED_AT = "roll_started_at_v1"
 
         /**
          * 没能写进系统相册的成片 id。

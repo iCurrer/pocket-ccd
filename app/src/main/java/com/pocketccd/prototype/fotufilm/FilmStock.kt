@@ -20,6 +20,14 @@ data class FilmStock(
     val width: Int,
     val height: Int,
     val maxHalo: Int,
+    /**
+     * SDR 交付肩部的拐点。**负片/印相 = 1.0（退化为纯 clip），反转片 = 0.7**。
+     *
+     * 为什么这个值不来自 pack：pack 是光学/化学参数的序列化，而肩部是**交付侧**的
+     * 选择（上游 `FilmSDRDelivery`）。pack 头部里没有这个字段，硬塞一个进去会让
+     * 已产出的 pack 全部失效。所以判据放在 [FilmStockCatalog.isTransparency]。
+     */
+    val shoulderKnee: Float = LinearColor.KNEE_BOUNDED,
 ) {
     val sizeLabel: String get() = "${width}×$height"
 }
@@ -27,8 +35,9 @@ data class FilmStock(
 /**
  * pack 目录的扫描器。
  *
- * pack 不进 APK（体积 + 许可口径），由 `adb push` 推到
- * `Android/data/<pkg>/files/film/`。目录不存在时这里**自己建**，因为
+ * 运行期**唯一事实来源**是 `Android/data/<pkg>/files/film/`。APK 的 assets 里另带了
+ * 一份精选 pack 作初装种子（见 [provisionBundled]），所以装完就能拍；开发者照旧可以
+ * `adb push` 覆盖或增删。目录不存在时这里**自己建**，因为
  * `adb shell mkdir` 建出来的目录属主是 shell、模式 `drwxrws---`，App 透过
  * FUSE 能 push 进去却列不出内容，表现为「4 个 pack 在设备上但 packCount=0」。
  * 这个坑已经踩过一次，别把 mkdirs() 删掉。
@@ -56,16 +65,71 @@ object FilmStockCatalog {
     private const val MIN_FRAME_PIXELS = 1_000_000L
 
     /**
-     * 卷名可读化。文件名是 `gold200__4096x3072.fswp` 这种形式，
-     * 直接大写不好看（`TRIX400`），所以给常用卷一张显式表，其余走兜底规则。
+     * **反转片（正片 / 幻灯片）名单。** 这些卷要在显示编码前先压一次 SDR 肩部
+     * （[LinearColor.KNEE_TRANSPARENCY]），否则高光在显示白处硬切（D-067）。
+     *
+     * 判据是**成色工艺**，不是审美：E-6 / K-14 这类直接观看的正片没有印相阶段来吸收
+     * 胶片的物理肩部，光线继续往上走；负片和黑白片印在相纸上时，相纸的特性曲线已经
+     * 把肩部吃掉了，宿主再压就是压两遍。
+     *
+     * 名单只收**没有歧义**的正片。写着"可能是"的一律不收 —— 漏判的后果是这支卷的
+     * 高光硬切（和现在一样，无回归），误判的后果是负片的高光被提前滚降（观感直接变了）。
+     * 宁可漏，不可错。
+     */
+    private val TRANSPARENCY_STOCKS = setOf(
+        // 富士正片
+        "velvia50", "provia100f", "astia100f",
+        // 柯达正片
+        "ektachromee100", "kodachrome25", "kodachrome64", "kodachrome200",
+        // 阿克发正片
+        "agfachrome50", "agfachrome100", "agfachrome200",
+        // 红外正片
+        "aerochrome1443",
+    )
+
+    /** 这支卷是不是反转片，见 [TRANSPARENCY_STOCKS]。 */
+    internal fun isTransparency(id: String): Boolean = filmIdOf(id) in TRANSPARENCY_STOCKS
+
+    /**
+     * 卷名可读化。文件名是 `gold200__4000x3000.fswp` 这种形式，
+     * 直接大写不好看（`TRIX400`），所以给常用卷一张显式表，其余走兜底规则
+     * （大写 + 下划线换空格），不会显示成乱码，只是不一定好看。
+     *
+     * 键是**上游 stock 文件名**（`Sources/FotufilmCore/Stocks/<key>.json`），
+     * 值是这支胶卷的实际商品名。**不要**编名字：表里没收录就走兜底，
+     * 兜底至少是原始 id，编一个"富士经典正片"反而是在陈述一个不存在的事实。
+     *
+     * 表里前 8 支是 APK 内置的精选组（见 `prebuilt/fotufilm/packs`），
+     * 其余留给 `adb push` 进来的 pack 用。
      */
     private val KNOWN_LABELS = mapOf(
+        // ---- APK 内置的 8 支 ----
         "gold200" to "GOLD 200",
         "portra400" to "PORTRA 400",
+        "ektar100" to "EKTAR 100",
         "trix400" to "TRI-X 400",
+        "acros100" to "ACROS 100 II",
+        "provia100f" to "PROVIA 100F",
+        "velvia50" to "VELVIA 50",
+        "cinestill800t" to "CINEStill 800T",
+        // ---- 可 adb push 的常见卷 ----
         "ultramax400" to "ULTRAMAX 400",
         "colorplus200" to "COLORPLUS 200",
+        "superia200" to "SUPERIA 200",
         "superia400" to "SUPERIA 400",
+        "c200" to "C200",
+        "pro400h" to "PRO 400H",
+        "pro160ns" to "PRO 160NS",
+        "reala100" to "REALA 100",
+        "tmax100" to "T-MAX 100",
+        "delta3200" to "DELTA 3200",
+        "hp5plus400" to "HP5 PLUS 400",
+        "fp4plus125" to "FP4 PLUS 125",
+        "astia100f" to "ASTIA 100F",
+        "cinestill400d" to "CINEStill 400D",
+        "vision250d" to "VISION3 250D",
+        "vision500t" to "VISION3 500T",
+        "eterna500" to "ETERNA 500",
         "example-negative-400" to "EXAMPLE 400",
     )
 
@@ -188,6 +252,11 @@ object FilmStockCatalog {
                             width = pack.width,
                             height = pack.height,
                             maxHalo = pack.maxHalo,
+                            shoulderKnee = if (isTransparency(id)) {
+                                LinearColor.KNEE_TRANSPARENCY
+                            } else {
+                                LinearColor.KNEE_BOUNDED
+                            },
                         )
                     }
                 }

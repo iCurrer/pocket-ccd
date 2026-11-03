@@ -28,8 +28,28 @@ android {
         // 成片页印相放大到 92%/8dp 纸边、ISO 行；设置页版本信息改左对齐三行。
         // 0.6.2：真机第二轮——成片页纸底铺到状态栏；帧号改连续序号；发现图标；
         // 横屏锁竖屏；保存/收藏/分享/更多接真实行为；换卷加确认；发现页文案落地。
-        versionCode = 11
-        versionName = "0.6.2"
+        // 0.7.0（D-069..D-071）：整套 UI 换成玻璃拟态 + Material You（`ui/film/` 整包删除）；
+        // 去掉"一卷 36 张"卷模型；内置胶卷从 3 支扩到 8 支（+ektar100 / acros100 /
+        // provia100f / velvia50 / cinestill800t）；反转片补 SDR 肩部（D-068）。
+        // 0.8.0（D-074，真机反馈第一轮）：Material Symbols 图标修正（viewBox 负原点导致
+        // 整批图标不可见）、去掉跟随壁纸取色、拍摄页顶栏/快门/EV 面板重排、成像链路
+        // （JPEG 95、旋转不滤波、stripRows 256）、屏幕常亮与快门触感。
+        // 0.8.1（D-077）：查看器盖住 TabBar（模态层级）、拍摄页宽屏上限 560dp、
+        // 无相机会话时不画变焦轨、设置页加诊断入口。
+        // 0.8.2（D-079）：拍摄页 dock 上滑打开"去哪儿"抽屉（相册/胶卷/发现/设置），
+        // 相机页终于能直达发现页。
+        // 0.8.3（D-080）：取景框重做 —— 3:4 带边框的取景窗（不再是挨边全屏），
+        // 预览流固定 4:3 以精确铺满窗口。
+        // 0.8.4（D-081）：片边（135 半格胶片条）与日期后背（盖章），设置页可开关。
+        // 0.8.5（D-082）：片边/日期改成曝光合成 —— 5×7 点阵掩膜 + 晕光，片基噪点、
+        // 齿孔光渗与亚毫米抖动、印字墨扩散，不再是一眼假的矢量字。
+        // 0.8.6（D-083）：拍摄页强制横屏（sensorLandscape），其它页竖屏；横版改成
+        // 左右两侧控件的相机式排版、取景窗 4:3；横拍落盘即横版，片边 1:1 不缩。
+        // 0.8.7（D-084）：齿孔改到画布长边 —— 胶片方向跟照片走，画门按 135 的 24mm 高度、
+        // 照片 1:1 贴进画门，画面占片宽 69%。
+        // versionCode 必须递增：同一 debug 签名覆盖安装时，相同 versionCode 在部分 ROM 上会被拒。
+        versionCode = 21
+        versionName = "0.8.8"
     }
 
     buildTypes {
@@ -71,6 +91,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric 要读真实资源（drawable/strings），否则截图测试只能看到黑块。
+            isIncludeAndroidResources = true
+        }
     }
 
     packaging {
@@ -123,7 +150,16 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
 
+    // 玻璃组件：捕获背后图层 → RenderEffect 模糊 → AGSL 折射/边缘高光。
+    // API 31 以下自动退化（库内部按 SDK_INT 判 capability），不需要额外分支。
+    implementation(libs.kyant.backdrop)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    // 布局回归：Robolectric + Compose 截图测试（`./gradlew :app:testDebugUnitTest -Pscreenshot`）。
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

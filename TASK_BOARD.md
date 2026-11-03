@@ -583,7 +583,7 @@ T1-014 + T1-015 → T1-016（性能烟雾）→ M1 退出评审
 | FOT-003 | 3 个代表性 FSWP pack | FOT-002 | Gold200/Portra400/TriX400 | `.fswp` ×3 | AOT parity 工具可读取 | `--dump-wasm-pack` | `DONE`（判据改为 `[F]` 实证：run `39145196597` 的 4 个 pack 已下载，头部解出 `FSWP v2 4000x3000`；parity 用 `example-negative-400__96x64` 跑通 64 case） |
 | FOT-004 | arm64 CPU AOT `.so` + 最小 JNI | FOT-003 | `libfotufilm_android.so`（构建脚本 `native/`） | 真机处理 1 张 12MP | 输出非黑/非 NaN；记录耗时/内存 | 真机 | `DONE`（`1864f56` 提交 `native/`；`0c6610c` 修 `find_path` 被 NDK sysroot 重根化；`6004220` 修 most vexing parse。run `39198895398` 全绿，`.so` 5,874,424 B 通过 AArch64 + JNI 导出断言。**真机实测（run 见下）**：非 debuggable 的 `benchmark` 构建下，3 个 12MP pack 全 `nonFinite=0`，单帧 **2.0–3.2 s**（内核占 80–85%），峰值 RSS **373–463 MB**。数据与方法见 [`docs/fotufilm-device-benchmark.md`](docs/fotufilm-device-benchmark.md)） |
 | FOT-005 | FSWP 解析 + Kotlin FilmEngine API | FOT-004 | `app/src/main/java/com/pocketccd/prototype/fotufilm/` | pack 选择、JNI 调用 | 3 个 stock 可渲染 | 单元/真机 | `DONE`（`FotufilmNative`（9 个 external，与 C++ 签名逐条对齐）、`FilmPack`（小端 FSWP 解析）、`FilmEngine`（行带分块 + halo）、`LinearColor`、`FilmSelfTest`。真机：`libraryLoaded=true` / `abiVersion=1` / `available=true` / `packCount=4`；Gold200、Portra400、TriX400 三卷均渲染成功；TriX400 输出 R=G=B 精确相等（黑白卷），三彩色卷各有 0.128–0.137 偏色） |
-| FOT-006 | 解码/线性 Rec.2020/输出色彩 | FOT-004 | `imaging/` | 输入输出色彩转换 | 与桌面参考误差可接受 | 色块/样片 | `TODO` |
+| FOT-006 | 解码/线性 Rec.2020/输出色彩 | FOT-004 | `fotufilm/LinearColor.kt` | 输入输出色彩转换 | 与桌面参考误差可接受 | 色块/样片 | `IN_PROGRESS`（**2026-10-27 第一批落地，真机观感未验**，见 D-067）。已补：输入 `linearSRGBToRec2020`、输出 `linearDisplayP3ToSRGB`、一个量化步的**确定性三角抖动**（xorshift32，seed = `pack.seed`，跨行带连续）。数值逐位抄上游 `ColorScience.swift` / `DisplayEncoding.swift`，未自创。新增 `LinearColorTest` 8 例（灰阶中性守恒/纯红落基色/灰阶往返/超白 clip/P3 纯蓝超色域裁切/NaN 归零/抖动确定性无偏/抖动打散纯色），全量 72/72。**仍缺**：① `highlightShoulder` —— 负片 `knee=1` 退化为 clip 故现役三卷不受影响，**反转片 `knee=0.7` 必须先补**；② gamut mapping —— 现走 clip，超色域饱和色丢色相梯度。**故障背景**：真机反馈白天过曝 + 蓝天溢出，查实为输入缺 Rec.2020 转换（R 少 40%/B 多 5.6%，只影响高饱和、不动中性灰）叠输出 P3 当 sRGB 硬裁 |
 | FOT-007 | CameraX → 引擎 → 保存 | FOT-005、M2 | `camera/`、`storage/` | 拍照闭环 | 真机照片进入 app 相册 | 真机 | `DONE`（**真机端到端已跑通**）。`camera/CameraPreview.kt`（Preview + ImageCapture、`targetRotation=ROTATION_0`、`attachedSurfaceResolution` 匹配 pack）、`camera/PhotoStore.kt`（全尺寸 + 1440 缩略图，临时文件 rename）、`camera/CaptureState.kt`；`fotufilm/FilmStock.kt` 扫描 pack；`AppViewModel` 转 `AndroidViewModel` 并在 `Dispatchers.Default` 上跑冲洗。**实证 2026-10-19 14:33:43**：PJZ110 按快门 → `film_1792391623930_gold200__4096x3072.jpg` 落盘，`4096×3072 / 3,038,375 B`，缩略图 `1440×1080 / 320,410 B`，照片墙可见。均无 EXIF 方向标记。遗留方向问题见 FOT-017 |
 | FOT-008 | 胶片选择器 + 12 stock | FOT-005 | `ui/film/` | 选择器/metadata | 切换生效；无假数据 | UI/真机 | `TODO` |
 | FOT-009 | 预览/成片双路径 | FOT-007 | `ui/camera/` | 低分辨率预览 + 全分辨率成片 | 预览不冒充成片 | 真机 | `TODO` |
@@ -782,3 +782,22 @@ M1 的优先级已写在各任务字段中。为避免表格过宽，其余里�
 | T9-036 | 胶卷库装卷动画：不跳页 + 换卷过渡（D-061） | T9-016 | `ui/film/films/FilmLibraryScreen.kt` | 点选后留在本页；卡片「装卷中…」呼吸 900ms；已装卷大卡 AnimatedContent 上滑/淡入；回取景器由「继续拍摄」触发 | 选卷不跳页；换卷有可见过程；不会误触重复装卷 | 真机点选两卷 | `DONE`（代码/单测/打包过；真机未验） |
 | T9-037 | 显影页 + 开源声明页版式重做（D-061） | T9-018/T9-020 | `ui/result/ResultScreen.kt`、`ui/settings/LicensesScreen.kt` | 显影页：扫描光带+胶片横纹+四角刻线+真实阶段+已等待秒数；开源页：无衬线 13/22、空行分段、序号+细线分节、去卡片 | 显影页不干巴且不造假数据；开源页中文可读、层级清楚 | 真机两页截图 | `DONE`（代码/单测/打包过；真机未验） |
 | T9-038 | 真机截图反馈：消灭死黑 + 参数移出画面 + 底盖帧数窗（D-062） | T9-035 | `ui/film/FilmCaptureScreen.kt`、`ui/film/FilmInteractions.kt`、`ui/film/FilmControls.kt`、`ui/film/FilmTheme.kt` | 窗→工具条→底盖连续；变焦/EV 进工具条（EV 点开在窗底展开刻度）；底盖中央 EXP 帧数窗；快门 68/80、副键 76×50 | 无 weight 空白带；画面无参数文字；底盖填满且内容有层次 | 真机截图对比 v0.4.0 | `DONE`（代码/单测/打包过；真机未验） |
+
+---
+
+## 9. 玻璃拟态改版（2026-11-01，D-068..D-071）
+
+| ID | 任务 | 依赖 | 触及文件 | 交付物 | 验收标准 | 验收方式 | 状态 |
+|---|---|---|---|---|---|---|---|
+| G-01 | 设计令牌与主题（玻璃 + Material You） | — | `ui/theme/Tokens.kt`、`Type.kt`、`Theme.kt` | `GlassShape`/`GlassSpace`/`GlassType`/`GlassPalette`；`PocketCcdTheme(dynamic=)` | 只有深色基底；11sp 地板；`ui/` 下裸字号 0 | `NoBareFontSizeTest` | `DONE`（真机未验） |
+| G-02 | 玻璃组件层 + 图标集 | G-01 | `ui/glass/Glass.kt`、`GlassIcons.kt`、`GlassNavBar.kt` | 6 个基础件 + 18 个手绘图标 + 悬浮 TabBar | 图标钮 `label` 必填；每个图标都有绘制分支 | `GlassComponentContractTest` 3 例 | `DONE`（真机未验） |
+| G-03 | 数据层去掉卷模型 | — | `navigation/AppViewModel.kt`、`camera/PhotoStore.kt` | 删 `rollStartedAt`/`startNewRoll`/`rollShots`；新增 `usedBytes()`、`filmCards`、`stockSwitchedNotice` | 计数只剩"本机拍过几张" | 代码审查 | `DONE` |
+| G-04 | 重做相机页 | G-02 | `ui/camera/CameraScreen.kt` | 全屏预览 + 玻璃浮层 + 对焦三态 + 变焦轨 + EV 面板 | 功能一个不少；快门 74dp；闪白在最外层 | 真机 | `DONE`（**真机未验**） |
+| G-05 | 重做照片墙与查看器 | G-02 | `ui/gallery/GalleryScreen.kt`、`PhotoViewer.kt` | 玻璃网格 + 筛选芯片 + 循环查看器 | `dockReserve` 让位；点开一张能进详情 | `GalleryFilterTest` 12 例 | `DONE`（真机未验） |
+| G-06 | 胶卷库（8 支精选） | G-02 | `ui/films/FilmLibraryScreen.kt`、`fotufilm/FilmStock.kt` | 当前卷大卡 + 候选列表；`FilmCard`；`KNOWN_LABELS` 扩到 28 条 | 拍不了的卷灰掉并给原因；没拍过画胶卷筒不画假风景 | 真机 + `filmCards` 聚合 | `DONE`（**8 支 pack 待 CI 产出**） |
+| G-07 | 统一单张详情 | G-02 | `ui/detail/PhotoDetailScreen.kt` | 冲洗/写入/完成/失败四态；真 EXIF + 体积；收藏/分享/在相册打开 | 历史照片也有完整参数与动作 | 真机 | `DONE`（**真机未验**） |
+| G-08 | 设置 / 开源声明 / 发现 | G-02 | `ui/settings/SettingsScreen.kt`、`UiPrefs.kt`、`ui/discover/DiscoverScreen.kt` | 三组设置 + `licenses_*` 原文；动态取色开关落盘 | CC BY-SA 4.0 披露完整；开关立刻生效并跨启动保留 | 真机 | `DONE`（真机未验） |
+| G-09 | 新导航壳与底部玻璃 Tab | G-01..G-08 | `ui/AppRoot.kt`、`navigation/AppState.kt`、`MainActivity.kt` | 5 目的地 + 压栈详情；相机保活；闪白置顶；FileProvider | 任何页面都能回相机；详情按来源返回；相册来的详情不点灯 | `AppStateTest` 18 例 | `DONE`（真机未验） |
+| G-10 | SDR 肩部（反转片前置） | — | `fotufilm/LinearColor.kt`、`FilmEngine.kt`、`FilmStock.kt` | `shoulder()` + `KNEE_BOUNDED`/`KNEE_TRANSPARENCY` | 负片输出逐像素不变；正片高光渐近不硬切 | `LinearColorTest` 新增 4 例 | `DONE`（真机观感未验） |
+| G-11 | 8 支 pack 产出并内置 | G-06 | `.github/workflows/fotufilm-android-native.yml`、`prebuilt/fotufilm/packs/` | workflow 默认 stocks 改成 8 支 | APK assets 里 8 个 `.fswp`，装完即是 8 卷 | 解压 APK 核对 assets | `BLOCKED`（**Windows 无法产出，需跑 macOS CI**） |
+| G-12 | 真机验收 | G-04..G-09 | — | 五页截图 + 装机记录 | 冷启动不闪红、相机保活、对焦/变焦/EV/闪光灯、冲洗落盘、相册一份 | 真机 | `BLOCKED`（**当前无设备连接**） |

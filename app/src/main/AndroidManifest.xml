@@ -33,10 +33,17 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PocketCCD">
 
+        <!--
+            D-083：拍摄页强制横版，其他页面竖版 —— 所以方向不能写死在 manifest 里，
+            改由 MainActivity 按当前页面设置 requestedOrientation。
+
+            configChanges 必须列全：不加的话每次切换方向都会重建 Activity，
+            正在冲洗的那张（6 秒）和相机会话会一起没掉。
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|navigation|uiMode"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -54,14 +61,19 @@
             android:label="Fotufilm self test" />
 
         <!--
-          M9 重设计的独立预览入口（T9-012 需要新旧对照）。
-          不接相机、不改现有导航；用静态画面校验间距与金属层次。
-          adb shell am start -n com.pocketccd.prototype/.ui.film.FilmPreviewActivity
+          详情页「分享」用。FileProvider 只把 `Pictures/pocket-ccd/` 这一棵子树暴露
+          成 content:// URI —— ACTION_SEND 不接受 file://（API 24+ 抛
+          FileUriExposedException）。authority 必须与 AppRoot 里拼的字符串一致。
         -->
-        <activity
-            android:name=".ui.film.FilmPreviewActivity"
-            android:exported="true"
-            android:label="Film UI preview" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
     </application>
 
 </manifest>

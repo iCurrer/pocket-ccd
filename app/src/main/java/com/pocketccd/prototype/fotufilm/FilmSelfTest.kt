@@ -7,6 +7,7 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.abs
 
 /**
@@ -107,6 +108,25 @@ class FilmSelfTest(private val context: Context) {
             return result
         }
 
+        // 只带内置 12MP pack 的机器上，最小的 pack 就是 12MP，整帧参考路径跑不了
+        // （`FULL_FRAME_PIXEL_LIMIT` 是 4MP）。**这是夹具缺失，不是引擎出错**：
+        // 以前这里会抛异常 → verdict 变成 FAIL，用户装完自测看到"失败"完全无从解释（D-078）。
+        val pixels = runCatching {
+            FilmPack.fromFile(small).use { it.width.toLong() * it.height }
+        }.getOrDefault(Long.MAX_VALUE)
+        if (pixels > FilmEngine.FULL_FRAME_PIXEL_LIMIT) {
+            result.put("status", "SKIPPED")
+            result.put("pack", small.name)
+            result.put("size", "$pixels px")
+            result.put(
+                "reason",
+                "没有小尺寸夹具 pack：最小的 ${small.name} 是 $pixels 像素，" +
+                    "整帧参考路径上限 ${FilmEngine.FULL_FRAME_PIXEL_LIMIT}。" +
+                    "把 96×64 的引擎夹具 push 到 files/film/ 后重跑即可。",
+            )
+            return result
+        }
+
         return runCatching {
             FilmPack.fromFile(small).use { pack ->
                 val engine = FilmEngine(pack)
@@ -154,16 +174,20 @@ class FilmSelfTest(private val context: Context) {
         val result = JSONObject()
         // 不写死尺寸：pack 尺寸跟着目标机的最大 JPEG 走（PJZ110 是 4096x3072），
         // 换机型后这里若还写 4000x3000 就会静默 SKIPPED。按文件名里的 __WxH 取最大的那卷。
-        val candidate = files
-            .mapNotNull { file ->
-                val spec = file.name.substringAfter("__", "").removeSuffix(".fswp")
-                val parts = spec.split('x')
-                val width = parts.getOrNull(0)?.toIntOrNull()
-                val height = parts.getOrNull(1)?.toIntOrNull()
-                if (width != null && height != null) file to width.toLong() * height else null
-            }
-            .maxByOrNull { it.second }
-            ?.first
+        val sized = files.mapNotNull { file ->
+            val spec = file.name.substringAfter("__", "").removeSuffix(".fswp")
+            val parts = spec.split('x')
+            val width = parts.getOrNull(0)?.toIntOrNull()
+            val height = parts.getOrNull(1)?.toIntOrNull()
+            if (width != null && height != null) file to width.toLong() * height else null
+        }
+        // 样张优先**彩色负片**：第一版挑的是"最大的一卷"，在真机上正好选中 acros100，
+        // 于是样张是一张灰图 —— 看色彩问题的人拿到黑白样张等于没给（D-078）。
+        val candidate = (
+            sized.filter { FilmStockCatalog.filmIdOf(it.first.name) in SAMPLE_PREFERRED_STOCKS }
+                .maxByOrNull { it.second }
+                ?: sized.maxByOrNull { it.second }
+            )?.first
             ?: return result.also {
                 it.put("status", "SKIPPED")
                 it.put("reason", "没有 12MP pack")
@@ -178,7 +202,16 @@ class FilmSelfTest(private val context: Context) {
                 fillPhotoLike(source)
                 val target = Bitmap.createBitmap(pack.width, pack.height, Bitmap.Config.ARGB_8888)
 
-                val render = FilmEngine(pack).render(source, destination = target)
+                // 用这支卷**真实**的交付曲线跑：反转片要 SDR 肩部，负片不要。
+                // 之前一律用默认 1.0，等于拿负片的曲线给正片测参数（D-074）。
+                val knee = if (FilmStockCatalog.isTransparency(candidate.name)) {
+                    LinearColor.KNEE_TRANSPARENCY
+                } else {
+                    LinearColor.KNEE_BOUNDED
+                }
+                result.put("shoulderKnee", knee.toDouble())
+
+                val render = FilmEngine(pack, shoulderKnee = knee).render(source, destination = target)
                 result.put("totalMillis", render.totalMillis)
                 result.put("kernelMillis", render.kernelMillis)
                 result.put("encodeMillis", render.encodeMillis)
@@ -193,6 +226,18 @@ class FilmSelfTest(private val context: Context) {
                 result.put("mean", JSONArray(render.mean.map { it.toDouble() }))
                 // 输出不能是纯黑或纯白：那说明解码或编码有一端错了（比如把 sRGB 当线性用）。
                 result.put("plausible", render.max.all { it > 0.05f } && render.mean.all { it in 0.01f..0.95f })
+
+                // 把这一帧**存成 JPEG**：自测报告只有数字，"观感"得看图。
+                // 这张图是"程序纹理 → 解码 → 引擎 → 编码"的完整输出，adb pull 出来就能判断
+                // 色彩/颗粒/反差有没有问题，不需要用户先拍一张。
+                val sample = File(context.getExternalFilesDir(null), "fotufilm-selftest-render.jpg")
+                runCatching {
+                    FileOutputStream(sample).use { out ->
+                        target.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                    }
+                    result.put("sample", sample.absolutePath)
+                }.onFailure { Log.w(TAG, "自测样张写盘失败: ${it.message}") }
+
                 result.put("status", "OK")
 
                 source.recycle()
@@ -398,15 +443,28 @@ class FilmSelfTest(private val context: Context) {
         }
         if (bitmapPath != null) {
             when (bitmapPath.optString("status")) {
-                "OK" -> if (!bitmapPath.optBoolean("plausible")) {
-                    failures.add("Bitmap 路径输出范围异常（纯黑或纯白），sRGB↔线性可能用反了")
+                "OK" -> {
+                    if (!bitmapPath.optBoolean("plausible")) {
+                        failures.add("Bitmap 路径输出范围异常（纯黑或纯白），sRGB↔线性可能用反了")
+                    }
+                    // 产品路径（相机帧 → Bitmap → 引擎）的 NaN 以前没人查：
+                    // synthetic 那几条是干净的，真机上吐 NaN 的恰恰是这一条（D-074）。
+                    val nan = bitmapPath.optLong("nonFinite")
+                    if (nan > 0) {
+                        failures.add("Bitmap 路径输出含 $nan 个 NaN/Inf（成片会是黑点/白点）")
+                    }
                 }
+
                 "SKIPPED" -> failures.add("Bitmap 路径未运行：${bitmapPath.optString("reason")}")
                 else -> failures.add("Bitmap 路径失败：${bitmapPath.optString("reason")}")
             }
         }
+        // 分块交叉验证要一个 96×64 的夹具 pack 才跑得动（整帧参考路径上限 4MP）。
+        // 只带内置 12MP pack 的机器上它会 SKIPPED —— 那是"缺夹具"，不是"引擎坏了"，
+        // 所以只作为提示附在 verdict 后面，不算失败（D-078）。
+        var note: String? = null
         if (parity.optString("status") != "RAN") {
-            failures.add("分块交叉验证未运行：${parity.optString("reason")}")
+            note = "分块交叉验证未运行（${parity.optString("status")}）：${parity.optString("reason")}"
         } else {
             for (key in PARITY_RUNS) {
                 val run = parity.optJSONObject(key) ?: continue
@@ -421,12 +479,27 @@ class FilmSelfTest(private val context: Context) {
                 }
             }
         }
-        return if (failures.isEmpty()) "PASS" else "FAIL: ${failures.joinToString("; ")}"
+        return when {
+            failures.isNotEmpty() -> "FAIL: ${failures.joinToString("; ")}"
+            note != null -> "PASS（$note）"
+            else -> "PASS"
+        }
     }
 
     companion object {
         private const val TAG = "FotufilmSelfTest"
         const val REPORT_NAME = "fotufilm-selftest.json"
+
+        /**
+         * 样张优先用这些卷（都是**彩色**负片）。
+         *
+         * 不在这里的卷（黑白、正片）也能跑，只是样张不适合用来看色彩 ——
+         * 第一版按"最大的一卷"挑，真机上正好选中 acros100，样张是灰的（D-078）。
+         */
+        private val SAMPLE_PREFERRED_STOCKS = setOf(
+            "gold200", "portra400", "ektar100", "cinestill800t", "ultramax400",
+            "colorplus200", "superia200", "superia400", "c200", "pro400h", "reala100",
+        )
 
         /**
          * 两套带子高度。必须互质或至少不互相整除，否则两套的接缝行会重叠，

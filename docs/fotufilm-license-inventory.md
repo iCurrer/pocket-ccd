@@ -46,6 +46,8 @@
 
 | 组件 | License | 处理 |
 |---|---|---|
+| **Material Symbols Rounded**（Google Material Design Icons） | Apache-2.0 | 玻璃层 21 个图标取自官方 SVG，由 `tools/gen_glass_icons.py` 转成 `res/drawable/ic_glass_*.xml`（D-073）。保留版权与许可证声明，不修改图标几何 |
+| **Backdrop**（`io.github.kyant0:backdrop`，Kyant0/AndroidLiquidGlass） | Apache-2.0 | 玻璃组件依赖它做背景模糊/折射/边缘高光（D-072）。作为未修改的 Maven 依赖引入，需在 notices 中保留版权与许可证全文，并注明 "Composition Multiplatform Liquid Glass effect, Copyright Kyant" |
 | Halide | MIT | 在 App 的 open-source notices 中完整保留版权/许可；AOT 二进制携带 Halide runtime |
 | rawtoaces-data camera profiles | Apache-2.0 | 保留 LICENSE/声明 |
 | colour-science xenon spectrum | BSD-3-Clause | 完整保留 notice |

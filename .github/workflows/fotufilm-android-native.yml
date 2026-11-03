@@ -30,7 +30,10 @@ on:
       stocks:
         description: "Space-separated stock ids"
         required: true
-        default: "gold200 portra400 trix400"
+        # 这 8 支就是 APK 内置的精选组（见 prebuilt/fotufilm/packs/ 与
+        # FilmStockCatalog.KNOWN_LABELS）。改这里等于改分发内容，别只改一侧：
+        # 内置包多了而 assets 里没有，胶卷库里就是一支"点了没反应"的灰卷。
+        default: "gold200 portra400 ektar100 trix400 acros100 provia100f velvia50 cinestill800t"
       pack_size:
         description: "WIDTHxHEIGHT. Must equal the capture resolution — spatial params are baked per frame size"
         required: false
