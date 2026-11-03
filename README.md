@@ -1,43 +1,72 @@
-# Pocket CCD
+<div align="center">
 
-一台**手机上的玩具数码相机**：打开就是全屏取景器，按下快门之后，这一帧才被"冲洗"成某一支胶卷的样子。
+# 📷 Pocket CCD
 
-界面是一套深色玻璃相机 —— 近黑机身、玻璃芯片、金色参数、按页签切换。取景器里永远是**原色画面**：
-胶卷效果只出现在成片里，不预览、不加滤镜。
+**一台装在手机里的玩具数码相机** —— 打开就是取景器，按下快门之后，这一帧才被冲洗成某支胶卷的样子。
 
-胶卷效果不是滤镜，而是一套**物理成像模型**：上游 [Fotufilm](https://github.com/DhaliwalX/fotufilm-engine)
-把显影（develop）与印相（print）两段过程连同胶卷、相纸的实测数据一起编译成 Halide 内核，
-本仓库把这套引擎移植到 Android，并补上相机、分块渲染、方向补偿与落盘。
+[![Android](https://img.shields.io/badge/Android-29%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.08-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Version](https://img.shields.io/badge/version-0.8.8-orange)](app/build.gradle.kts)
+[![Engine](https://img.shields.io/badge/engine-Fotufilm%20·%20Halide-8A2BE2)](https://github.com/DhaliwalX/fotufilm-engine)
+
+</div>
+
+<p align="center">
+  <img src="docs/screenshots/readme/viewfinder.jpg" width="23%" alt="取景页">
+  <img src="docs/screenshots/readme/films.jpg" width="23%" alt="胶卷库">
+  <img src="docs/screenshots/readme/zoom-toast.jpg" width="23%" alt="变焦反馈">
+</p>
+
+> 上面三张摄于 0.6.x（纸面 UI 时代）。0.8 起的深色玻璃界面用截图测试生成：
+> `./gradlew :app:testDebugUnitTest` → `app/build/screenshots/`（不入库）。
 
 ---
 
-## 界面预览
+## 这是什么
 
-<p align="center">
-  <img src="docs/screenshots/readme/viewfinder.jpg" width="24%" alt="取景页">
-  <img src="docs/screenshots/readme/films.jpg" width="24%" alt="胶卷库">
-  <img src="docs/screenshots/readme/zoom-toast.jpg" width="24%" alt="变焦反馈">
-</p>
+取景器里永远是**原色画面**：胶卷效果只出现在成片里，不预览、不加滤镜。
+成片不是套 LUT，而是走一套**物理成像模型** —— 上游 [Fotufilm](https://github.com/DhaliwalX/fotufilm-engine)
+把显影（develop）与印相（print）两段过程连同胶卷、相纸的实测数据一起编译成 Halide 内核，
+本仓库把这套引擎移植到 Android，并补上相机、分块渲染、方向补偿与落盘。
 
-> 上面三张摄于 0.6.x（纸面 UI 时代）。0.8 起的深色玻璃界面见
-> [`app/build/screenshots/`](app/build/screenshots/) —— 那份目录由 Robolectric 截图测试生成，
-> 跑一次 `./gradlew :app:testDebugUnitTest` 就有，不入库。
+## 功能
 
-## 当前状态（0.8.8）
-
-| 能力 | 状态 | 说明 |
+| | 能力 | 说明 |
 |---|---|---|
-| 取景页（强制横屏） | 完成 | 拍摄页 `sensorLandscape`，其它页锁竖屏；横版是左右两侧控件的相机式排版，取景窗 4:3 |
-| 拍照 → 冲洗 → 落盘 → 系统相册 | 完成 | 真机验证；私有目录 + `Pictures/Pocket CCD/` 各一份 |
-| 胶卷库（8 支内置卷） | 完成 | FSWP pack 热插；按卷分组、最近一张样片 |
-| 照片墙 / 全屏查看器 / 收藏 / 按卷筛选 | 完成 | 查看器是模态层，盖住底部 TabBar |
-| 片边（135 胶片条） | 完成 | 齿孔在画布长边；画门按 135 的 24mm 高度、照片 1:1 贴入 |
-| 日期后背 | 完成 | 5×7 点阵掩膜 + 晕光，`'26 11 2` 格式 |
-| 分块冲洗 | 完成 | `stripRows=256` + 物理 halo，整帧 12MP 约 4–5 秒（debug 包） |
-| 成像自测 | 完成 | 设置 → 诊断 → 运行成像自测（仅 debug），产出 JSON + 样张 |
+| 📸 | **取景页（强制横屏）** | 拍摄页 `sensorLandscape`、其它页锁竖屏；横版是左右两侧控件的相机式排版，4:3 取景窗 |
+| 🎞️ | **胶卷库** | 8 支内置卷（FSWP pack 热插），按卷分组、显示最近一张样片 |
+| ⚗️ | **真实显影** | 光谱重建 → 显影 → 印相，含颗粒、晕光、邻界效应；`stripRows=256` 分块 + 物理 halo |
+| 🖼️ | **片边** | 135 胶片条：齿孔在画布长边，画门按 135 的 24mm 高度、照片 1:1 贴入 |
+| 📅 | **日期后背** | 5×7 点阵掩膜 + 晕光，`'26 11 2` 格式，画在右下角 |
+| 🗂️ | **照片墙 / 查看器** | 全屏 pager、左右滑动、♥ 收藏、按卷筛选；查看器是模态层，盖住底部 TabBar |
+| 🩺 | **成像自测** | 设置 → 诊断 → 运行成像自测（仅 debug），产出 JSON + 样张，可 `adb pull` |
 
-设计取舍、每一处"为什么这么做"都记在 [`DECISION_LOG.md`](DECISION_LOG.md)（D-001…D-084），
-任务与遗留问题在 [`TASK_BOARD.md`](TASK_BOARD.md)。
+## 快速开始
+
+```bash
+# 一条命令：构建 + 跑完 118 项单测（含 Robolectric 截图）
+./gradlew :app:assembleDebug :app:testDebugUnitTest --offline
+
+# 安装（首次需要相机权限）
+adb install -r -t app/build/outputs/apk/debug/app-debug.apk
+adb shell pm grant com.pocketccd.prototype android.permission.CAMERA
+```
+
+产出的截图在 `app/build/screenshots/`，成片在
+`Android/data/com.pocketccd.prototype/files/Pictures/pocket-ccd/full/`（另有系统相册一份）。
+
+## 文档
+
+- [📐 DECISION_LOG.md](DECISION_LOG.md) —— 每个"为什么这么做"（D-001…D-084）
+- [🗓️ TASK_BOARD.md](TASK_BOARD.md) —— 任务与遗留问题
+- [🎞️ docs/film-edge-and-date-back.md](docs/film-edge-and-date-back.md) —— 片边/日期后背的设计与上游参考
+
+## 许可
+
+胶卷 profile 与引擎遵循上游的 Apache-2.0 / CC BY-SA 4.0，署名与修改说明见
+[`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md)。本项目不隶属于
+Fotufilm、MUA Studio 或任何胶片厂商，胶卷名称仅用于说明模拟对象。
 
 ## 管线：一张照片怎么变成胶片
 
