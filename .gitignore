@@ -42,3 +42,19 @@ dist/
 
 # 截图裁切只用于本地测量，不把主人照片带进仓库
 docs/design/camera-preview-crop.jpg
+
+# 激活服务端不进公开仓库（2026-11-21 决定）：
+# 这份代码本身没有密钥（pepper / admin.key 在服务器上由 secrets 动态生成并 chmod 600），
+# 但 nginx-pccd.fky.ltd.conf 含域名、证书落盘路径与面板目录结构 —— 公开等于公布
+# 激活服务的部署拓扑。服务端仍留在本地，只是不随这棵仓库分发。
+server/
+
+# 胶卷包装图只入库 8 张成品（<stock>.png），不入库模型原图与合版预览：
+# 一是体积（原图约 12MB，仓库从 45MB 涨到 73MB），二是原图带画进像素的棋盘格背景、
+# 没有 alpha，只是"能重新抠一次"的备份，不是分发物。
+# 成品图里含真实胶卷商标，对外口径见 docs/artwork/film/README.md §商标说明。
+# 模型原图前缀不统一：多数是 Edit_*，portra400（作为底图的那张）是 Follow_* —— 两条都要拦。
+docs/artwork/film/*/Edit_*.png
+docs/artwork/film/*/Follow_*.png
+docs/artwork/film/_sheet.png
+docs/artwork/film/_slot_preview.png

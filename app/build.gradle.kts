@@ -47,13 +47,41 @@ android {
         // 左右两侧控件的相机式排版、取景窗 4:3；横拍落盘即横版，片边 1:1 不缩。
         // 0.8.7（D-084）：齿孔改到画布长边 —— 胶片方向跟照片走，画门按 135 的 24mm 高度、
         // 照片 1:1 贴进画门，画面占片宽 69%。
+        // 0.9.0-beta1（D-090）：全站视觉统一到"暖白机身"材质 —— 玻璃拟态整套拆掉
+        // （含 kyant0:backdrop 依赖），相册/胶卷/发现/设置改成浅色面板；按下反馈
+        // 从"缩一下"改成内阴影"陷进去"。首个对外内测版。
+        // 0.9.0-beta2（D-092）：设置页加「下载并安装」—— 读 Release 的 APK 附件、
+        // 前台下载带进度、三道校验后交给系统安装器；不再跳浏览器。
         // versionCode 必须递增：同一 debug 签名覆盖安装时，相同 versionCode 在部分 ROM 上会被拒。
-        versionCode = 21
-        versionName = "0.8.8"
+        // 应用内更新还要它**真的变大**才会装：校验阶段会发现 versionCode 不大于当前的包并拒绝。
+        // 0.9.0-beta3（D-093）：内测邀请码闸门 —— 首次启动弹激活页，服务端一码一机绑定，
+        // 通过后永久离线可用。服务端代码在 `server/app.py`（零依赖 Python）。
+        // 换域名只改下面这一行的 ACTIVATION_URL，客户端不散落 URL。
+        // 0.9.0-beta4（D-095）：UI 材质改造（双向倒角 + 凹槽 + 金属盘）+ 激活页重排；
+        // 胶卷包装图接入（8 支，WebP 带 alpha，`ui/artwork/FilmArtworkRes.kt` 是唯一映射表）。
+        buildConfigField("String", "ACTIVATION_URL", "\"https://pccd.fky.ltd/pccd/activate\"")
+        versionCode = 25
+        versionName = "0.9.0-beta4"
     }
 
     buildTypes {
         release {
+            /**
+             * 内测分发用 **debug 签名**（D-091）。
+             *
+             * 三个理由：
+             * 1. 仓库里没有正式 keystore（也不该有），不签名就产不出能装的包；
+             * 2. 之前所有内测包都是 debug 签名，换成新密钥意味着测试机必须先卸载
+             *    —— 相册里那些成片在 `Android/data` 下，卸载会一起没掉；
+             * 3. 这一版的分发渠道是 GitHub Releases 的预发布页，不是应用商店。
+             *
+             * **正式上架前必须换掉**：换成自己的 keystore（`signingConfigs` 里加一条
+             * release，密钥文件不进仓库），否则永远无法用同一身份发布第二个版本。
+             */
+            signingConfig = signingConfigs.getByName("debug")
+            // 不开 R8：这个包的最小可用版本比"小几 MB"重要。规则没有在 release 上
+            // 验证过，而 Compose + CameraX + 反射式的 FilmPack 解析都在里面 ——
+            // 上线当夜做混淆，出问题的地方会非常难定位。
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -123,7 +151,10 @@ android {
         //
         // 许可：pack 是 film profile 的改编，按 CC BY-SA 4.0 分发，需署名 Fotufilm /
         // MUAStudio Inc. 并声明是否修改（见 docs/fotufilm-license-inventory.md §2）。
-        assets.srcDir(
+        // 用 `directories`（AGP 8.10 起的入口）；`srcDir(...)` 已标废弃。
+        // 改完必须核对 APK 内 `assets/*.fswp` 仍是 8 个 —— 这条要是失效，
+        // 装完就是"0 卷、快门永久置灰"，属于装了个打不开的相机。
+        assets.directories.add(
             rootProject.layout.projectDirectory.dir("prebuilt/fotufilm/packs").asFile.absolutePath
         )
     }
@@ -149,10 +180,6 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-
-    // 玻璃组件：捕获背后图层 → RenderEffect 模糊 → AGSL 折射/边缘高光。
-    // API 31 以下自动退化（库内部按 SDK_INT 判 capability），不需要额外分支。
-    implementation(libs.kyant.backdrop)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
