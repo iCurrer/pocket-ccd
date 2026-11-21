@@ -36,8 +36,17 @@ class FilmEngine(
     /**
      * 把 [source] 冲洗并印相到 [destination]。
      *
-     * 尺寸必须与 pack 声明的一致（D-037）：pack 里的空间参数是"毫米 × pixels-per-mm"，
-     * 换尺寸等于换了光学系统，效果会整体跑偏。所以这里宁可抛异常也不静默缩放。
+     * **输入尺寸不再要求等于 pack 头部声明的尺寸**（D-098）。理由是 native 侧
+     * `processFrame` 只校验「输入为正 / 输出不小于输入 / origin 不越界」三项，
+     * 从头到尾没有比对过 `pack->width/height`；帧的行列数是**原样传给内核**的，
+     * 而 pack 里的空间参数按「毫米 × 该帧 pixels-per-mm」在这组行列数上解算。
+     *
+     * 所以小尺寸帧是自洽的：像素少 → pixels-per-mm 小 → 半径同比缩小，
+     * 颗粒/晕光/扩散的**物理尺度不变**。这条性质是低像素传感器机型能出片的唯一
+     * 依据，也是"绝不缩放"（D-037）能被满足的原因 —— 我们不动像素，只是不裁。
+     *
+     * 仍然保留的唯一硬约束是**输出画布必须与输入同尺寸**：内核按整块处理，
+     * 输出画布小于输入块会被 native 拒绝，大于则留在边缘一圈未初始化像素。
      *
      * @param stripRows 每条带子真正输出的行数。越小峰值内存越低、但 halo 重叠越多、
      *   总耗时越高。128 行的真实重叠是 `2×halo/stripRows` —— 实测 halo 55–62，
@@ -50,13 +59,13 @@ class FilmEngine(
         stripRows: Int = DEFAULT_STRIP_ROWS,
     ): RenderResult {
         require(FotufilmNative.loaded) { "libfotufilm_android.so 未加载" }
-        require(source.width == pack.width && source.height == pack.height) {
-            "输入 ${source.width}x${source.height} 与 pack 的 ${pack.width}x${pack.height} 不一致"
-        }
         val target = destination ?: Bitmap.createBitmap(
-            pack.width, pack.height, Bitmap.Config.ARGB_8888,
+            source.width, source.height, Bitmap.Config.ARGB_8888,
         )
-        require(target.width == pack.width && target.height == pack.height) { "目标画布尺寸不符" }
+        require(target.width == source.width && target.height == source.height) {
+            "目标画布 ${target.width}x${target.height} 与输入 " +
+                "${source.width}x${source.height} 不一致"
+        }
         require(!target.isRecycled) { "目标画布已回收" }
 
         return render(BitmapSource(source), target, stripRows, source.width, source.height)
@@ -89,10 +98,8 @@ class FilmEngine(
      * float 平面，12MP 下是 274MB。超过 [FULL_FRAME_PIXEL_LIMIT] 直接拒绝，
      * 免得"验证代码"自己先把内存吃光。
      */
-    fun renderFullFrame(source: Bitmap, destination: Bitmap? = null): Bitmap {
-        require(source.width == pack.width && source.height == pack.height) { "输入与 pack 尺寸不一致" }
-        return renderFullFrameFrom(BitmapSource(source), pack.width, pack.height, destination)
-    }
+    fun renderFullFrame(source: Bitmap, destination: Bitmap? = null): Bitmap =
+        renderFullFrameFrom(BitmapSource(source), source.width, source.height, destination)
 
     /**
      * 与 [renderSynthetic] **吃同一份程序纹理**，但走整帧路径。
@@ -396,11 +403,19 @@ class FilmEngine(
          * 每条带子真正输出的行数。
          *
          * 128 → 256（D-074）：实测 halo 55–62，带子高度 128 时内核要算
-         * `(128 + 2×58)/128 ≈ 1.9×` 的行，一半时间花在重叠区。256 行降到 1.48×，
+         * `(128 + 2×58)/128 ≈ 1.9×` 的行，一半时间花在重叠区。256 行降到 1.45×，
          * 单张能省约 20% 时间 —— 手持拍摄里少两三百毫秒就是少一点糊。
-         * 代价是单条带子的平面缓冲从约 49MB 涨到约 75MB，仍在 256MB 预算内。
+         *
+         * 256 → 384（D-091）：同一笔账再算一遍，(384 + 116)/384 = **1.30×**，
+         * 相对 256 又省约 10% 的内核时间（内核占总耗时 80–85%）。再往上收益迅速变薄
+         * （512 行是 1.23×，只多省 5%，缓冲却要 123MB），384 是这条曲线上的拐点。
+         * 代价：单条带子的平面缓冲 75MB → 98MB，峰值 RSS 约 400–490MB ——
+         * 参考机 10.9GB 物理内存，`TILE_BUDGET_BYTES` 也仍有余量。
+         *
+         * 注意这正是"颗粒相位按调用次数推进"（见 [renderSynthetic]）的那类改动：
+         * 换档后同一张源图重跑不会与 256 逐像素相同，但统计特性一致。
          */
-        const val DEFAULT_STRIP_ROWS = 256
+        const val DEFAULT_STRIP_ROWS = 384
         const val FULL_FRAME_PIXEL_LIMIT = 4_000_000L
 
         private const val TAG = "FilmEngine"

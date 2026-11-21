@@ -52,6 +52,13 @@ data class CameraUiState(
     val camera: CameraState = CameraState.Pending,
     val canShoot: Boolean = false,
     val blockReason: String? = null,
+    /**
+     * 这台设备**实际会拍出多大**，如 `4000×3000` 或 `3264×2448`。
+     *
+     * 不等于 pack 的尺寸：设备给不到满幅时走原生直通（D-098），成片就是设备尺寸。
+     * 所以这里不能直接印 `FilmStock.sizeLabel` —— 那是 pack 的校准尺寸，不是成片尺寸。
+     */
+    val frameLabel: String? = null,
     /** 当前会话能给出的最大采集尺寸。没有能用的卷时，用它告诉用户这台设备能给多大。 */
     val largestSupported: Size? = null,
     /**

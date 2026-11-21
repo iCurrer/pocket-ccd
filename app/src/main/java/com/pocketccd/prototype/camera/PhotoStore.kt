@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -157,7 +158,12 @@ class PhotoStore(context: Context) {
             // SavedPhoto.thumbnailFile 的契约本来就是"候选路径，调用方先 isFile"。
             val thumb = File(thumbDir, "$id.jpg")
             runCatching {
-                val thumbBitmap = scaleForThumbnail(final)
+                // 缩略图从**盘上的成片**解码，而不是从内存里那张 12MP 缩下去（D-091）。
+                // 两个好处：① `inSampleSize` 走 libjpeg 的 DCT 缩放，先做一次 2×2 的
+                // 块平均，再交给 bilinear 收最后 1.4 倍 —— 一次 4096→1440 的双线性
+                // 会跳过采样点，胶片的颗粒正好是被跳掉的那种高频，缩略图上会起摩尔纹；
+                // ② 盘上那份已经转正、已经贴过片边/日期，缩略图和大图必然一致。
+                val thumbBitmap = loadThumbnail(full) ?: scaleForThumbnail(final)
                 try {
                     writeAtomically(thumb) {
                         thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
@@ -621,6 +627,48 @@ class PhotoStore(context: Context) {
         if (parts.size < 3 || parts[0] != "film") return null
         val timestamp = parts[1].toLongOrNull() ?: return null
         return Triple(stem, parts[2], timestamp)
+    }
+
+    /**
+     * 从落盘的成片解出一张缩略图（D-091）。
+     *
+     * 用 `inSampleSize` 只解到目标的两倍左右，再交给 [scaleForThumbnail] 收尾：
+     * JPEG 的 1/2、1/4、1/8 缩放是在 DCT 域做块平均，等于一次免费且正确的低通滤波，
+     * 比"从全尺寸直接双线性插值"在细密纹理（胶片颗粒、织物、头发）上明显干净。
+     *
+     * 返回 null 表示"这张图不适合从盘上读"（原图本来就小、解码失败），
+     * 调用方退回内存里那张，绝不因为缩略图失败而让整张照片失败。
+     */
+    private fun loadThumbnail(file: File): Bitmap? {
+        if (!file.isFile) return null
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+        if (longest <= THUMBNAIL_LONG_EDGE) return null
+
+        // 采样到"还比目标大一点"的那一档：4096 且目标 1440 → sample = 2（解出 2048）。
+        var sample = 1
+        while (longest / (sample * 2) >= THUMBNAIL_LONG_EDGE) sample *= 2
+
+        val decoded = BitmapFactory.decodeFile(
+            file.absolutePath,
+            BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+                inScaled = false
+            },
+        ) ?: return null
+
+        return try {
+            val scaled = scaleForThumbnail(decoded)
+            if (scaled !== decoded) decoded.recycle()
+            scaled
+        } catch (error: Throwable) {
+            decoded.recycle()
+            Log.w(TAG, "缩略图解码失败，退回内存图：${file.name}", error)
+            null
+        }
     }
 
     private fun scaleForThumbnail(source: Bitmap): Bitmap {
