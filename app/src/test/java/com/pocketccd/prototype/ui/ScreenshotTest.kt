@@ -2,7 +2,12 @@ package com.pocketccd.prototype.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -22,6 +27,7 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.showBottomTabs
 import com.pocketccd.prototype.camera.LensStop
 import com.pocketccd.prototype.camera.SavedPhoto
+import com.pocketccd.prototype.ui.auth.ActivationPage
 import com.pocketccd.prototype.ui.camera.CameraScreen
 import com.pocketccd.prototype.ui.detail.DetailStatus
 import com.pocketccd.prototype.ui.discover.DiscoverScreen
@@ -33,11 +39,19 @@ import com.pocketccd.prototype.ui.gallery.GalleryScreen
 import com.pocketccd.prototype.ui.gallery.PhotoWallItem
 import com.pocketccd.prototype.ui.glass.GlassBackdrop
 import com.pocketccd.prototype.ui.glass.GlassNavBar
-import com.pocketccd.prototype.ui.glass.LocalGlassBackdrop
 import com.pocketccd.prototype.ui.glass.GlassTab
 import com.pocketccd.prototype.ui.settings.LicensesScreen
 import com.pocketccd.prototype.ui.settings.SettingsScreen
+import com.pocketccd.prototype.ui.settings.SettingsVersionBlock
+import com.pocketccd.prototype.ui.settings.UpdateUi
+import com.pocketccd.prototype.ui.theme.ConsoleColor
+import com.pocketccd.prototype.ui.theme.GlassShape
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
+import com.pocketccd.prototype.ui.theme.consolePanel
+import com.pocketccd.prototype.ui.theme.consolePress
+import com.pocketccd.prototype.update.ApkAsset
+import com.pocketccd.prototype.update.InstallState
+import com.pocketccd.prototype.update.ReleaseInfo
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.Rule
@@ -74,6 +88,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -83,7 +99,12 @@ class ScreenshotTest {
                     permissionGranted = true,
                     exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
                     evIndex = 0,
-                    lensStops = listOf(LensStop(1f, 24), LensStop(3f, 70)),
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    // 主长焦档（D-088）：该档右上角会标 T。
+                    lensTelephoto = LensStop(3f, 70, optical = true),
                     // 贴花开着时 dock 上方那行状态字（D-081）。
                     imprintLabel = "135 半格 · 日期",
                     viewfinder = { modifier -> FakeViewfinder(modifier) },
@@ -104,6 +125,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -113,13 +136,132 @@ class ScreenshotTest {
                     permissionGranted = true,
                     exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
                     evIndex = 0,
-                    lensStops = listOf(LensStop(1f, 24), LensStop(3f, 70)),
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    // 主长焦档（D-088）：该档右上角会标 T。
+                    lensTelephoto = LensStop(3f, 70, optical = true),
                     imprintLabel = "135 半格 · 日期",
+                    stockDetail = "4000×3000",
                     viewfinder = { modifier -> FakeViewfinder(modifier) },
                 )
             }
         }
         capture("camera-landscape")
+    }
+
+    /**
+     * 横版·不可拍（D-089）：快门要灰着但**还在原位**，原因写在状态条里，
+     * 闪光灯不可用要能一眼看出来（灰键 + "无闪光灯"）。
+     */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun cameraConsoleBlocked() {
+        compose.setContent {
+            PocketCcdTheme {
+                CameraScreen(
+                    stockName = "VELVIA 50",
+                    stockDetail = "4096×3072",
+                    shotsWithStock = 0,
+                    flashOn = false,
+                    flashAvailable = false,
+                    gridOn = false,
+                    canShoot = false,
+                    blockReason = "「VELVIA 50」需要 4096×3072，这台设备只能给 4000×3000",
+                    permissionGranted = true,
+                    exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
+                    evIndex = 0,
+                    lensStops = listOf(LensStop(1f, 24, optical = true)),
+                    viewfinder = { modifier -> FakeViewfinder(modifier) },
+                )
+            }
+        }
+        capture("camera-console-blocked")
+    }
+
+    /** 横版·没有相机权限：取景窗还在（深色画框），里面是说明 + 唯一出口。 */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun cameraConsoleNoPermission() {
+        compose.setContent {
+            PocketCcdTheme {
+                CameraScreen(
+                    stockName = "GOLD 200",
+                    shotsWithStock = 0,
+                    flashOn = false,
+                    flashAvailable = false,
+                    gridOn = false,
+                    canShoot = false,
+                    blockReason = "需要相机权限才能取景",
+                    permissionGranted = false,
+                    viewfinder = null,
+                )
+            }
+        }
+        capture("camera-console-no-permission")
+    }
+
+    /**
+     * 横版·EV 微调展开（点顶栏那颗 EV 键）：刻度下方多出 −/0/+ 三个键。
+     * 重点看快门被压缩后**没有溢出**、也没有被盖住。
+     */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun cameraConsoleEvOpen() {
+        compose.setContent {
+            PocketCcdTheme {
+                CameraScreen(
+                    stockName = "PORTRA 400",
+                    stockDetail = "4000×3000",
+                    shotsWithStock = 7,
+                    flashOn = true,
+                    flashAvailable = true,
+                    gridOn = true,
+                    canShoot = true,
+                    blockReason = null,
+                    permissionGranted = true,
+                    exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
+                    evIndex = 2,
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    evInitiallyOpen = true,
+                    imprintLabel = "日期后背",
+                    viewfinder = { modifier -> FakeViewfinder(modifier) },
+                )
+            }
+        }
+        capture("camera-console-ev-open")
+    }
+
+    /** 横版·抽屉展开：相册/胶卷/发现/设置。浅色面板，跟机身同一套材质。 */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun cameraConsoleSwitcher() {
+        compose.setContent {
+            PocketCcdTheme {
+                CameraScreen(
+                    stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
+                    shotsWithStock = 12,
+                    flashOn = false,
+                    flashAvailable = true,
+                    gridOn = false,
+                    canShoot = true,
+                    blockReason = null,
+                    permissionGranted = true,
+                    exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
+                    evIndex = 0,
+                    lensStops = listOf(LensStop(1f, 24, optical = true)),
+                    switcherInitiallyOpen = true,
+                    viewfinder = { modifier -> FakeViewfinder(modifier) },
+                )
+            }
+        }
+        capture("camera-console-switcher")
     }
 
     /** EV 面板展开：这是"面板压住变焦轨"那个 bug 的现场，必须能看到。 */
@@ -129,6 +271,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -138,7 +282,12 @@ class ScreenshotTest {
                     permissionGranted = true,
                     exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
                     evIndex = 2,
-                    lensStops = listOf(LensStop(1f, 24), LensStop(3f, 70)),
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    // 主长焦档（D-088）：该档右上角会标 T。
+                    lensTelephoto = LensStop(3f, 70, optical = true),
                     evInitiallyOpen = true,
                     viewfinder = { modifier -> FakeViewfinder(modifier) },
                 )
@@ -156,6 +305,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -165,7 +316,12 @@ class ScreenshotTest {
                     permissionGranted = true,
                     exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
                     evIndex = 0,
-                    lensStops = listOf(LensStop(1f, 24), LensStop(3f, 70)),
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    // 主长焦档（D-088）：该档右上角会标 T。
+                    lensTelephoto = LensStop(3f, 70, optical = true),
                     switcherInitiallyOpen = true,
                     viewfinder = { modifier -> FakeViewfinder(modifier) },
                 )
@@ -228,7 +384,7 @@ class ScreenshotTest {
         val photo = fakePhoto()
         compose.setContent {
             PocketCcdTheme {
-                GlassBackdrop(captureContent = false) {
+                GlassBackdrop {
                     PhotoDetailScreen(
                         status = DetailStatus.Saved,
                         photo = photo,
@@ -247,6 +403,57 @@ class ScreenshotTest {
         capture("detail")
     }
 
+    /**
+     * 横版成片页（D-089 修正）：从快门进来的详情页必须留在横版，否则转屏会把
+     * 正在飞的那张掐掉。重点看：照片是否等比吃满左半、右侧参数会不会被压缩到看不清、
+     * 三个动作键是否都在屏内。
+     */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun detailLandscape() {
+        // 横拍成片是 4000×3000，用它验 4:3 的画框（fakePhoto 本身是竖片）。
+        val photo = fakePhoto().copy(width = 4000, height = 3000)
+        compose.setContent {
+            PocketCcdTheme {
+                GlassBackdrop {
+                    PhotoDetailScreen(
+                        status = DetailStatus.Saved,
+                        photo = photo,
+                        stockLabel = photo.stockLabel,
+                        isFavorite = true,
+                        galleryPublished = true,
+                        onBack = {},
+                        onRetry = {},
+                        onToggleFavorite = {},
+                        onShare = {},
+                        onOpenInGallery = {},
+                    )
+                }
+            }
+        }
+        capture("detail-landscape")
+    }
+
+    /** 横版成片页·冲洗失败：重试键 + 说明必须在右栏里放得下。 */
+    @Test
+    @Config(qualifiers = "w804dp-h361dp-land-xxhdpi")
+    fun detailLandscapeFailed() {
+        compose.setContent {
+            PocketCcdTheme {
+                GlassBackdrop {
+                    PhotoDetailScreen(
+                        status = DetailStatus.Failed,
+                        stockLabel = "ACROS 100 II",
+                        failureMessage = "Camera is closed.",
+                        onBack = {},
+                        onRetry = {},
+                    )
+                }
+            }
+        }
+        capture("detail-landscape-failed")
+    }
+
     @Test
     fun filmsScreen() {
         val cards = listOf(
@@ -262,7 +469,6 @@ class ScreenshotTest {
                         selectedId = "gold200__4000x3000",
                         onSelect = {},
                         onRefresh = {},
-                        onOpenCamera = {},
                     )
                 }
             }
@@ -299,6 +505,31 @@ class ScreenshotTest {
     }
 
     /** 带 TabBar 的完整纸面层：TabBar 是唯一真正采样"内容图层"的控件。 */
+    /**
+     * 底部 dock 选中**中间**那格：胶囊必须落在第 2 格正中。
+     *
+     * 单独出一张图是因为上一版的胶囊位置靠等宽推算（不测量），算错一格的偏移
+     * 在"选中第一格"时是看不出来的（偏移量为 0），必须选一个非零索引才验得出来。
+     */
+    @Test
+    fun navTabs() {
+        compose.setContent {
+            PocketCcdTheme {
+                Box(Modifier.fillMaxSize().background(ConsoleColor.body)) {
+                    GlassNavBar(
+                        active = GlassTab.Films,
+                        onSelect = {},
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(bottom = 10.dp),
+                    )
+                }
+            }
+        }
+        capture("nav-tabs")
+    }
+
     @Test
     fun galleryWithTabBar() {
         val photos = listOf(
@@ -342,7 +573,7 @@ class ScreenshotTest {
                     SettingsScreen(
                         stockCount = 8,
                         photoCount = 42,
-                        versionName = "0.8.0",
+                        versionName = "0.9.0-beta1",
                         // debug 包里才有的诊断入口：截图里也要能看到它。
                         onRunSelfTest = {},
                     )
@@ -352,8 +583,173 @@ class ScreenshotTest {
         capture("settings")
     }
 
+    /**
+     * 检查更新的四种状态（D-091）。
+     *
+     * 这几态只在联网时出现，而联网恰恰是最难在测试里复现的部分 —— 不截图留档的话，
+     * "发现新版本"那一行的金色、"检查失败"那一行的砖红，都只能靠真机碰运气。
+     * 六块叠在一张图上，是为了让**右边缘不随状态跳动**这件事一眼可见。
+     */
+    @Test
+    fun settingsUpdateStates() {
+        compose.setContent {
+            PocketCcdTheme {
+                GlassBackdrop {
+                    Column(
+                        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
+                    ) {
+                        val noApk = ReleaseInfo(
+                            tag = "v0.10.0",
+                            version = "0.10.0",
+                            htmlUrl = "https://example.com",
+                        )
+                        val withApk = noApk.copy(
+                            apk = ApkAsset(
+                                name = "pocket-ccd-0.10.0.apk",
+                                url = "https://example.com/a.apk",
+                                bytes = 45_789_583L,
+                            ),
+                        )
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Idle,
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Checking,
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Latest,
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        // 发现新版：可下载（带体积）
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Available(withApk),
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        // 没挂附件：退回页面
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Available(noApk),
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.NoRelease,
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                        SettingsVersionBlock(
+                            versionName = "0.9.0-beta1",
+                            update = UpdateUi.Failed("网络不可达"),
+                            install = InstallState.Idle,
+                            onCheck = {},
+                            onOpenRelease = {},
+                            onDownload = {},
+                            onCancelDownload = {},
+                            onInstall = {},
+                            onRequestPermission = {},
+                        )
+                    }
+                }
+            }
+        }
+        capture("settings-update-states")
+    }
+
+    /**
+     * 下载/安装的四种中间态（D-092）。
+     *
+     * 这四态全都发生在"用户已经跨过联网那一关"之后，但每一态都可能把人卡住：
+     * 下载中要能取消、下好要能装、没权限要能去授权、失败要能重试。单独截一张，
+     * 是为了看清进度线的高度、动作键在长文案旁边会不会挤成一团。
+     */
+    @Test
+    fun settingsInstallStates() {
+        val withApk = ReleaseInfo(
+            tag = "v0.10.0",
+            version = "0.10.0",
+            htmlUrl = "https://example.com",
+            apk = ApkAsset(
+                name = "pocket-ccd-0.10.0.apk",
+                url = "https://example.com/a.apk",
+                bytes = 45_789_583L,
+            ),
+        )
+        compose.setContent {
+            PocketCcdTheme {
+                GlassBackdrop {
+                    Column(
+                        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
+                    ) {
+                        val cases = listOf(
+                            InstallState.Downloading(18_600_000L, 45_789_583L),
+                            InstallState.Ready("0.10.0"),
+                            InstallState.NeedPermission,
+                            InstallState.Failed("下载不完整（12.0 MB / 43.7 MB）"),
+                        )
+                        cases.forEach { state ->
+                            SettingsVersionBlock(
+                                versionName = "0.9.0-beta1",
+                                update = UpdateUi.Available(withApk),
+                                install = state,
+                                onCheck = {},
+                                onOpenRelease = {},
+                                onDownload = {},
+                                onCancelDownload = {},
+                                onInstall = {},
+                                onRequestPermission = {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        capture("settings-install-states")
+    }
+
     @Test
     fun discoverScreen() {
+        val recent = fakePhoto()
         compose.setContent {
             PocketCcdTheme {
                 GlassBackdrop {
@@ -362,6 +758,14 @@ class ScreenshotTest {
                         favoriteCount = 7,
                         stockCount = 8,
                         storageBytes = 1_240_000_000L,
+                        recentPhotos = listOf(
+                            PhotoWallItem(
+                                id = "recent",
+                                stockLabel = "GOLD 200",
+                                capturedAt = 1_700_000_000_000,
+                                imagePath = recent.thumbnailFile.absolutePath,
+                            ),
+                        ),
                     )
                 }
             }
@@ -390,7 +794,6 @@ class ScreenshotTest {
         compose.setContent {
             PocketCcdTheme {
                 GlassBackdrop(
-                    captureContent = false,
                     overlay = {
                         if (tabsVisible) {
                             GlassNavBar(
@@ -402,13 +805,11 @@ class ScreenshotTest {
                                     .padding(bottom = 10.dp),
                             )
                         }
-                        CompositionLocalProvider(LocalGlassBackdrop provides null) {
-                            PhotoViewer(
-                                photos = listOf(item),
-                                initialIndex = 0,
-                                favoriteIds = emptySet(),
-                            )
-                        }
+                        PhotoViewer(
+                            photos = listOf(item),
+                            initialIndex = 0,
+                            favoriteIds = emptySet(),
+                        )
                     },
                 ) {
                     GalleryScreen(
@@ -531,6 +932,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -540,7 +943,12 @@ class ScreenshotTest {
                     permissionGranted = true,
                     exposureProfile = ExposureProfile(-6, 6, 1f / 3f, 0),
                     evIndex = 0,
-                    lensStops = listOf(LensStop(1f, 24), LensStop(3f, 70)),
+                    lensStops = listOf(
+                        LensStop(1f, 24, optical = true),
+                        LensStop(3f, 70, optical = true),
+                    ),
+                    // 主长焦档（D-088）：该档右上角会标 T。
+                    lensTelephoto = LensStop(3f, 70, optical = true),
                     viewfinder = { modifier -> FakeViewfinder(modifier) },
                 )
             }
@@ -556,6 +964,8 @@ class ScreenshotTest {
             PocketCcdTheme {
                 CameraScreen(
                     stockName = "GOLD 200",
+                    // 包装图按 pack id 查：截图里要能看到真图而不是占位暗盒。
+                    stockId = "gold200",
                     shotsWithStock = 12,
                     flashOn = false,
                     flashAvailable = true,
@@ -584,6 +994,104 @@ class ScreenshotTest {
                     ),
                 ),
         )
+    }
+
+    /**
+     * 材质条：抬高 vs 按下（D-090）。
+     *
+     * 这一条专门盯**内阴影有没有真的画出来**。按下态在静态截图里抓不到（要真按住），
+     * 而 `BlurMaskFilter` 在某些渲染路径上是"画不出来但不报错"的 —— 那种失败只有看图
+     * 才发现。左边是静止的面板，右边是按下到底（`pressed = { 1f }`）的同一块面板：
+     * 右图内沿必须有一圈由边向心的暗带，且上沿比下沿深。
+     */
+    @Test
+    fun materialStates() {
+        compose.setContent {
+            PocketCcdTheme {
+                Box(
+                    Modifier.fillMaxSize().background(ConsoleColor.body),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                        listOf(0f, 1f).forEach { amount ->
+                            Box(
+                                Modifier
+                                    .size(132.dp)
+                                    .consolePanel(
+                                        color = ConsoleColor.panelLight,
+                                        shape = GlassShape.panel,
+                                        elevation = 8.dp,
+                                    )
+                                    .consolePress(GlassShape.panel, pressed = { amount }),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        capture("material-states")
+    }
+
+    /**
+     * 内测激活页（D-093）：空态。
+     *
+     * 这是内测用户看到的**第一屏**，所以值得单独盯：暖光层会不会把标题洗淡、
+     * 输入框的"凹槽"读不读得出来、通栏键在 411dp 上会不会贴到卡片边缘。
+     */
+    @Test
+    fun activationEmpty() {
+        compose.setContent {
+            PocketCcdTheme {
+                ActivationPage(
+                    code = "",
+                    busy = false,
+                    error = null,
+                    whyOpen = false,
+                    onCodeChange = {},
+                    onSubmit = {},
+                    onToggleWhy = {},
+                )
+            }
+        }
+        capture("activation-empty")
+    }
+
+    /** 错误态：码被占用。看的是朱红提示有没有把按钮往下挤、以及它与输入框的距离。 */
+    @Test
+    fun activationError() {
+        compose.setContent {
+            PocketCcdTheme {
+                ActivationPage(
+                    code = "PP1SR5XK",
+                    busy = false,
+                    error = "这个码已经在别的设备上用过了",
+                    whyOpen = false,
+                    onCodeChange = {},
+                    onSubmit = {},
+                    onToggleWhy = {},
+                )
+            }
+        }
+        capture("activation-error")
+    }
+
+    /** 说明展开 + 正在核对：看长文案会不会把版式顶出屏幕、按钮的禁用态是否还读得出。 */
+    @Test
+    fun activationWhyOpenBusy() {
+        compose.setContent {
+            PocketCcdTheme {
+                ActivationPage(
+                    code = "PP1SR5XK",
+                    busy = true,
+                    error = null,
+                    whyOpen = true,
+                    onCodeChange = {},
+                    onSubmit = {},
+                    onToggleWhy = {},
+                )
+            }
+        }
+        capture("activation-why-open")
     }
 
     private fun capture(name: String) {
