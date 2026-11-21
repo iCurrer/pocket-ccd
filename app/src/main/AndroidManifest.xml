@@ -3,11 +3,30 @@
 
     <!--
       FOT-007 起申请 CAMERA：预览、拍照都走 CameraX。
-      仍然不申请 INTERNET / 存储权限 —— 成片落在应用自己的外部私有目录
-      （getExternalFilesDir(Pictures)），不写系统相册，因此不需要任何存储权限。
+      不申请任何存储权限 —— 成片落在应用自己的外部私有目录
+      （getExternalFilesDir(Pictures)），相册副本走 MediaStore（API 29+ 无需权限）。
       没有 READ_MEDIA_IMAGES：照片墙只列本应用自己写的文件。
     -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!--
+      D-091：设置页的「检查更新」要读 GitHub Releases。
+      **只用于这一件事**：没有启动自检、没有埋点、没有图片上传。请求只在用户点按
+      那次发出，读完 JSON 就结束。INTERNET 本身是普通权限，安装时不弹窗。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      D-092：设置页的「下载并安装」把更新包交给系统安装器。
+
+      这是**应用内更新**绕不开的一条：从 Android 8 起，任何非商店渠道安装 APK 都要求
+      这份声明 + 用户在系统设置里单独允许"安装未知应用"。声明本身不弹窗，也不代表
+      立刻有了权限 —— 真正的开关由用户掌握，我们只在首次安装时把他送到那个开关前。
+
+      没有 REQUEST_DELETE_PACKAGES、没有 QUERY_ALL_PACKAGES：这条更新链路只需要
+      "把文件交给安装器"，不需要知道机器上还装了什么。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- required=false：没有相机的设备（含部分模拟器）仍可安装，运行时降级为静态取景框。 -->
     <uses-feature
