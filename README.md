@@ -7,7 +7,8 @@
 [![Android](https://img.shields.io/badge/Android-29%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.08-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Version](https://img.shields.io/badge/version-0.8.8-orange)](app/build.gradle.kts)
+[![Version](https://img.shields.io/badge/version-0.9.0--beta4-orange)](app/build.gradle.kts)
+[![Stage](https://img.shields.io/badge/stage-closed%20beta-black)](docs/BETA_ACTIVATION.md)
 [![Engine](https://img.shields.io/badge/engine-Fotufilm%20·%20Halide-8A2BE2)](https://github.com/DhaliwalX/fotufilm-engine)
 
 </div>
@@ -18,8 +19,9 @@
   <img src="docs/screenshots/readme/zoom-toast.jpg" width="23%" alt="变焦反馈">
 </p>
 
-> 上面三张摄于 0.6.x（纸面 UI 时代）。0.8 起的深色玻璃界面用截图测试生成：
-> `./gradlew :app:testDebugUnitTest` → `app/build/screenshots/`（不入库）。
+> 上面三张摄于 0.6.x（纸面 UI 时代），**不代表当前界面**。0.9 起是「暖白机身」材质
+> （填充面板 + 双向倒角 + 凹槽 + 金属盘），旧的玻璃拟态已整套拆除（D-090 / D-094）。
+> 当前界面由截图测试生成：`./gradlew :app:testDebugUnitTest` → `app/build/screenshots/`（不入库），真机图待补。
 
 ---
 
@@ -35,17 +37,22 @@
 | | 能力 | 说明 |
 |---|---|---|
 | 📸 | **取景页（强制横屏）** | 拍摄页 `sensorLandscape`、其它页锁竖屏；横版是左右两侧控件的相机式排版，4:3 取景窗 |
-| 🎞️ | **胶卷库** | 8 支内置卷（FSWP pack 热插），按卷分组、显示最近一张样片 |
+| 🎛️ | **暖白机身材质** | 全站统一「机身」质感：填充面板 + 双向倒角 + 凹槽 + 金属盘；按下反馈是内阴影「陷进去」而非缩放 |
+| 🧭 | **竖版 dock** | 底部一枚滑动胶囊 + 5 个图标，无文字、无描边；位置按槽位算出，不靠硬编码 |
+| 🎞️ | **胶卷库** | 8 支内置卷（FSWP pack 热插），按卷分组、显示最近一张样片；每支一张包装图（`drawable-nodpi/`） |
 | ⚗️ | **真实显影** | 光谱重建 → 显影 → 印相，含颗粒、晕光、邻界效应；`stripRows=256` 分块 + 物理 halo |
 | 🖼️ | **片边** | 135 胶片条：齿孔在画布长边，画门按 135 的 24mm 高度、照片 1:1 贴入 |
 | 📅 | **日期后背** | 5×7 点阵掩膜 + 晕光，`'26 11 2` 格式，画在右下角 |
+| 📐 | **竖置帧无损转正** | 尺寸判定与方向判定合并成一条口径；旋转在冲洗之后，避免竖置帧躺倒（D-096） |
 | 🗂️ | **照片墙 / 查看器** | 全屏 pager、左右滑动、♥ 收藏、按卷筛选；查看器是模态层，盖住底部 TabBar |
+| 🔑 | **激活闸门（内测）** | 首次启动需邀请码，服务端一码一机绑定；通过后 token 落地，**永久离线可用** |
+| ⬇️ | **应用内更新** | 设置页读 GitHub Releases → 前台下载带进度 → 字节数/可解析/包名+versionCode 三道校验 → 交系统安装器 |
 | 🩺 | **成像自测** | 设置 → 诊断 → 运行成像自测（仅 debug），产出 JSON + 样张，可 `adb pull` |
 
 ## 快速开始
 
 ```bash
-# 一条命令：构建 + 跑完 118 项单测（含 Robolectric 截图）
+# 一条命令：构建 + 跑 207 项单测（含 Robolectric 截图回归）
 ./gradlew :app:assembleDebug :app:testDebugUnitTest --offline
 
 # 安装（首次需要相机权限）
@@ -58,9 +65,11 @@ adb shell pm grant com.pocketccd.prototype android.permission.CAMERA
 
 ## 文档
 
-- [📐 DECISION_LOG.md](DECISION_LOG.md) —— 每个"为什么这么做"（D-001…D-084）
+- [📐 DECISION_LOG.md](DECISION_LOG.md) —— 每个"为什么这么做"（D-001…D-098）
 - [🗓️ TASK_BOARD.md](TASK_BOARD.md) —— 任务与遗留问题
 - [🎞️ docs/film-edge-and-date-back.md](docs/film-edge-and-date-back.md) —— 片边/日期后背的设计与上游参考
+- [🔑 docs/BETA_ACTIVATION.md](docs/BETA_ACTIVATION.md) —— 内测邀请码闸门：服务端部署、一码一机绑定、离线策略
+- [📋 docs/PRD.md](docs/PRD.md) —— 产品需求文档：定位、用户场景、功能编号与状态、路线图、风险
 
 ## 许可
 
@@ -75,8 +84,10 @@ Fotufilm、MUA Studio 或任何胶片厂商，胶卷名称仅用于说明模拟�
    │  CameraX ImageCapture，targetRotation 固定 ROTATION_0
    ▼
 JPEG 4096×3072（传感器原始方向）                       约 3–4 MB
-   │  decodeJpeg：尺寸适配到 pack 声明值（现在是 4000×3000）
-   │    相等 → 直接用；更大 → 中心裁切（本机就是这条）；更小 → 抛错（绝不缩放）
+   │  decodeJpeg：与 pack 声明的 4000×3000 比对
+   │    相等 → 直接用；更大 → 中心裁切（本机就是这条）；更小 → **原生直通**（D-098）：
+   │    不比对尺寸，内核按传入的行列数自行解算 mm→px，输出 = 帧尺寸，只打 undersized 标记
+   │    （"竖置且无方向"这一种组合才报错）
    ▼
 Bitmap ARGB_8888 恰好 4000×3000                        约 46 MiB
    │  LinearColor.decodeInto：sRGB → scene-linear RGB
@@ -151,10 +162,10 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 | 目的地 | 页面 | 状态 |
 |---|---|---|
 | `CAMERA` | 全屏取景器（根） | 已接管默认入口 |
-| `RESULT` | 成片页：大图 + 真实 EXIF 参数网格 + `FRAME n / 36` | 暗色版代码完成，待真机；**2026-10-23 起新拍成片带真实 EXIF**（D-055） |
-| `GALLERY` | 胶片相册：按卷分组 + 三列缩略图 + **全屏查看器/首尾循环/★收藏/筛选**（T9-015） | 暗色版代码完成，待真机 |
+| `RESULT` | 成片页：大图 + 真实 EXIF 参数网格 + `FRAME n`（连续序号） | 0.9 版代码完成，待真机；**2026-10-23 起新拍成片带真实 EXIF**（D-055） |
+| `GALLERY` | 胶片相册：按卷分组 + 三列缩略图 + **全屏查看器/首尾循环/★收藏/筛选**（T9-015） | 0.9 版代码完成，待真机 |
 | `FILMS` | 胶卷库：已装卷大卡 + 全部卷列表 + 装卷（T9-016） | 真机验收通过 |
-| `SETTINGS` | 设置页（原型没有此页，按同一套令牌自绘） | 暗色版代码完成，待真机 |
+| `SETTINGS` | 设置页（原型没有此页，按同一套令牌自绘） | 0.9 版代码完成，待真机 |
 
 取景页的卷名 pill 点进去就是 `FILMS`——它本来就带 `ChevronRight`，
 之前却被接成"点一下切到下一卷"，卷多了要连点好几次才知道切到哪。现在改为进库挑选。
@@ -193,8 +204,9 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 
 ### 取景页里哪些是真的
 
-- **取景页只保留卷名、卷内计数与进度**（`1 / 36 EXP` + 36 格刻度）。原先的
-  `LIVE`、`12.6MP`、`4:3` 三个 chip 和底部的 `AUTO · 4:3 · JPEG`、`余 N 张` 已删除：
+- **取景页只保留卷名与张数**。卷模型在 D-070 之后就是**一个 stockId 过滤器** ——
+  没有"一卷 36 张"、没有格数刻度、没有"换卷"这个动作，换卷 = 换过滤器。原先的
+  `LIVE`、`12.6MP`、`4:3` 三个 chip 和底部的 `AUTO · 4:3 · JPEG`、`余 N 张` 也已删除：
   它们都是真值，但用户此刻不用它们做任何决定（D-050）。设计稿上的曝光三要素
   （`1/125 · f/2.8 · ISO 400`）在 CameraX 里拿不到，从来就不存在。
   画幅与像素留在成片页的参数网格里。
@@ -206,10 +218,10 @@ scratch。目标机（12GB 内存）常态只剩 2.4GB 可用，整帧做法会�
 - **`3.2×` 的含义是"73mm 那颗镜头的倍率"，不是"当前帧一定来自它"**。没有公开 API 能查询
   当前成像的物理镜头，系统 HAL 自己决定。要自证只能读成片 EXIF 的 `FocalLength`
   （主摄约 6mm、长焦约 16mm），成片页把它当真实参数展示。
-- **卷计数是真的**（D-040 / D-046）：`PhotoStore.rollStartedAt()` 记录本卷起点，
-  `capturedAt` 晚于它的**且属于当前这支胶卷**的才计入，满 36 张禁快门。
-  **绝不能用照片库总数冒充本卷张数**——那是两回事；只按时间过滤也不行，
-  换卷后计数器会继承上一支卷的曝光数，还会白吃新卷的格数。
+- **卷计数按 stockId 过滤，不靠时间**（D-040 / D-046 / D-070）：张数 = 当前这支卷下的
+  照片数，**绝不能用照片库总数冒充**——那是两回事。早先用 `rollStartedAt` 按时间切卷，
+  换卷后计数器会继承上一支卷的曝光数、还会白吃新卷的格数；现在换卷只换过滤器，
+  时间不参与计数，也没有容量上限（原来"满 36 张禁快门"随之删除）。
 - **对焦标签三态**：`AF` / `AF LOCK` / `AF FAIL`。原型永远写 `AF LOCK`，这里按
   `startFocusAndMetering` 的真实回调切换。
 
@@ -547,6 +559,7 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 
 | 文件 | 用途 |
 |---|---|
+| [📋 docs/PRD.md](docs/PRD.md) | 产品需求文档：定位、用户场景、功能需求编号与状态、路线图、风险 |
 | [`DEVELOPMENT_SPEC.md`](DEVELOPMENT_SPEC.md) | 产品意图与技术方向的基线 |
 | [`DECISION_LOG.md`](DECISION_LOG.md) | 技术决策及理由（D-037、D-036 等） |
 | [`TASK_BOARD.md`](TASK_BOARD.md) | 任务、前置、验收、证据 |
@@ -557,7 +570,7 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 | [`docs/github-actions-fotufilm.md`](docs/github-actions-fotufilm.md) | CI 两个 job 的触发与 artifact 说明 |
 | [`docs/fotufilm-license-inventory.md`](docs/fotufilm-license-inventory.md) | 上游与胶片数据的许可口径 |
 | [`docs/fotufilm-windows-build.md`](docs/fotufilm-windows-build.md) | WSL2 本地构建（备选路径） |
-| [`docs/film-dark-ui-spec.md`](docs/film-dark-ui-spec.md) | 暗色胶片相机 UI 规格（M9 基线：令牌映射、组件方案、已知偏差） |
+| [`docs/film-dark-ui-spec.md`](docs/film-dark-ui-spec.md) | 历史：暗色胶片相机 UI 规格（M9 基线，0.9 起已被「暖白机身」取代，留作对照） |
 | [`docs/interaction-spec.md`](docs/interaction-spec.md) | 原型四页逐条交互对照（原型做法 / Compose 实现 / 能不能做） |
 | [`docs/screenshots/`](docs/screenshots/) | 真机截图，按时间命名，迭代过程全留 |
 
@@ -575,7 +588,4 @@ docs/screenshots/    真机截图（迭代过程全留）；readme/ 是裁剪压
 - 不引入账号、云同步、分析 SDK，不上传任何照片；
 - 不使用真实相机品牌 Logo/机型名作为产品名；
 - 不把未验证的成像结论写成事实；
-- 当前包名 `com.pocketccd.prototype` 为临时值，禁止发布。
-| **布局重排 + 凹凸实体键（v0.4.1）** | **代码完成，待真机** | T9-035/T9-038 / D-061/D-062：窗 → 工具条 → 底盖连续填满（消灭真机上 112dp 死黑）；变焦/EV 收进工具条；底盖中央帧数窗；相册/换卷凹凸实体键 76×50；快门 68/80 |
-| **胶卷库装卷动画（v0.4.0）** | **代码完成，待真机** | T9-036 / D-061：点选胶卷后留在本页，卡片「装卷中…」呼吸 900ms，已装卷大卡滑入/淡入换卷，回取景器由「继续拍摄」显式触发 |
-| **显影页 + 开源声明页重排（v0.4.0）** | **代码完成，待真机** | T9-037 / D-061：显影页扫描光带+真实阶段（显影/写入）+已等待秒数+四角刻线；开源页正文改无衬线 13/22、序号+细线分节、去描边卡片 |
+- 当前包名 `com.pocketccd.prototype` 为临时值；签名仍是 debug、未开 R8，**未换正式 keystore 前不进应用商店**（0.9.x 只走 GitHub Releases 预发布页做内测分发）。
