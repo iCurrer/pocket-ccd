@@ -1,22 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      windowBackground 必须是 Compose 首帧的底色（FilmPalette.appBg = 0x0B0C0E）。
+      windowBackground 必须是 Compose 首帧的底色。D-090 之后它是**机身暖白**
+      （ConsoleColor.body = #E9E7E0），不再是近黑 #0B0C0E。
 
-      这里曾经是旧红色玩具机身的主色 #D9382E。窗口背景在 setContent 之前就已经
-      画出来了，Compose 首帧要等 Activity 创建 + ViewModel 首次扫卷 + 权限判断，
-      冷启动那一两百毫秒露的就是这个值 —— 表现成「启动闪一下红」。
-      换 UI 主题时 Compose 里的颜色改了、这个 XML 值不会跟着变，是最容易漏的一处。
+      窗口背景在 setContent 之前就已经画出来了，Compose 首帧要等 Activity 创建 +
+      ViewModel 首次扫卷 + 权限判断，冷启动那一两百毫秒露的就是这个值。
+      换 UI 主题时 Compose 里的颜色改了、这个 XML 值不会跟着变，是最容易漏的一处
+      （历史上就因为漏改闪过一次红色、一次黑屏）。
 
-      父主题用深色 Material：Compose 之外的系统控件（权限对话框、文本选择柄、
-      启动预览）会跟着走暗色，不会在近黑界面上闪出白底。
+      父主题保持 Material.NoActionBar：Compose 之外的系统控件（权限对话框、
+      文本选择柄、启动预览）跟着走浅色，不会在暖白界面上闪出深色弹窗。
+      状态栏/导航栏改成深色图标（windowLight*Bar = true），否则白字压在暖白底上读不出。
     -->
-    <style name="Theme.PocketCCD" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#0B0C0E</item>
-        <item name="android:colorAccent">#E7B37A</item>
+    <style name="Theme.PocketCCD" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#E9E7E0</item>
+        <item name="android:colorAccent">#8A6C36</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -87,9 +88,9 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** 一次点按对焦的视觉状态。 */
-private data class FocusMark(val x: Float, val y: Float, val state: FocusState, val at: Long)
+internal data class FocusMark(val x: Float, val y: Float, val state: FocusState, val at: Long)
 
-private enum class FocusState { Working, Locked, Failed }
+internal enum class FocusState { Working, Locked, Failed }
 
 /**
  * 取景页。全屏预览 + 玻璃浮层，没有任何机身装饰。
@@ -105,8 +106,22 @@ private enum class FocusState { Working, Locked, Failed }
 @Composable
 fun CameraScreen(
     stockName: String,
+    /**
+     * 这一支卷的 pack id（文件名去 `.fswp`），只用于查包装图。
+     *
+     * 不拿 [stockName] 去查：显示名是 `GOLD 200`、id 是 `gold200`，两者中间隔着一层
+     * 命名口径（显示名随 pack 元数据变，id 是文件系统事实）。null = 没有卷。
+     */
+    stockId: String? = null,
     /** 这一支胶卷累计拍过多少张（卷模型移除后，只有这一层计数是真的）。 */
     shotsWithStock: Int,
+    /**
+     * 这一支胶卷的画幅（pack 帧尺寸，如 `4000×3000`）。
+     *
+     * 只用于横屏胶卷卡的副行。null = 还没扫到 / 竖屏布局不用它，不显示。
+     * 它**不是** ISO、不是片基类型 —— 那些数据本工程没有，不要往这里塞。
+     */
+    stockDetail: String? = null,
     flashOn: Boolean,
     flashAvailable: Boolean,
     gridOn: Boolean,
@@ -127,6 +142,14 @@ fun CameraScreen(
     imprintLabel: String? = null,
     zoom: Float = 1f,
     lensStops: List<LensStop> = emptyList(),
+    /**
+     * 原生**主长焦**档（D-088）。null = 这台机器没有独立长焦，或探测链路整条失败。
+     *
+     * 单独传进来而不是让 [ZoomRail] 自己从 [lensStops] 里挑：长焦判定涉及
+     * "哪颗才算主长焦"的口径（最短的 ≥1.4× 物理镜头），这个口径必须只有一个源头，
+     * 否则界面标了 `T` 而 handle 的吸附逻辑认的是另一颗。
+     */
+    lensTelephoto: LensStop? = null,
     exposureProfile: ExposureProfile? = null,
     evIndex: Int = 0,
     viewfinder: (@Composable (Modifier) -> Unit)? = null,
@@ -171,25 +194,74 @@ fun CameraScreen(
         }
     }
 
-    BoxWithConstraints(modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(p.background)) {
         // 横版（D-083）：拍摄页被强制横屏，控件不能还堆在上下两头 —— 横屏只有 361dp 高。
         val landscape = maxWidth > maxHeight
 
-        // ---- 取景窗（D-080）----
-        // 不再是"预览即屏幕"：画面缩进一个带圆角、描边、角标的窗里，四周留给控件。
+        // ---- 横版：整套换成"浅色机身拍摄台"（D-089）----
+        // 竖屏那套（全屏预览 + 玻璃浮层）留着不动：分屏/折叠屏的半屏窗口仍会走到它，
+        // 而且它是玻璃语言里唯一经过真机验证的取景页，没有理由为了统一而删掉。
+        if (landscape) {
+            CameraConsole(
+                modifier = Modifier.fillMaxSize(),
+                stockName = stockName,
+                stockId = stockId,
+                stockDetail = stockDetail,
+                shotsWithStock = shotsWithStock,
+                flashOn = flashOn,
+                flashAvailable = flashAvailable,
+                gridOn = gridOn,
+                canShoot = canShoot,
+                blockReason = blockReason,
+                notice = notice,
+                imprintLabel = imprintLabel,
+                lastThumbnail = lastThumbnail,
+                zoom = zoom,
+                lensStops = lensStops,
+                exposureProfile = exposureProfile,
+                evIndex = evIndex,
+                permissionGranted = permissionGranted,
+                evOpen = evOpen,
+                focus = focus,
+                switcherOpen = switcherOpen,
+                viewfinder = viewfinder,
+                onShutter = onShutter,
+                onToggleFlash = onToggleFlash,
+                onToggleGrid = onToggleGrid,
+                onToggleEv = { evOpen = !evOpen },
+                onOpenGallery = onOpenGallery,
+                onOpenFilms = onOpenFilms,
+                onOpenSettings = onOpenSettings,
+                onOpenDiscover = onOpenDiscover,
+                onOpenSwitcher = {
+                    evOpen = false
+                    switcherOpen = true
+                },
+                onCloseSwitcher = { switcherOpen = false },
+                onOpenAppSettings = onOpenAppSettings,
+                onTapToFocus = { offset -> focusOn(offset, onTapToFocus) { focus = it } },
+                onZoomChange = onZoomChange,
+                onEvChange = onEvChange,
+            )
+            BackHandler(enabled = switcherOpen) { switcherOpen = false }
+            return@BoxWithConstraints
+        }
+
+        // ---- 竖版取景窗（D-080）----
+        // 不是"预览即屏幕"：画面缩进一个带圆角、描边、角标的窗里，四周留给控件。
         // 比例取 **3:4** —— 那是成片的比例（传感器 4:3 横置，落盘时转 90°），
         // 所以窗里看到的取景和最后那张照片是同一个画幅，不会再有上下的黑边。
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            // 横版：取景窗变 4:3 横向；控件挪到左右两侧后，上下预留只要一点点。
-            // 宽 / 高
-            val windowAspect = if (landscape) 4f / 3f else 3f / 4f
-            val topReserve = if (landscape) 12.dp else ViewfinderTopReserve
-            val bottomReserve = if (landscape) 12.dp else ViewfinderBottomReserve
-            val bandHeight = maxHeight - topReserve - bottomReserve
-            val maxWindowWidth = minOf(maxWidth - GlassSpace.page * 2, CameraChromeMaxWidth)
-            val windowWidth = minOf(maxWindowWidth, bandHeight * windowAspect)
-            val windowHeight = windowWidth / windowAspect
+        //
+        // 这一段只剩竖屏在用：横版已经在上面交给 [CameraConsole] 了。
+        val windowAspect = 3f / 4f
+        val topReserve = ViewfinderTopReserve
+        val bottomReserve = ViewfinderBottomReserve
+        val bandHeight = maxHeight - topReserve - bottomReserve
+        val maxWindowWidth = minOf(maxWidth - GlassSpace.page * 2, CameraChromeMaxWidth)
+        val windowWidth = minOf(maxWindowWidth, bandHeight * windowAspect)
+        val windowHeight = windowWidth / windowAspect
 
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(topReserve))
                 Box(
@@ -200,8 +272,8 @@ fun CameraScreen(
                         modifier = Modifier
                             .size(windowWidth, windowHeight)
                             .clip(ViewfinderShape)
-                            .background(Color.Black)
-                            .border(1.dp, Color.White.copy(alpha = 0.18f), ViewfinderShape),
+                            .background(Color(0xFF050505))
+                            .border(1.dp, p.border, ViewfinderShape),
                     ) {
                         if (permissionGranted && viewfinder != null) {
                             viewfinder(Modifier.fillMaxSize())
@@ -216,7 +288,7 @@ fun CameraScreen(
                                             Brush.radialGradient(
                                                 colors = listOf(
                                                     Color.Transparent,
-                                                    Color.Black.copy(alpha = 0.42f),
+                                                    Color.Black.copy(alpha = 0.36f),
                                                 ),
                                                 center = Offset(size.width / 2f, size.height * 0.46f),
                                                 radius = size.maxDimension * 0.62f,
@@ -234,20 +306,7 @@ fun CameraScreen(
                                     .fillMaxSize()
                                     .pointerInput(Unit) {
                                         detectTapGestures { offset ->
-                                            focus = FocusMark(
-                                                offset.x,
-                                                offset.y,
-                                                FocusState.Working,
-                                                System.nanoTime(),
-                                            )
-                                            onTapToFocus(offset.x, offset.y) { ok ->
-                                                focus = FocusMark(
-                                                    offset.x,
-                                                    offset.y,
-                                                    if (ok) FocusState.Locked else FocusState.Failed,
-                                                    System.nanoTime(),
-                                                )
-                                            }
+                                            focusOn(offset, onTapToFocus) { focus = it }
                                         }
                                     },
                             )
@@ -269,8 +328,7 @@ fun CameraScreen(
             )
         }
 
-        // ---- 顶部：胶卷名 · 张数 / 工具（横版不画，控件挪到左右两侧）----
-        if (!landscape) {
+        // ---- 顶部：胶卷名 · 张数 / 工具 ----
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -322,20 +380,19 @@ fun CameraScreen(
                 icon = { tint -> GlassIcon(GlassIconKind.Gear, tint) },
             )
         }
-        }
 
         // ---- 右侧：变焦档 ----
         // EV 面板展开时收起变焦轨：两者都锚在右侧/中央，360dp 屏幕上必然叠在一起。
         // 没有会话时（权限被拒 / 相机还没绑上）不画变焦轨：那两个圆钮点了不会有任何
         // 反应，摆在那里就是在骗人（D-076 截图核对时发现的）。
-        if (!landscape && !evOpen && permissionGranted && viewfinder != null) {
+        if (!evOpen && permissionGranted && viewfinder != null) {
             ZoomRail(
                 modifier = Modifier
-                    .align(if (landscape) Alignment.TopEnd else Alignment.CenterEnd)
-                    .padding(end = GlassSpace.page)
-                    .then(if (landscape) Modifier.statusBarsPadding() else Modifier),
+                    .align(Alignment.CenterEnd)
+                    .padding(end = GlassSpace.page),
                 zoom = zoom,
                 stops = lensStops,
+                telephoto = lensTelephoto,
                 onZoomChange = onZoomChange,
             )
         }
@@ -364,8 +421,7 @@ fun CameraScreen(
             }
         }
 
-        // ---- 底部：提示 / 不可拍原因 / dock（横版不画）----
-        if (!landscape) {
+        // ---- 底部：提示 / 不可拍原因 / dock ----
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -497,121 +553,6 @@ fun CameraScreen(
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
             Spacer(Modifier.height(GlassSpace.gap))
         }
-        }
-
-        // ---- 横版：控件排到左右两侧（D-083）----
-        // 横屏只有 361dp 高，竖版那套"上下堆叠"会把取景窗压到两百来 dp；把控件挪到
-        // 两侧以后，窗能吃满高度，才像一台横着拿的相机。
-        if (landscape) {
-            // 左上：胶卷芯片
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = GlassSpace.page, top = GlassSpace.tight),
-            ) {
-                GlassChip(
-                    text = if (shotsWithStock > 0) "$stockName · $shotsWithStock" else stockName,
-                    overPhoto = true,
-                    onClick = onOpenFilms,
-                    leading = { tint -> GlassIcon(GlassIconKind.Film, tint, size = 16.dp) },
-                    trailing = { tint -> GlassIcon(GlassIconKind.Chevron, tint, size = 16.dp) },
-                )
-            }
-
-            // 右上：EV + 设置
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(end = GlassSpace.page, top = GlassSpace.tight),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (exposureProfile != null) {
-                    GlassIconButton(
-                        label = "曝光补偿",
-                        active = evOpen || evIndex != exposureProfile.index,
-                        overPhoto = true,
-                        size = 44.dp,
-                        onClick = { evOpen = !evOpen },
-                        icon = { tint -> GlassIcon(GlassIconKind.Exposure, tint) },
-                    )
-                }
-                GlassIconButton(
-                    label = if (gridOn) "关闭九宫格" else "打开九宫格",
-                    active = gridOn,
-                    overPhoto = true,
-                    size = 44.dp,
-                    onClick = onToggleGrid,
-                    icon = { tint -> GlassIcon(GlassIconKind.Grid, tint) },
-                )
-                GlassIconButton(
-                    label = "设置",
-                    overPhoto = true,
-                    size = 44.dp,
-                    onClick = onOpenSettings,
-                    icon = { tint -> GlassIcon(GlassIconKind.Gear, tint) },
-                )
-            }
-
-            // 左中：相册 · 闪光
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = GlassSpace.page),
-                verticalArrangement = Arrangement.spacedBy(GlassSpace.tight),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                GalleryKey(lastThumbnail, onOpenGallery)
-                GlassIconButton(
-                    label = when {
-                        !flashAvailable -> "这台镜头没有闪光灯"
-                        flashOn -> "关闭闪光灯"
-                        else -> "打开闪光灯"
-                    },
-                    active = flashOn && flashAvailable,
-                    enabled = flashAvailable,
-                    overPhoto = true,
-                    onClick = onToggleFlash,
-                    icon = { tint ->
-                        GlassIcon(
-                            kind = if (flashOn && flashAvailable) {
-                                GlassIconKind.Flash
-                            } else {
-                                GlassIconKind.FlashOff
-                            },
-                            tint = tint,
-                            filled = flashOn && flashAvailable,
-                        )
-                    },
-                )
-            }
-
-            // 右中：快门 · 九宫格（变焦轨在右上）
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = GlassSpace.page),
-                verticalArrangement = Arrangement.spacedBy(GlassSpace.tight),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                ShutterKey(canShoot, onShutter)
-                if (!evOpen && permissionGranted && viewfinder != null) {
-                    ZoomRail(zoom = zoom, stops = lensStops, onZoomChange = onZoomChange)
-                }
-            }
-
-            if (imprintLabel != null && !switcherOpen) {
-                Text(
-                    text = imprintLabel,
-                    style = GlassType.badge,
-                    color = p.onGlassMuted,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = GlassSpace.page, bottom = GlassSpace.gap),
-                )
-            }
-        }
 
         // ---- 上滑抽屉：相册 / 胶卷 / 发现 / 设置 ----
         // 遮罩在下、面板在上；点遮罩或按返回都能关。
@@ -648,6 +589,31 @@ fun CameraScreen(
     }
 }
 
+/**
+ * 一次点按对焦的完整来回：先立刻画"对焦中"，再等 `startFocusAndMetering` 的真实回执。
+ *
+ * 抽成函数是因为横版（[CameraConsole]）和竖版两套版面都要同一份逻辑 ——
+ * 两份拷贝迟早会走偏（一份加了 FAIL 态、另一份忘了），而"永远显示 AF LOCK"正是
+ * T9-006 修掉的那个假话。
+ */
+internal fun focusOn(
+    offset: Offset,
+    request: (Float, Float, (Boolean) -> Unit) -> Unit,
+    publish: (FocusMark?) -> Unit,
+) {
+    publish(FocusMark(offset.x, offset.y, FocusState.Working, System.nanoTime()))
+    request(offset.x, offset.y) { ok ->
+        publish(
+            FocusMark(
+                offset.x,
+                offset.y,
+                if (ok) FocusState.Locked else FocusState.Failed,
+                System.nanoTime(),
+            ),
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 快门
 // ---------------------------------------------------------------------------
@@ -665,12 +631,21 @@ fun CameraScreen(
 private fun ShutterKey(enabled: Boolean, onClick: () -> Unit) {
     val p = MaterialTheme.glass
     val haptics = LocalHapticFeedback.current
-    val ring = if (enabled) Color.White.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.30f)
+    val ring = if (enabled) p.accent.copy(alpha = 0.78f) else p.border
     Box(
         modifier = Modifier
-            .size(74.dp)
+            .size(76.dp)
             .clip(CircleShape)
-            .border(2.dp, ring, CircleShape)
+            .drawBehind {
+                drawCircle(p.surfaceRaised)
+                drawCircle(
+                    color = p.accentDeep.copy(alpha = if (enabled) 0.45f else 0.18f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 1.dp.toPx(),
+                    ),
+                )
+            }
+            .border(1.5.dp, ring, CircleShape)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
@@ -687,14 +662,28 @@ private fun ShutterKey(enabled: Boolean, onClick: () -> Unit) {
             Modifier
                 .size(60.dp)
                 .clip(CircleShape)
-                .background(if (enabled) Color.White else Color.White.copy(alpha = 0.22f)),
+                .background(
+                    if (enabled) {
+                        Brush.radialGradient(
+                            colors = listOf(
+                                p.onGlass,
+                                Color(0xFFCEC7BA),
+                                Color(0xFF8B867D),
+                            ),
+                        )
+                    } else {
+                        Brush.radialGradient(
+                            colors = listOf(p.surfaceRaised, p.surface),
+                        )
+                    },
+                ),
         )
         // 中心一个大光圈点：玻璃面板上纯白圆盘容易和面板边界糊在一起，加个凹点定位。
         Box(
             Modifier
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(if (enabled) p.background.copy(alpha = 0.16f) else Color.Transparent),
+                .background(if (enabled) p.accentDeep.copy(alpha = 0.34f) else Color.Transparent),
         )
     }
 }
@@ -720,6 +709,7 @@ private fun DestinationSwitcher(
     onDiscover: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    val p = MaterialTheme.glass
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -742,7 +732,7 @@ private fun DestinationSwitcher(
                         .padding(bottom = 10.dp)
                         .size(width = 32.dp, height = 3.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.30f)),
+                        .background(p.onGlass.copy(alpha = 0.30f)),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -801,9 +791,9 @@ private fun GalleryKey(thumbnailPath: String?, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(52.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(p.fillStrong)
-            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
+            .clip(GlassShape.control)
+            .background(p.surfaceRaised)
+            .border(1.dp, p.border, GlassShape.control)
             .clickable(
                 role = Role.Button,
                 onClickLabel = "打开相册",
@@ -832,7 +822,7 @@ private fun GalleryKey(thumbnailPath: String?, onClick: () -> Unit) {
  * 解码，12MP 原图上不会解出 48MB 的位图。这里**不**缓存 —— 只有一张，且点位很小。
  */
 @Composable
-private fun rememberLastThumbnail(path: String?): ImageBitmap? {
+internal fun rememberLastThumbnail(path: String?): ImageBitmap? {
     val density = LocalDensity.current
     val px = with(density) { 52.dp.roundToPx() }
     val state = produceState<ImageBitmap?>(initialValue = null, key1 = path, key2 = px) {
@@ -852,43 +842,105 @@ private fun rememberLastThumbnail(path: String?): ImageBitmap? {
 /**
  * 右侧竖排变焦轨。
  *
- * 档位来源优先真实光学镜头表（D-044）；探不到就退回 1×/2× 两档数码。
+ * 档位来源优先真实光学镜头表（D-044 / D-088）；探不到就退回 1×/2× 两档数码。
  * **0.6× 及以下一律不显示**：CameraX 上小于 1 的倍率会被 clamp 到 1，
  * 画出来就是一个点不动的按钮（旧问题 P1-13）。
+ *
+ * @param telephoto 原生主长焦档。非 null 时该档右上角标 `T`，把"换镜"和
+ *   "数码放大"在视觉上分开 —— 两者点下去都是 `setZoomRatio`，但画质完全不同。
  */
 @Composable
 private fun ZoomRail(
     modifier: Modifier = Modifier,
     zoom: Float,
     stops: List<LensStop>,
+    telephoto: LensStop? = null,
     onZoomChange: (Float) -> Float,
 ) {
     val options = remember(stops) {
-        val optical = stops.map { it.zoomRatio }.filter { it >= 1f }
-        if (optical.size >= 2) optical.distinct().sorted() else listOf(1f, 2f)
+        val optical = stops
+            .filter { it.zoomRatio >= 1f }
+            .distinctBy { (it.zoomRatio * 10f).roundToInt() }
+            .sortedBy { it.zoomRatio }
+        if (optical.size >= 2) optical else listOf(LensStop(1f), LensStop(2f))
     }
     if (options.isEmpty()) return
 
+    val p = MaterialTheme.glass
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(GlassSpace.tight),
+        verticalArrangement = Arrangement.spacedBy(GlassSpace.micro),
     ) {
-        options.forEach { ratio ->
+        options.forEach { stop ->
+            val ratio = stop.zoomRatio
             // 选中判定用相对误差 15%：真实倍率是 3.1999 这种值，精确相等永远不成立。
             val selected = abs(zoom - ratio) <= ratio * 0.15f
-            // 用圆钮不用胶囊：右侧这条轨和顶部那排按钮是同一类控件，
-            // 混着"胶囊 + 圆形"就会看着像一堆大大小小的椭圆。
-            GlassIconButton(
-                label = "变焦 ${formatRatio(ratio)}",
-                active = selected,
-                overPhoto = true,
-                size = 44.dp,
-                onClick = { onZoomChange(ratio) },
-                icon = { tint ->
-                    Text(text = formatRatio(ratio), style = GlassType.label, color = tint)
-                },
-            )
+            // 长焦档的 T 角标：判定要宽一点（20%），因为 handle 的吸附与这里的
+            // 档位值取自同一份数据，差的是浮点，不该让角标时有时无。
+            val isTele = telephoto != null &&
+                abs(ratio - telephoto.zoomRatio) <= telephoto.zoomRatio * 0.20f
+
+            Box(
+                modifier = Modifier
+                    .width(70.dp)
+                    .height(48.dp)
+                    .semantics {
+                        contentDescription = buildString {
+                            append("变焦 ")
+                            append(formatRatio(ratio))
+                            stop.focalLabel?.let {
+                                append("，等效 ")
+                                append(it)
+                            }
+                            if (isTele) append("，原生光学长焦")
+                        }
+                    },
+            ) {
+                GlassSurface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = GlassShape.control,
+                    overPhoto = true,
+                    interactive = true,
+                    onClick = { onZoomChange(ratio) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Text(
+                            text = formatRatio(ratio),
+                            style = GlassType.label,
+                            color = if (selected) p.accentBright else p.onGlass,
+                        )
+                        stop.focalLabel?.let { focal ->
+                            Text(
+                                text = focal,
+                                style = GlassType.badge,
+                                // 有 mm 的档（真实镜头）比数码档亮一档：不增加元素，
+                                // 靠亮度把"这是光学"说清楚。
+                                color = when {
+                                    selected -> p.accentBright
+                                    stop.optical -> p.onGlass
+                                    else -> p.onGlassMuted
+                                },
+                            )
+                        }
+                    }
+                }
+                if (isTele) {
+                    Text(
+                        text = "T",
+                        style = GlassType.badge,
+                        color = if (selected) p.accentBright else p.onGlassMuted,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp, end = 6.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -906,7 +958,7 @@ private val ViewfinderTopReserve = 96.dp
 private val ViewfinderBottomReserve = 152.dp
 
 /** 取景窗的圆角。比 dock 的 32dp 小一档：窗是"画框"，不该比机身更圆。 */
-private val ViewfinderShape = RoundedCornerShape(26.dp)
+private val ViewfinderShape = RoundedCornerShape(12.dp)
 
 /**
  * 取景角标：四角各一个 L 形短标。
@@ -916,11 +968,11 @@ private val ViewfinderShape = RoundedCornerShape(26.dp)
  */
 @Composable
 private fun ViewfinderCornerMarks() {
+    val color = MaterialTheme.glass.onGlass.copy(alpha = 0.68f)
     Canvas(Modifier.fillMaxSize()) {
         val inset = 12.dp.toPx()
         val length = 16.dp.toPx()
         val stroke = 2.dp.toPx()
-        val color = Color.White.copy(alpha = 0.55f)
         val right = size.width - inset
         val bottom = size.height - inset
 
@@ -1011,10 +1063,10 @@ private fun fmtEv(value: Float): String =
 
 @Composable
 private fun GridOverlay() {
+    val color = MaterialTheme.glass.onGlass.copy(alpha = 0.18f)
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        val color = Color.White.copy(alpha = 0.22f)
         val stroke = 1f
         for (i in 1..2) {
             drawLine(color, Offset(w * i / 3f, 0f), Offset(w * i / 3f, h), stroke)
@@ -1030,14 +1082,14 @@ private fun GridOverlay() {
  * 旧原型永远显示 AF LOCK，那是假话（T9-006）。
  */
 @Composable
-private fun FocusReticle(mark: FocusMark) {
+internal fun FocusReticle(mark: FocusMark) {
     val density = LocalDensity.current
     val x = with(density) { mark.x.toDp() }
     val y = with(density) { mark.y.toDp() }
     val color = when (mark.state) {
         FocusState.Working -> Color.White.copy(alpha = 0.85f)
-        FocusState.Locked -> Color(0xFF9BE7A0)
-        FocusState.Failed -> Color(0xFFFFB4AB)
+        FocusState.Locked -> MaterialTheme.glass.accentBright
+        FocusState.Failed -> MaterialTheme.glass.error
     }
     val label = when (mark.state) {
         FocusState.Working -> "对焦中"

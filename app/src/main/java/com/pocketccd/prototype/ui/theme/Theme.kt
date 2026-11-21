@@ -3,7 +3,7 @@ package com.pocketccd.prototype.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -13,113 +13,132 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
- * **玻璃拟态**主题：只有一套固定色板。
+ * **Warm Chassis** 主题：只有一套固定色板，浅色。
  *
- * 与旧体系的差别：
+ * D-069 起这套令牌是"深色玻璃"（Darkroom Instrument），照片浮在近黑的衬底上。
+ * D-090 换掉了这个方向：整台机器是**暖白机身 + 银灰面板 + 黄铜标记**，
+ * 相册、胶卷、发现、设置与横屏拍摄页共用同一套材质 —— 原来只有拍摄页是浅色，
+ * 一进相册就跳回深色玻璃，读起来像两个 App 拼在一起。
  *
- * 1. **只有一套基底，不再分"取景页暗 / 纸面页亮"**。全 App 是深色玻璃，相机预览是
- *    唯一的光源；相册、胶卷库、设置页在同一个深底上叠玻璃面板。
- * 2. **不跟随壁纸取色**（D-074）。相机 App 的界面是照片的衬底：强调色跟着壁纸变，
- *    同一张照片在不同桌面下会显得不一样；而取色只影响选中态和强调文字，收益
- *    远小于"不可预期"的代价。强调色固定为冷蓝种子色。
- * 3. **玻璃是叠加层，不是背景**：面板 = 白色低透明度填充 + 库画的边缘高光；
- *    背景模糊/折射由 `io.github.kyant0:backdrop` 完成（D-072）。
+ * ## 为什么浅色也敢用在看图的页面
+ *
+ * 深色衬底的传统理由是"让照片跳出来"。但这里的隐喻不是屏幕，是**一台相机**：
+ * 相机的机身是浅色的，取景窗才是深色的。所以规矩改成：
+ *
+ * - 页面底 = 机身暖白，控件浮在机身上；
+ * - **影像本身所在的框是深色**（取景窗 `ConsoleColor.viewfinder`、查看器底色），
+ *   照片永远贴着深色出画，对比度不丢。
+ *
+ * ## 三条硬约束（与拍摄页同一套）
+ *
+ * 1. **浅底深字**：正文必须是深石墨，不允许在这套底上再叠白色文字。
+ * 2. **只有一个强调色**：黄铜金只出现在"当前值/选中/可按下"三种语义上。
+ * 3. **描边即结构**：层次靠 1dp 描边 + 大半径低浓度阴影（见 [consolePanel]）。
  */
 @Immutable
 data class GlassPalette(
-    /** 页面底色（近黑，带一点色相）。 */
+    /** 页面底色（机身暖白）。 */
     val background: Color,
-    /** 玻璃面板填充（叠在照片/背景之上时用得到的低透明度白）。 */
+    /** 凹槽底：需要"陷进去"的容器（参数卡、列表行底）。 */
+    val surface: Color,
+    /** 抬高的浅面板：卡片、按键、dock。 */
+    val surfaceRaised: Color,
+    /** 极淡的暗色叠加（叠在 [surfaceRaised] 上做分组）。 */
     val fill: Color,
-    /** 更实一点的玻璃：需要压住底下花哨内容的面板（底部 dock、动作条）。 */
+    /** 稍重的暗色叠加（选中行、按下底色）。 */
     val fillStrong: Color,
     /**
-     * 压在**影像**上时的深色蒙版，垫在 [fill] 下面。
+     * 压在**影像**上时的近实心浅板。
      *
-     * 影像的亮度不受控：只靠 6% 白叠在亮部，白字会糊掉。这层黑让玻璃在任何照片上
-     * 都还读得清，同时保留背后被模糊的内容。
+     * 影像亮度不受控，半透明浅板在亮部会糊掉、在暗部会消失。压在照片上的控件用
+     * 92% 的暖白，读起来像"贴在照片上的实体塑料片"，而不是一层滤镜。
      */
     val veil: Color,
-    /** 玻璃描边。 */
+    /** 面板描边。 */
     val border: Color,
-    /** 顶部高光（玻璃厚度感，从 12% 白渐变到透明）。 */
+    /** 顶边受光（面板上表面反的光）。 */
     val highlight: Color,
-    /** 玻璃上的主文字。 */
+    /** 主文字：深石墨。 */
     val onGlass: Color,
-    /** 玻璃上的次级文字（说明、单位）。 */
+    /** 次级文字（说明、单位）。 */
     val onGlassMuted: Color,
-    /** 强调色（选中态、快门、链接）。 */
+    /** 强调色（选中底色、指示条、实心主按钮）。 */
     val accent: Color,
+    /** 强调色的**可读版本**：浅底上当文字/图标用的深金。 */
+    val accentBright: Color,
+    /** 更暗的强调色，用于按压与阴影侧。 */
+    val accentDeep: Color,
+    /** 强调色实底上的文字。 */
     val onAccent: Color,
     /** 失败 / 危险态文字（冲洗失败、这台设备拍不了这卷）。 */
     val error: Color,
-    /** 背景上的两颗光斑，给 Material You 一点色。 */
+    /** 页面顶部的一层极淡暖光，给平涂的机身一点纵深。 */
     val glowA: Color,
     val glowB: Color,
     /** 压暗层：查看器、对话框背后。 */
     val scrim: Color,
 )
 
-private val PocketCcdColors = darkColorScheme(
-    primary = Color(0xFFA8C7FA),
-    onPrimary = Color(0xFF0A2233),
-    primaryContainer = Color(0xFF2B4A6F),
-    onPrimaryContainer = Color(0xFFD6E3FF),
-    secondary = Color(0xFFBFC6DC),
-    tertiary = Color(0xFFDDBCE0),
-    background = Color(0xFF0B0C0F),
-    onBackground = Color(0xFFE3E2E6),
-    surface = Color(0xFF121318),
-    onSurface = Color(0xFFE3E2E6),
-    surfaceVariant = Color(0xFF2A2C33),
-    onSurfaceVariant = Color(0xFFC4C6CF),
-    outline = Color(0xFF8E9099),
-    outlineVariant = Color(0xFF44474E),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
+private val PocketCcdColors = lightColorScheme(
+    primary = ConsoleColor.accentDeep,
+    onPrimary = Color(0xFFFBF6EA),
+    primaryContainer = Color(0xFFEBD9B8),
+    onPrimaryContainer = Color(0xFF3A2C12),
+    secondary = ConsoleColor.secondaryText,
+    onSecondary = Color(0xFFFBF6EA),
+    background = ConsoleColor.body,
+    onBackground = ConsoleColor.primaryText,
+    surface = ConsoleColor.panelLight,
+    onSurface = ConsoleColor.primaryText,
+    surfaceVariant = ConsoleColor.panel,
+    onSurfaceVariant = ConsoleColor.secondaryText,
+    outline = ConsoleColor.border,
+    outlineVariant = ConsoleColor.borderSoft,
+    error = ConsoleColor.danger,
+    onError = Color(0xFFFDF6EF),
 )
 
-private fun glassOf(scheme: androidx.compose.material3.ColorScheme): GlassPalette {
-    // 强调色的"亮不亮"决定玻璃上的文字要不要翻成 dark：动态取色可能给出浅黄之类的
-    // primary，直接用 onPrimary 会和白色玻璃冲突。
-    val onGlass = Color.White.copy(alpha = 0.95f)
-    return GlassPalette(
-        background = scheme.background,
-        fill = Color.White.copy(alpha = 0.06f),
-        fillStrong = Color.White.copy(alpha = 0.10f),
-        veil = Color.Black.copy(alpha = 0.48f),
-        border = Color.White.copy(alpha = 0.14f),
-        highlight = Color.White.copy(alpha = 0.12f),
-        onGlass = onGlass,
-        onGlassMuted = onGlass.copy(alpha = 0.62f),
-        accent = scheme.primary,
-        onAccent = scheme.onPrimary,
-        error = scheme.error,
-        glowA = scheme.primary,
-        glowB = scheme.tertiary,
-        scrim = Color.Black.copy(alpha = 0.55f),
-    )
-}
+private fun glassOf(scheme: androidx.compose.material3.ColorScheme): GlassPalette = GlassPalette(
+    background = scheme.background,
+    // 从 M3 scheme 取，而不是再从 ConsoleColor 抄一遍：两处各写一遍迟早会不一致。
+    surface = scheme.surfaceVariant,
+    surfaceRaised = scheme.surface,
+    fill = Color.Black.copy(alpha = 0.030f),
+    fillStrong = Color.Black.copy(alpha = 0.065f),
+    veil = Color(0xF2F4F2EB),
+    border = ConsoleColor.border,
+    highlight = Color.White.copy(alpha = 0.60f),
+    onGlass = ConsoleColor.primaryText,
+    onGlassMuted = ConsoleColor.secondaryText,
+    accent = ConsoleColor.accent,
+    // 浅底上的"亮金"读不出来（对比度约 1.8:1），可读版换成深金（约 4.9:1）。
+    accentBright = ConsoleColor.accentDeep,
+    accentDeep = ConsoleColor.accentDeep,
+    onAccent = Color(0xFF2A2113),
+    error = scheme.error,
+    glowA = Color(0xFFFFF6E2),
+    glowB = ConsoleColor.accentLight,
+    scrim = Color.Black.copy(alpha = 0.62f),
+)
 
 private val LocalGlassPalette = staticCompositionLocalOf { glassOf(PocketCcdColors) }
 
-/** 当前玻璃色板。页面里一律读它，不要直接读 `MaterialTheme.colorScheme`。 */
+/** 当前色板。页面里一律读它，不要直接读 `MaterialTheme.colorScheme`。 */
 val MaterialTheme.glass: GlassPalette
     @Composable get() = LocalGlassPalette.current
 
 private val GlassShapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp),
+    extraSmall = RoundedCornerShape(6.dp),
     small = GlassShape.chip,
     medium = GlassShape.card,
     large = GlassShape.panel,
-    extraLarge = RoundedCornerShape(40.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 /**
- * 只有深色一套基底：相机 App 的所有页面都在看照片，白底会把成片衬得发灰。
+ * 只有一套固定色板：不读系统壁纸，也不看系统深/浅色。
  *
- * 色板**固定**，不读系统壁纸、也不看系统深/浅色 —— 相机界面必须是中性的衬底，
- * 同一张照片在任何桌面、任何主题下都该长一个样（D-074）。
+ * 相机是器材，同一张照片的衬底不该由壁纸决定。
  */
 @Composable
 fun PocketCcdTheme(content: @Composable () -> Unit) {

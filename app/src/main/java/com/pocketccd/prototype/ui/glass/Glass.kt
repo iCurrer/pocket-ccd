@@ -4,8 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +13,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,95 +30,59 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
+import com.pocketccd.prototype.ui.theme.ConsoleElevation
 import com.pocketccd.prototype.ui.theme.GlassPalette
 import com.pocketccd.prototype.ui.theme.GlassShape
 import com.pocketccd.prototype.ui.theme.GlassSpace
 import com.pocketccd.prototype.ui.theme.GlassType
+import com.pocketccd.prototype.ui.theme.consolePanel
+import com.pocketccd.prototype.ui.theme.consolePress
 import com.pocketccd.prototype.ui.theme.glass
 
 /**
- * 玻璃组件层。**全部建立在 `io.github.kyant0:backdrop`（Kyant0/AndroidLiquidGlass）之上。**
+ * 通用控件层（文件名保留 `glass/`，材质已不是玻璃）。
  *
- * ## 它和旧实现（手绘半透明 + 描边 + 竖直渐变）的根本区别
+ * ## 从"深色玻璃"到"浅色机身"改了什么（D-090）
  *
- * 旧版是"画得像玻璃"：一层白色低透明度填充、一圈 1px 描边、一条从顶部往下 220px 的
- * 白色渐变。它有三个无法修的硬伤 ——
+ * 旧实现把 `io.github.kyant0:backdrop` 当作地基：`Modifier.drawBackdrop` 把元素背后的
+ * 内容录成图层 → RenderEffect 模糊 → AGSL 折射 → 边缘高光。它是真玻璃，但代价是
+ * **每个控件都要一条离屏录制 + 全屏模糊**，而且在"相机机身"这个隐喻下是错的：
+ * 机身是暖白的实体塑料与金属，不是一块会透出背面的玻璃。
  *
- * 1. **描边恒定 1dp、渐变终点写死 220px**：不同密度/不同高度的面板上，那条"厚度感"
- *    要么看不见，要么变成一道硬边；
- * 2. **玻璃不会随内容变化**：底下是照片还是黑底，面板一模一样，看着就是塑料；
- * 3. **按压反馈是 `scale` + 涟漪**：涟漪会把玻璃糊成一块 Android 塑料。
+ * 新实现只做三件事：暖白填充、1dp 描边、大半径低浓度外阴影（[consolePanel]）。
+ * 按下反馈从"面板胀大"改成"陷进去"（[consolePress]）—— 内阴影比缩放更像实体键。
  *
- * 新实现交给库做：`Modifier.drawBackdrop` 把元素背后的内容录成图层 → RenderEffect
- * 模糊 → AGSL 折射（`lens`）→ AGSL 边缘高光（`Highlight`）→ 可选内/外阴影。
- * 按压时用 `layerBlock` 缩放**面板本身**，库会反向变换背景图层，于是玻璃"鼓起来"而
- * 背景不动 —— 这正是 Liquid Glass 的手感，涟漪被去掉。
+ * ## 为什么控件名还叫 `Glass*`
  *
- * ## 三级降级（都不崩、不画假东西）
- *
- * | 设备 | 效果 |
- * |---|---|
- * | API 33+ | 模糊 + 折射 + 方向性边缘高光（AGSL） |
- * | API 31/32 | 模糊 + 平涂边缘高光（无 RuntimeShader） |
- * | API 29/30 | 只是"着色 + 1px 高光描边"（Compose 侧没有 RenderEffect） |
- *
- * 另外，**背后没有可采样内容时**（取景页的相机预览是独立 Surface，录不到像素），
- * [LocalGlassBackdrop] 为 null，组件连模糊都不申请，只画着色 + 高光 ——
- * 宁可少一层效果，也不伪造一层假模糊。
+ * 改名要动 8 个页面、上百处调用点，而这次改动的验收标准是**看起来是一台机器**。
+ * 名字与材质不一致这件事，记在 DECISION_LOG 的待清理项里，不在发布前夜动它。
  */
 
-/** 无 backdrop 时的占位：画不出任何东西，且被库当作"空图层"跳过。 */
-private val NoBackdrop: Backdrop = emptyBackdrop()
-
-/** 玻璃的通用参数。全部用 dp 表达，由各自的 Density 换算成 px。 */
+/** 无 backdrop 时代的遗留常量：只影响"多浮一点"，不影响材质。 */
 private object GlassTuning {
-    /** 面板类（卡片、dock）的背景模糊半径。 */
-    val blur = 10.dp
+    /** 芯片、图标键这类小控件的浮起高度。 */
+    val keyLift = ConsoleElevation.key
 
-    /** 折射带高度：从边缘往里多少距离开始弯折。 */
-    val lensHeight = 14.dp
-
-    /** 折射量（边缘像素被"吸"进来的位移）。 */
-    val lensAmount = 18.dp
-
-    /** 图标钮/芯片这种小控件用的更小的折射。 */
-    val smallLensHeight = 8.dp
-    val smallLensAmount = 10.dp
-    val smallBlur = 6.dp
-
-    /** 按下时面板整体胀大多少（不是缩小 —— 玻璃是"被挤压"）。 */
-    val pressLift = 2.dp
+    /** 卡片类面板的浮起高度。 */
+    val panelLift = ConsoleElevation.card
 }
 
 /**
- * 一块玻璃面板。
+ * 一块面板。
  *
- * @param overPhoto 面板是否压在**影像**（照片/实时预览）上。压在影像上时多一层深色
- *   蒙版：影像亮度不可控，只靠 6% 白色叠加，白字在亮部会糊掉。
- * @param interactive 是否参与按压反馈（面板胀大 + 边缘高光增强）。纯展示面板传 false。
+ * @param overPhoto 面板是否压在**影像**（照片/实时预览）上。压在影像上时换成近实心
+ *   暖白（`veil`）：影像亮度不可控，半透明浅板在亮部会糊、在暗部会消失。
+ * @param interactive 是否参与按压反馈（陷下去）。纯展示面板传 false。
  * @param onClick 非空即整块可点。
- * @param blurRadius 背景模糊半径。面积大的面板（TabBar、动作条）可以调高，
- *   小芯片调低 —— 半径和控件尺寸不匹配时，边缘会糊出"脏边"。
  */
 @Composable
 fun GlassSurface(
@@ -128,48 +92,35 @@ fun GlassSurface(
     interactive: Boolean = false,
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(GlassSpace.inner),
-    blurRadius: Dp = GlassTuning.blur,
-    lensHeight: Dp = GlassTuning.lensHeight,
-    lensAmount: Dp = GlassTuning.lensAmount,
+    /** 覆盖描边色。选中态（当前装着的卷）用黄铜，其余保持默认。 */
+    borderColor: Color? = null,
+    /**
+     * 倒角强度。卡片普遍比键帽大一个量级，同样的强度摊在大面上会读成"塑料壳" ——
+     * 0.55 是量过的：小键给满、整张卡给一半，两者并排时厚度看起来才是一套。
+     */
+    bevel: Float = 0.55f,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val p = MaterialTheme.glass
-    val backdrop = LocalGlassBackdrop.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press = rememberPress(pressed && interactive)
-    // 折射只对圆角矩形/胶囊有定义（SDF 依赖四个角半径）；自定义 Shape 会抛，提前挡住。
-    val lensable = shape is CornerBasedShape
 
     Box(
         modifier = modifier
-            .drawBackdrop(
-                backdrop = backdrop ?: NoBackdrop,
-                shape = { shape },
-                effects = {
-                    // 只有真的有背景可采样时才申请模糊/折射：否则是在空图层上白烧 GPU。
-                    if (backdrop != null) {
-                        vibrancy()
-                        blur(blurRadius.toPx())
-                        if (lensable) {
-                            lens(lensHeight.toPx(), lensAmount.toPx())
-                        }
-                    }
-                },
-                highlight = { glassHighlight(press.value, width = 0.6.dp) },
-                shadow = { glassShadow(strength = if (overPhoto) 1f else 0.6f) },
-                innerShadow = {
-                    InnerShadow(radius = 12.dp, alpha = 0.22f + 0.20f * press.value)
-                },
-                layerBlock = if (interactive) pressLayer(press) else null,
-                onDrawSurface = { drawGlassSurface(p, overPhoto) },
+            .consolePanel(
+                color = if (overPhoto) p.veil else p.surfaceRaised,
+                shape = shape,
+                elevation = if (overPhoto) GlassTuning.panelLift + 4.dp else GlassTuning.panelLift,
+                borderColor = borderColor ?: p.border,
+                bevel = bevel,
             )
+            .consolePress(shape = shape, pressed = { press.value })
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
                         interactionSource = interaction,
-                        // 玻璃不用涟漪：涟漪是 Android 塑料感的来源，按压反馈由
-                        // 面板胀大 + 高光增强表达。
+                        // 不用涟漪：涟漪是 Android 塑料感的来源，按压反馈由内阴影表达。
                         indication = null,
                         role = Role.Button,
                         onClick = onClick,
@@ -180,21 +131,15 @@ fun GlassSurface(
             )
             .padding(contentPadding),
     ) {
-        // 面板内部不能再采样"页面背景"：那会把面板自己的背面重新画一遍（穿帮）。
-        CompositionLocalProvider(LocalGlassBackdrop provides null) {
-            content()
-        }
+        content()
     }
 }
 
 /**
- * 玻璃图标钮：**正方形 + 正圆**，默认 48dp（Material 的最小可点尺寸）。
+ * 图标钮：**正方形 + 正圆**，默认 48dp（Material 的最小可点尺寸）。
  *
- * 之前是 `size + 4.dp`（44 视觉 / 48 热区）两套尺寸并存，再加上调用点各自传 size，
- * 屏幕上就出现了"大大小小的椭圆"。现在只有一个尺寸来源：`size` 同时是宽、高、直径。
- *
- * @param label 读屏文案。**必填且无默认值** —— 编译器就挡住了"只画图标不写语义"。
- * @param active 选中/开启态：强调色实底 + 反色图标。
+ * @param label 读屏文案。**必填且无默认值** —— 编译器就挡住"只画图标不写语义"。
+ * @param active 选中/开启态：黄铜底 + 深金图标。
  */
 @Composable
 fun GlassIconButton(
@@ -208,48 +153,44 @@ fun GlassIconButton(
     icon: @Composable (tint: Color) -> Unit,
 ) {
     val p = MaterialTheme.glass
-    val backdrop = LocalGlassBackdrop.current
+    val buttonSize = if (size < 48.dp) 48.dp else size
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press = rememberPress(pressed && enabled)
+
     val tint = when {
-        !enabled -> p.onGlassMuted.copy(alpha = 0.38f)
-        active -> p.onAccent
-        else -> if (overPhoto) Color.White.copy(alpha = 0.92f) else p.onGlass
+        !enabled -> p.onGlassMuted.copy(alpha = 0.45f)
+        active -> p.accentDeep
+        else -> p.onGlass
+    }
+    val fill = when {
+        !enabled -> if (overPhoto) p.veil.copy(alpha = 0.72f) else p.surface
+        active -> p.accent.copy(alpha = 0.22f)
+        overPhoto -> p.veil
+        else -> p.surfaceRaised
+    }
+    val border = when {
+        active -> p.accent
+        else -> p.border
     }
 
     Box(
         modifier = modifier
             // 宽高由同一个 size 决定：任何父级约束下都不会拉成椭圆。
-            .size(size)
-            .drawBackdrop(
-                backdrop = backdrop ?: NoBackdrop,
-                shape = { CircleShape },
-                effects = {
-                    if (backdrop != null) {
-                        vibrancy()
-                        blur(GlassTuning.smallBlur.toPx())
-                        lens(
-                            GlassTuning.smallLensHeight.toPx(),
-                            GlassTuning.smallLensAmount.toPx(),
-                        )
-                    }
-                },
-                highlight = { glassHighlight(press.value, width = 0.7.dp) },
-                shadow = { glassShadow(strength = 0.5f) },
-                layerBlock = pressLayer(press),
-                onDrawSurface = {
-                    when {
-                        !enabled -> drawRect(Color.White.copy(alpha = 0.04f))
-                        active -> drawRect(p.accent)
-                        overPhoto -> {
-                            drawRect(p.veil)
-                            drawRect(Color.White.copy(alpha = 0.08f))
-                        }
-                        else -> drawRect(p.fill)
-                    }
-                },
+            .size(buttonSize)
+            .graphicsLayer {
+                // 缩一点点：轮廓先"让开"，内阴影再"压进去"。
+                val scale = 1f - 0.05f * press.value
+                scaleX = scale
+                scaleY = scale
+            }
+            .consolePanel(
+                color = fill,
+                shape = GlassShape.pill,
+                elevation = GlassTuning.keyLift,
+                borderColor = border,
             )
+            .consolePress(shape = GlassShape.pill, pressed = { press.value })
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -268,11 +209,8 @@ fun GlassIconButton(
 /**
  * 芯片：胶卷名、变焦档、筛选项。
  *
- * 选中态是**强调色玻璃**（低透明强调填充 + 强调色文字），不是实心色块：
- * 实心强调底在玻璃上会跳成一块贴纸。
- *
- * @param overPhoto 芯片是否直接压在实时预览/照片上（取景页顶部那两枚就是）。
- *   压在影像上时要垫一层深色蒙版，否则 6% 白在亮部完全读不出字。
+ * 选中态是**黄铜染色**（低透明金底 + 深金字 + 金色描边），不是实心色块：
+ * 实心强调底在同一排芯片里会跳成一块贴纸。
  */
 @Composable
 fun GlassChip(
@@ -285,49 +223,40 @@ fun GlassChip(
     trailing: (@Composable (Color) -> Unit)? = null,
 ) {
     val p = MaterialTheme.glass
-    val backdrop = LocalGlassBackdrop.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press = rememberPress(pressed)
-    val textColor = if (selected) p.onGlass else p.onGlassMuted
+    val textColor = if (selected) p.accentDeep else p.onGlassMuted
+    val fill = when {
+        selected -> p.accent.copy(alpha = 0.20f)
+        overPhoto -> p.veil
+        else -> p.surfaceRaised
+    }
 
     Row(
         modifier = modifier
-            .drawBackdrop(
-                backdrop = backdrop ?: NoBackdrop,
-                shape = { GlassShape.chip },
-                effects = {
-                    if (backdrop != null) {
-                        vibrancy()
-                        blur(GlassTuning.smallBlur.toPx())
-                        lens(
-                            GlassTuning.smallLensHeight.toPx(),
-                            GlassTuning.smallLensAmount.toPx(),
-                        )
-                    }
-                },
-                highlight = { glassHighlight(press.value, width = 0.6.dp) },
-                shadow = { glassShadow(strength = 0.45f) },
-                layerBlock = pressLayer(press),
-                onDrawSurface = {
-                    // 压在影像上先垫深色蒙版；选中态是强调色低透明叠加，不是实心底。
-                    if (overPhoto) drawRect(p.veil)
-                    drawRect(if (overPhoto) Color.White.copy(alpha = 0.08f) else p.fill)
-                    if (selected) drawRect(p.accent.copy(alpha = 0.30f))
-                },
+            .consolePanel(
+                color = fill,
+                shape = GlassShape.chip,
+                elevation = GlassTuning.keyLift,
+                borderColor = if (selected) p.accent else p.border,
+                // 芯片是长的：上下倒角要收一点，否则两端会亮成一截白条。
+                bevel = 0.75f,
             )
+            .consolePress(shape = GlassShape.chip, pressed = { press.value })
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         if (leading != null) {
-            leading(if (selected) p.accent else textColor)
+            leading(textColor)
             Spacer(Modifier.width(6.dp))
         }
         Text(
@@ -344,7 +273,18 @@ fun GlassChip(
     }
 }
 
-/** 文字按钮：失败页的"重试"、空态的"去拍摄"。 */
+/**
+ * 文字按钮：失败页的"重试"、空态的"去拍摄"、激活页的"激活"。
+ *
+ * 主按钮（[primary]）是**这一屏唯一的实体键**，所以它的投影比卡片重一档
+ * （[ConsoleElevation.hero]）：它离机身最远，按下去的手感也最强。
+ *
+ * @param height 键高。48dp 是默认；激活页那种"整屏只有一个动作"的版式用 52dp ——
+ *   否则那颗键在一大片留白里会显得怯。
+ * @param textStyle 文字样式。默认 [GlassType.label]；主按钮建议传 [GlassType.action]。
+ * @param busy 处理中。**外观与可用态一致**（实心黄铜）、但不接受点击 —— "正在核对…"
+ *   是一句要读得出来的状态文案，把它画成禁用灰字等于让用户以为按钮坏了。
+ */
 @Composable
 fun GlassButton(
     text: String,
@@ -352,49 +292,62 @@ fun GlassButton(
     modifier: Modifier = Modifier,
     primary: Boolean = true,
     enabled: Boolean = true,
+    height: Dp = 48.dp,
+    textStyle: TextStyle = GlassType.label,
+    busy: Boolean = false,
 ) {
     val p = MaterialTheme.glass
-    val backdrop = LocalGlassBackdrop.current
     val interaction = remember { MutableInteractionSource() }
+    // 按压反馈只在真能按的时候走：busy 时按下去没有意义。
     val pressed by interaction.collectIsPressedAsState()
-    val press = rememberPress(pressed && enabled)
+    val press = rememberPress(pressed && enabled && !busy)
+    val lit = primary && (enabled || busy)
+
     val textColor = when {
-        !enabled -> p.onGlassMuted.copy(alpha = 0.4f)
-        primary -> if (p.accent.luminance() > 0.5f) Color.Black.copy(alpha = 0.87f) else p.onAccent
+        // 禁用态的文字要**比底色深得多**：0.40 的深字压在 0.38 的淡金上是一团雾，
+        // "正在核对…"这种必须读得出来的状态文案会彻底消失（截图里抓到过）。
+        !enabled && !busy && primary -> p.onAccent.copy(alpha = 0.68f)
+        !enabled && !busy -> p.onGlassMuted.copy(alpha = 0.60f)
+        primary -> p.onAccent
         else -> p.onGlass
+    }
+    val fill = when {
+        // 禁用态的主键**仍然是黄铜**，只是不通电：换成灰底会和旁边的凹槽糊成一块，
+        // 用户读到的不是"还不能按"，而是"这里没有按钮"。
+        !enabled && !busy && primary -> p.accent.copy(alpha = 0.46f)
+        !enabled && !busy -> p.surface
+        primary -> p.accent
+        else -> p.surfaceRaised
     }
 
     Box(
         modifier = modifier
-            .height(48.dp)
-            .drawBackdrop(
-                backdrop = backdrop ?: NoBackdrop,
-                shape = { GlassShape.chip },
-                effects = {
-                    if (backdrop != null) {
-                        vibrancy()
-                        blur(GlassTuning.smallBlur.toPx())
-                        lens(
-                            GlassTuning.smallLensHeight.toPx(),
-                            GlassTuning.smallLensAmount.toPx(),
-                        )
-                    }
+            .height(height)
+            .graphicsLayer {
+                val scale = 1f - 0.03f * press.value
+                scaleX = scale
+                scaleY = scale
+            }
+            .consolePanel(
+                color = fill,
+                shape = GlassShape.chip,
+                elevation = if (lit) ConsoleElevation.hero else ConsoleElevation.key + 1.dp,
+                borderColor = when {
+                    lit -> p.accentDeep.copy(alpha = 0.55f)
+                    primary -> p.accentDeep.copy(alpha = 0.22f)
+                    else -> p.border
                 },
-                highlight = { glassHighlight(press.value, width = 0.6.dp) },
-                shadow = { glassShadow(strength = 0.5f) },
-                layerBlock = pressLayer(press),
-                onDrawSurface = {
-                    when {
-                        !enabled -> drawRect(Color.White.copy(alpha = 0.05f))
-                        primary -> drawRect(p.accent)
-                        else -> drawRect(p.fillStrong)
-                    }
-                },
+                bevel = if (enabled || busy) 0.85f else 0.4f,
+            )
+            .consolePress(
+                shape = GlassShape.chip,
+                pressed = { press.value },
+                strength = if (primary) 0.26f else 0.42f,
             )
             .clickable(
                 interactionSource = interaction,
                 indication = null,
-                enabled = enabled,
+                enabled = enabled && !busy,
                 role = Role.Button,
                 onClickLabel = text,
                 onClick = onClick,
@@ -402,17 +355,19 @@ fun GlassButton(
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = text, style = GlassType.label, color = textColor)
+        Text(text = text, style = textStyle, color = textColor)
     }
 }
 
-/** 玻璃上的分隔线：1px，比描边淡一档。 */
+/** 分隔线：1px，比描边淡一档。 */
 @Composable
 fun GlassDivider(modifier: Modifier = Modifier) {
     Box(
         modifier
+            // Box 没有子元素时宽度是 0：不显式撑满，分隔线在 Column 里根本画不出来。
+            .fillMaxWidth()
             .height(1.dp)
-            .background(MaterialTheme.glass.border.copy(alpha = 0.5f)),
+            .background(MaterialTheme.glass.border.copy(alpha = 0.62f)),
     )
 }
 
@@ -423,7 +378,7 @@ fun GlassScrim(modifier: Modifier = Modifier) {
 }
 
 /**
- * 玻璃面板里的文字统一用"玻璃上文字"色，避免每处手写 tint。
+ * 面板里的文字统一用"面板上文字"色，避免每处手写 tint。
  * 需要强调色的子树单独用 [LocalContentColor] 覆盖即可。
  */
 @Composable
@@ -444,7 +399,7 @@ fun GlassContent(
 /**
  * 按压进度 0..1（不是 Boolean 直接切）。
  *
- * 返回 [Animatable]，在 **draw / layer 块里读 `value`** 而不是在组合期读：
+ * 返回 [Animatable]，在 **draw 块里读 `value`** 而不是在组合期读：
  * 这样按压动画不会触发重组，只重画，12MP 拍照时主线程本来就紧。
  */
 @Composable
@@ -453,44 +408,8 @@ private fun rememberPress(pressed: Boolean): Animatable<Float, *> {
     LaunchedEffect(pressed) {
         progress.animateTo(
             targetValue = if (pressed) 1f else 0f,
-            animationSpec = spring(dampingRatio = 0.62f, stiffness = 900f),
+            animationSpec = spring(dampingRatio = 0.66f, stiffness = 1100f),
         )
     }
     return progress
-}
-
-/** `layerBlock`：面板胀大，库会反向变换背景图层，于是玻璃"鼓"而背景不动。 */
-private fun pressLayer(press: Animatable<Float, *>): GraphicsLayerScope.() -> Unit = {
-    val scale = 1f + GlassTuning.pressLift.toPx() / size.height * press.value
-    scaleX = scale
-    scaleY = scale
-}
-
-/**
- * 边缘高光：方向性（默认 45°）的白色描边，按下去更亮。
- *
- * 这条边才是"玻璃"的主视觉 —— 旧实现的毛病正是把它画成了一条不带方向的 1px 实线。
- */
-private fun glassHighlight(press: Float, width: Dp): Highlight =
-    Highlight.Default.copy(
-        width = width,
-        alpha = 0.55f + 0.45f * press,
-    )
-
-/** 外部阴影。strength 越小越"贴"，芯片要贴、面板要浮。 */
-private fun glassShadow(strength: Float): Shadow =
-    Shadow(
-        radius = (18f * strength).dp,
-        offset = DpOffset(0.dp, (6f * strength).dp),
-        alpha = 0.5f * strength,
-    )
-
-/** 面板底色：影像上多一层深色蒙版，否则白字在亮部读不清。 */
-private fun DrawScope.drawGlassSurface(p: GlassPalette, overPhoto: Boolean) {
-    if (overPhoto) {
-        drawRect(p.veil)
-        drawRect(Color.White.copy(alpha = 0.08f))
-    } else {
-        drawRect(p.fill)
-    }
 }

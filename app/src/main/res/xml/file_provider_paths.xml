@@ -13,4 +13,15 @@
     <external-files-path
         name="pocket_ccd"
         path="Pictures/pocket-ccd/" />
+
+    <!--
+      D-092：应用内更新下载的安装包（`cacheDir/updates/*.apk`）。
+
+      单独开一个 `cache-path`，而不是把范围扩大到 `cacheDir` 根：这个 provider 只应
+      暴露"我们明确要交给外部应用的那个文件"。安装器拿到的是 content:// URI，
+      读权限随 Intent 一次性授予，安装完即失效。
+    -->
+    <cache-path
+        name="updates"
+        path="updates/" />
 </paths>

@@ -17,21 +17,30 @@ import androidx.compose.ui.unit.sp
  */
 object GlassType {
 
+    /** 极少数页面的展示标题。 */
+    val display = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 30.sp,
+        lineHeight = 35.sp,
+        letterSpacing = (-0.6).sp,
+    )
+
     /** 大标题：页面标题、胶卷名。 */
     val title = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = (-0.3).sp,
+        fontSize = 26.sp,
+        lineHeight = 31.sp,
+        letterSpacing = (-0.4).sp,
     )
 
     /** 卡片标题。 */
     val cardTitle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
+        fontSize = 17.sp,
+        lineHeight = 23.sp,
     )
 
     /** 正文 / 列表主标签。 */
@@ -39,7 +48,7 @@ object GlassType {
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 20.sp,
+        lineHeight = 21.sp,
     )
 
     /** 次要说明。 */
@@ -47,7 +56,7 @@ object GlassType {
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-        lineHeight = 17.sp,
+        lineHeight = 18.sp,
     )
 
     /** 芯片文字、按钮文字。 */
@@ -56,7 +65,7 @@ object GlassType {
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.2.sp,
+        letterSpacing = 0.1.sp,
     )
 
     /** 参数读数（张数、EV、倍率、EXIF）。等宽让数字不左右跳。 */
@@ -64,17 +73,26 @@ object GlassType {
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp,
+        lineHeight = 17.sp,
+        letterSpacing = 0.2.sp,
     )
 
     /** 大号读数：快门计时、片数总计。 */
     val numericLarge = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.5.sp,
+        fontSize = 18.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.3.sp,
+    )
+
+    /** 极大读数：页面上只能出现一个主数字。 */
+    val numericHero = TextStyle(
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 32.sp,
+        lineHeight = 34.sp,
+        letterSpacing = 0.2.sp,
     )
 
     /** 小号读数：角标、单位。11sp 是地板，不再往下探。 */
@@ -83,6 +101,49 @@ object GlassType {
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         lineHeight = 14.sp,
+    )
+
+    /**
+     * 主按钮文字（D-094）：比 [label] 高一档。
+     *
+     * 一屏只允许有一个主按钮，它得压得住版式；用 12sp 的芯片字号去撑 52dp 的通栏键，
+     * 读起来像"卡片里的一行小字"，不像"这个页面唯一的动作"。
+     */
+    val action = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.2.sp,
+    )
+
+    /**
+     * 邀请码**字符格**里的单个字符（D-094）。
+     *
+     * 与 [codeInput] 的区别：字距归零。格子的间距已经做进布局，再叠 3sp 字距会让
+     * 字符在格里偏左 1.5sp —— 八个格一起偏，就是一眼能看出的不居中。
+     */
+    val codeCell = TextStyle(
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 19.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.sp,
+    )
+
+    /**
+     * 邀请码输入：等宽 + 宽字距。
+     *
+     * 字距 3sp 是为了让 8 个字符读起来像一排**冲压字符**而不是一串数字：用户在聊天记录里
+     * 看到 `PCCD-7K3M-9QX2`，要能一位一位对着抄。这是全 App 唯一需要"逐字符对齐"的输入，
+     * 所以它单独占一档，不并进 [numericLarge]。
+     */
+    val codeInput = TextStyle(
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
+        lineHeight = 26.sp,
+        letterSpacing = 3.sp,
     )
 }
 

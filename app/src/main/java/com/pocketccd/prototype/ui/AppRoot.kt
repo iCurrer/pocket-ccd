@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,9 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +49,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pocketccd.prototype.BuildConfig
+import com.pocketccd.prototype.auth.ActivationStore
 import com.pocketccd.prototype.camera.CameraHandle
 import com.pocketccd.prototype.camera.CameraPreview
 import com.pocketccd.prototype.camera.CaptureState
@@ -64,6 +64,7 @@ import com.pocketccd.prototype.navigation.AppDestination
 import com.pocketccd.prototype.navigation.AppEvent
 import com.pocketccd.prototype.navigation.AppViewModel
 import com.pocketccd.prototype.navigation.showBottomTabs
+import com.pocketccd.prototype.ui.auth.ActivationScreen
 import com.pocketccd.prototype.ui.camera.CameraScreen
 import com.pocketccd.prototype.ui.detail.DetailStatus
 import com.pocketccd.prototype.ui.detail.PhotoDetailScreen
@@ -74,11 +75,11 @@ import com.pocketccd.prototype.ui.gallery.PhotoViewer
 import com.pocketccd.prototype.ui.gallery.ViewerRequest
 import com.pocketccd.prototype.ui.gallery.PhotoWallItem
 import com.pocketccd.prototype.ui.glass.GlassBackdrop
-import com.pocketccd.prototype.ui.glass.LocalGlassBackdrop
 import com.pocketccd.prototype.ui.glass.GlassNavBar
 import com.pocketccd.prototype.ui.glass.GlassTab
 import com.pocketccd.prototype.ui.settings.SettingsScreen
 import com.pocketccd.prototype.ui.theme.PocketCcdTheme
+import com.pocketccd.prototype.ui.theme.glass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -115,6 +116,22 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
     // 相机 App 的界面是照片的衬底，强调色跟着壁纸变会让同一张照片在不同桌面下
     // 看起来不一样；而且它只覆盖选中态/强调文字，收益远小于"不可预期"的代价。
     PocketCcdTheme {
+        // ---- 内测闸门（D-093）----
+        //
+        // 位置是有讲究的：必须在 `PocketCcdTheme` 之后、**所有副作用之前**返回。
+        // 下面那几十行一挂载就会发生的动作包括：构造 PhotoStore/FavoritesStore/ImprintPrefs、
+        // 申请相机权限、绑定 CameraX、按目的地改 requestedOrientation。没激活的人一个都不该触发 ——
+        // 尤其是相机绑定：让他先看到激活页，而不是在激活页背后听马达动一下。
+        //
+        // debug 包直接放行：调试 UI 时不该每次都输码。release 走 debug 签名但
+        // `BuildConfig.DEBUG == false`（D-091），所以这条捷径不会漏进内测包。
+        val activation = remember { ActivationStore(context) }
+        var activated by remember { mutableStateOf(activation.isActivated() || BuildConfig.DEBUG) }
+        if (!activated) {
+            ActivationScreen(onActivated = { activated = true })
+            return@PocketCcdTheme
+        }
+
         val state by viewModel.state.collectAsStateWithLifecycle()
         val capture by viewModel.capture.collectAsStateWithLifecycle()
         val cameraUi by viewModel.cameraUi.collectAsStateWithLifecycle()
@@ -140,6 +157,9 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         var zoomRatio by remember { mutableFloatStateOf(1f) }
         var cameraNonce by remember { mutableIntStateOf(0) }
         var lensStops by remember { mutableStateOf<List<LensStop>>(emptyList()) }
+        // 原生主长焦档（D-088）。null = 这台机器没有独立长焦，或探测链路整条失败。
+        // 提成独立状态而不是每次从 lensStops 里现挑：口径只有 LensInfo 一个源头。
+        var lensTelephoto by remember { mutableStateOf<LensStop?>(null) }
         var exposureProfile by remember { mutableStateOf<ExposureProfile?>(null) }
         var evIndex by remember { mutableIntStateOf(0) }
         var flashOn by remember { mutableStateOf(false) }
@@ -165,8 +185,23 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
         // manifest 里已经不再锁竖屏；这里按目的地改 requestedOrientation。
         val activity = remember(context) { context.findActivityOrNull() }
         val configuration = LocalConfiguration.current
-        LaunchedEffect(state.destination) {
-            val wanted = if (state.destination == AppDestination.CAMERA) {
+
+        // **从快门进的详情页，全程留在横版。**
+        //
+        // 这条链路上一次转屏都不允许发生，理由有两条，都踩过：
+        //
+        // 1. `takePicture` 是异步的（MAXIMIZE_QUALITY 300–800ms），而"跳详情页"在同一帧
+        //    就发生了。转屏会让拍摄页从横版控制台整块换成竖版版面 → PreviewView 销毁 →
+        //    unbindAll → 正在飞的那一张被 abort 成 **"Camera is closed."**（真机复现）。
+        // 2. 就算等帧到手再转，转屏仍然要重绑相机：看完照片按返回，取景窗会黑 0.3–0.6 秒
+        //    再亮起来。拍一张看一张是相机最高频的操作，这个代价不该付。
+        //
+        // 所以成片页补了一套横版版面（PhotoDetailScreen 的 `maxWidth > maxHeight` 分支），
+        // 方向由"从哪进来的"决定，不看采集状态 —— 需求是确定的，就别拿时序去凑。
+        val shutterDetail = state.destination == AppDestination.DETAIL &&
+            state.detailOrigin == AppDestination.CAMERA
+        LaunchedEffect(state.destination, state.detailOrigin) {
+            val wanted = if (state.destination == AppDestination.CAMERA || shutterDetail) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -349,6 +384,12 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
             if (captureVisible) {
                 CameraScreen(
                     stockName = activeStock?.label ?: "没有胶卷",
+                    // 包装图按 pack id 查（不是显示名）：id 是文件名事实，显示名会随元数据变。
+                    stockId = activeStock?.id,
+                    // 横版胶卷卡副行用的画幅。**取设备实际能给的尺寸**，不是 pack 的
+                    // 校准尺寸：给不到满幅时成片按原生尺寸出（D-098），这里写 4000×3000
+                    // 就是编数据。扫不到相机时退回 pack 尺寸（那也正是下发给 CameraX 的目标）。
+                    stockDetail = cameraUi.frameLabel ?: activeCard?.frameLabel,
                     shotsWithStock = activeCard?.shots ?: 0,
                     flashOn = flashOn,
                     flashAvailable = flashAvailable,
@@ -363,10 +404,12 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                         else -> cameraUi.blockReason
                     },
                     notice = notice,
+                    imprintLabel = imprint.label(),
                     permissionGranted = hasPermission,
                     lastThumbnail = activeCard?.latestThumbnail,
                     zoom = zoomRatio,
                     lensStops = lensStops,
+                    lensTelephoto = lensTelephoto,
                     exposureProfile = exposureProfile,
                     evIndex = evIndex,
                     viewfinder = if (cameraBound && activeStock != null) {
@@ -389,6 +432,7 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                                         bindFailures = 0
                                         viewModel.onCameraBound(bound)
                                         lensStops = bound.lensStops
+                                        lensTelephoto = bound.lensCapability.telephoto
                                         flashAvailable = bound.hasFlash
                                         // 新会话的闪光灯/变焦/EV 都是"出厂值"，
                                         // 由这里把界面记住的那一档补回去。
@@ -479,10 +523,8 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
             if (destination != AppDestination.CAMERA) {
                 GlassBackdrop(
                     modifier = Modifier.swallowTaps(),
-                    // 详情页没有 TabBar，查看器打开时也没有 —— 没人采样这张图层，
-                    // 别白录一遍全屏。
-                    captureContent = showBottomTabs(destination, viewerRequest != null),
-                    // overlay 里的玻璃才能采样"内容图层"；放进 content 里就是自己采自己。
+                    // overlay 是**层级**不是采样：dock 必须压住列表最后一行，
+                    // 查看器必须压住 dock。放进 content 里两者会互相盖。
                     overlay = {
                         // 底部玻璃 Tab：只在四个平级页出现。
                         // 详情页是压栈页，它的出口是左上角返回（回起点），不是 Tab；
@@ -506,25 +548,23 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                             )
                         }
 
-                        // 查看器画在 overlay 里（TabBar 之上），并且**不采样页面背景** ——
-                        // 它背后是照片，采样页面图层只会把相册网格糊到工具栏上。
+                        // 查看器画在 overlay 里（dock 之上）。它是模态：底部 dock 不能
+                        // 从照片底下露出一角，所以查看器必须晚于 dock 绘制（D-077）。
                         viewerRequest?.let { request ->
-                            CompositionLocalProvider(LocalGlassBackdrop provides null) {
-                                PhotoViewer(
-                                    photos = request.photos,
-                                    initialIndex = request.index,
-                                    favoriteIds = favoriteIds,
-                                    onToggleFavorite = { item ->
-                                        favoriteIds = favorites.toggle(item.id)
-                                    },
-                                    onOpenDetail = { item ->
-                                        viewerRequest = null
-                                        detailPhotoId = item.id
-                                        viewModel.onEvent(AppEvent.OpenDetail)
-                                    },
-                                    onClose = { viewerRequest = null },
-                                )
-                            }
+                            PhotoViewer(
+                                photos = request.photos,
+                                initialIndex = request.index,
+                                favoriteIds = favoriteIds,
+                                onToggleFavorite = { item ->
+                                    favoriteIds = favorites.toggle(item.id)
+                                },
+                                onOpenDetail = { item ->
+                                    viewerRequest = null
+                                    detailPhotoId = item.id
+                                    viewModel.onEvent(AppEvent.OpenDetail)
+                                },
+                                onClose = { viewerRequest = null },
+                            )
                         }
                     },
                 ) {
@@ -553,7 +593,6 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                             selectedId = activeStock?.id,
                             onSelect = viewModel::selectStock,
                             onRefresh = viewModel::refreshStocks,
-                            onOpenCamera = { viewModel.onEvent(AppEvent.OpenCamera) },
                         )
 
                         AppDestination.DISCOVER -> DiscoverScreen(
@@ -561,12 +600,23 @@ fun PocketCcdRoute(viewModel: AppViewModel = viewModel()) {
                             favoriteCount = photos.count { it.id in favoriteIds },
                             stockCount = cards.size,
                             storageBytes = storageBytes,
+                            recentPhotos = photos.take(4),
                         )
 
                         AppDestination.SETTINGS -> SettingsScreen(
                             stockCount = cards.size,
                             photoCount = photos.size,
                             versionName = BuildConfig.VERSION_NAME,
+                            betaActivation = remember(activated) {
+                                val at = activation.activatedAt()
+                                if (at <= 0L) null else {
+                                    java.time.Instant.ofEpochMilli(at)
+                                        .atZone(java.time.ZoneId.systemDefault())
+                                        .format(
+                                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+                                        ) + " 激活"
+                                }
+                            },
                             imprint = imprint,
                             onToggleFilmEdge = {
                                 val next = imprint.copy(filmEdge = !imprint.filmEdge)
@@ -684,6 +734,7 @@ private fun Modifier.swallowTaps(): Modifier =
 @Composable
 private fun ShutterFlash(trigger: Int) {
     if (trigger == 0) return
+    val flashColor = MaterialTheme.glass.onGlass
     val flash = remember { Animatable(0f) }
     LaunchedEffect(trigger) {
         flash.snapTo(0.82f)
@@ -693,7 +744,7 @@ private fun ShutterFlash(trigger: Int) {
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = flash.value }
-            .background(Color.White),
+            .background(flashColor),
     )
 }
 
@@ -747,7 +798,7 @@ private fun toast(context: Context, message: String) {
     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 /** 从 Compose 的 Context 往上找 Activity（orientation 只能设在它身上）。 */
-private tailrec fun Context.findActivityOrNull(): Activity? = when (this) {
+internal tailrec fun Context.findActivityOrNull(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivityOrNull()
     else -> null

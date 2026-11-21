@@ -6,13 +6,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,11 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,9 +60,11 @@ import com.pocketccd.prototype.ui.glass.GlassIcon
 import com.pocketccd.prototype.ui.glass.GlassIconButton
 import com.pocketccd.prototype.ui.glass.GlassIconKind
 import com.pocketccd.prototype.ui.glass.GlassSurface
+import com.pocketccd.prototype.ui.theme.ConsoleColor
 import com.pocketccd.prototype.ui.theme.GlassShape
 import com.pocketccd.prototype.ui.theme.GlassSpace
 import com.pocketccd.prototype.ui.theme.GlassType
+import com.pocketccd.prototype.ui.theme.consolePanel
 import com.pocketccd.prototype.ui.theme.glass
 import java.util.Calendar
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +73,12 @@ import kotlinx.coroutines.withContext
 
 /** 成片页的阶段。与 `CaptureState` 一一对应，但 UI 不需要认识 ViewModel 的类。 */
 enum class DetailStatus { Processing, Writing, Saved, Failed }
+
+/** 深色衬板上的次级文字：白 62%，与取景器内的角标同一档。 */
+private val OnMatteMuted = Color.White.copy(alpha = 0.62f)
+
+/** 深色衬板上的失败色：比浅底上的砖红提亮一档，否则压在石墨上看不清。 */
+private val OnMatteError = Color(0xFFE08D7D)
 
 /**
  * 单张详情：**刚拍完**和**从相册翻回来**共用这一屏。
@@ -98,6 +112,7 @@ fun PhotoDetailScreen(
     onShare: () -> Unit = {},
     onOpenInGallery: () -> Unit = {},
 ) {
+    // 两套版面的底部渐隐都要渐到**页面底色**：渐到黑色在浅色底上会变成一道脏灰。
     val p = MaterialTheme.glass
     val file = photo?.fullFile
 
@@ -124,101 +139,279 @@ fun PhotoDetailScreen(
         }
     }
 
-    Column(modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = GlassSpace.page, end = GlassSpace.page, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GlassIconButton(
-                label = "返回",
-                onClick = onBack,
-                icon = { tint -> GlassIcon(GlassIconKind.Back, tint) },
-            )
-            Spacer(Modifier.width(GlassSpace.gap))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = photo?.stockLabel ?: stockLabel ?: "成片",
-                    style = GlassType.cardTitle,
-                    color = p.onGlass,
-                )
-                Text(
-                    text = when (status) {
-                        DetailStatus.Processing -> "显影中"
-                        DetailStatus.Writing -> "写入中"
-                        DetailStatus.Saved -> "已完成"
-                        DetailStatus.Failed -> "冲洗失败"
-                    },
-                    style = GlassType.badge,
-                    color = p.onGlassMuted,
-                )
-            }
-        }
+    val title = photo?.stockLabel ?: stockLabel ?: "成片"
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = GlassSpace.page),
-            verticalArrangement = Arrangement.spacedBy(GlassSpace.gap),
-        ) {
-            PrintBox(
-                photo = photo,
-                status = status,
-                elapsedSeconds = elapsed,
-                failureMessage = failureMessage,
-            )
-
-            when (status) {
-                DetailStatus.Failed -> {
-                    GlassButton(
-                        text = "重试",
-                        onClick = onRetry,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "重试会重新按一次快门，生成一张新的照片；刚才那张若已落盘，" +
-                            "会留在相册里。",
-                        style = GlassType.caption,
-                        color = p.onGlassMuted,
-                    )
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        if (maxWidth > maxHeight) {
+            // ---- 横版：照片在左、参数与动作在右 ----
+            //
+            // 这不是"顺手支持横屏"。从快门进来的详情页**必须**留在横版：转竖会把拍摄页
+            // 从横版控制台整块换成竖版版面，PreviewView 随之销毁 → unbindAll →
+            // 正在飞的那一张被 abort 成 "Camera is closed."（D-089 修正）。
+            // 所以宁可给成片页补一套横版，也不要在这条链路上转屏。
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(GlassSpace.page),
+                horizontalArrangement = Arrangement.spacedBy(GlassSpace.gap),
+            ) {
+                // 左：印相按可用空间等比缩放（横版不高，宁可小也不滚动 —— 看照片不该翻页）
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val ratio = frameRatioOf(photo)
+                    val width = minOf(maxWidth, maxHeight * ratio)
+                    Box(Modifier.size(width, width / ratio)) {
+                        PrintBox(photo, status, elapsed, failureMessage)
+                    }
                 }
 
-                DetailStatus.Processing, DetailStatus.Writing -> Unit
-
-                DetailStatus.Saved -> InfoCard(
-                    exif = exif,
-                    capturedAt = photo?.capturedAt,
-                    deviceModel = deviceModel,
-                    bytes = bytes,
-                    galleryPublished = galleryPublished,
-                )
+                // 右：标题 / 参数 / 动作
+                Column(Modifier.width(DetailSidebar).fillMaxHeight()) {
+                    DetailHeader(
+                        title = title,
+                        status = status,
+                        onBack = onBack,
+                        contentPadding = PaddingValues(
+                            start = 0.dp,
+                            top = 0.dp,
+                            end = 0.dp,
+                            bottom = GlassSpace.tight,
+                        ),
+                    )
+                    val infoScroll = rememberScrollState()
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(infoScroll),
+                        ) {
+                            DetailBody(
+                                status = status,
+                                exif = exif,
+                                capturedAt = photo?.capturedAt,
+                                deviceModel = deviceModel,
+                                bytes = bytes,
+                                galleryPublished = galleryPublished,
+                                onRetry = onRetry,
+                            )
+                        }
+                        // 横版右栏放不下整张参数卡，只能滚 —— 但 Compose 的滚动没有滚动条，
+                        // 不给一条底部渐隐，那块卡片看起来就像被裁坏了。
+                        // **只在真的还能往下滚时才画**：否则内容短的时候会凭空多出一条黑杠。
+                        if (infoScroll.canScrollForward) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(28.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colorStops = arrayOf(
+                                                0f to Color.Transparent,
+                                                0.55f to p.background.copy(alpha = 0.82f),
+                                                1f to p.background,
+                                            ),
+                                        ),
+                                    ),
+                            )
+                        }
+                    }
+                    if (status == DetailStatus.Saved) {
+                        Spacer(Modifier.height(GlassSpace.tight))
+                        ActionList(
+                            isFavorite = isFavorite,
+                            onToggleFavorite = onToggleFavorite,
+                            onShare = onShare,
+                            onOpenInGallery = onOpenInGallery,
+                            galleryPublished = galleryPublished,
+                        )
+                    }
+                }
             }
-            // 动作条不再放在滚动内容里：3:4 的成片一占就 540dp，收藏/分享/相册
-            // 三个按钮在 891dp 高的屏幕上永远要滚一下才看得见。它们现在是固定底栏。
-            Spacer(Modifier.height(GlassSpace.inner))
-        }
-
-        if (status == DetailStatus.Saved) {
-            ActionCard(
-                isFavorite = isFavorite,
-                onToggleFavorite = onToggleFavorite,
-                onShare = onShare,
-                onOpenInGallery = onOpenInGallery,
-                galleryPublished = galleryPublished,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(
+        } else {
+            Column(modifier.fillMaxSize()) {
+                DetailHeader(
+                    title = title,
+                    status = status,
+                    onBack = onBack,
+                    contentPadding = PaddingValues(
                         start = GlassSpace.page,
+                        top = 8.dp,
                         end = GlassSpace.page,
-                        top = GlassSpace.tight,
-                        bottom = GlassSpace.inner,
+                        bottom = 8.dp,
                     ),
+                    withStatusInset = true,
+                )
+
+                val bodyScroll = rememberScrollState()
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(bodyScroll)
+                            .padding(horizontal = GlassSpace.page),
+                        verticalArrangement = Arrangement.spacedBy(GlassSpace.gap),
+                    ) {
+                        PrintBox(
+                            photo = photo,
+                            status = status,
+                            elapsedSeconds = elapsed,
+                            failureMessage = failureMessage,
+                        )
+
+                        DetailBody(
+                            status = status,
+                            exif = exif,
+                            capturedAt = photo?.capturedAt,
+                            deviceModel = deviceModel,
+                            bytes = bytes,
+                            galleryPublished = galleryPublished,
+                            onRetry = onRetry,
+                        )
+
+                        // 动作条不再放在滚动内容里：3:4 的成片一占就 540dp，收藏/分享/相册
+                        // 三个按钮在 891dp 高的屏幕上永远要滚一下才看得见。它们现在是固定底栏。
+                        Spacer(Modifier.height(GlassSpace.inner))
+                    }
+                    // 参数卡是被底栏切断的。深色玻璃时代底栏自己会糊掉接缝；现在是
+                    // 不透明浅板，切口的半行字会明晃晃地贴着底栏 —— 必须有这条渐隐，
+                    // 把"还能往下滚"画出来。**只在真能滚时才画**，否则会多一道灰杠。
+                    if (bodyScroll.canScrollForward) {
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(30.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0f to Color.Transparent,
+                                            0.55f to p.background.copy(alpha = 0.85f),
+                                            1f to p.background,
+                                        ),
+                                    ),
+                                ),
+                        )
+                    }
+                }
+
+                if (status == DetailStatus.Saved) {
+                    ActionCard(
+                        isFavorite = isFavorite,
+                        onToggleFavorite = onToggleFavorite,
+                        onShare = onShare,
+                        onOpenInGallery = onOpenInGallery,
+                        galleryPublished = galleryPublished,
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .padding(
+                                start = GlassSpace.page,
+                                end = GlassSpace.page,
+                                top = GlassSpace.tight,
+                                bottom = GlassSpace.inner,
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 横版右侧栏宽度：够放一行"时间 / 曝光 / 感光度"，又不至于把照片挤成一条。 */
+private val DetailSidebar = 236.dp
+
+/** 成片的画框比例，只允许在 3:4～4:3 之间变化（极端长宽比仍有一个稳定的框）。 */
+private fun frameRatioOf(photo: SavedPhoto?): Float = photo
+    ?.takeIf { it.width > 0 && it.height > 0 }
+    ?.let { (it.width.toFloat() / it.height).coerceIn(3f / 4f, 4f / 3f) }
+    ?: (4f / 3f)
+
+/** 顶部：返回 + 卷名 + 阶段。竖版与横版共用，只是内边距不同。 */
+@Composable
+private fun DetailHeader(
+    title: String,
+    status: DetailStatus,
+    onBack: () -> Unit,
+    contentPadding: PaddingValues,
+    withStatusInset: Boolean = false,
+) {
+    val p = MaterialTheme.glass
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (withStatusInset) Modifier.statusBarsPadding() else Modifier)
+            .padding(contentPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GlassIconButton(
+            label = "返回",
+            onClick = onBack,
+            icon = { tint -> GlassIcon(GlassIconKind.Back, tint) },
+        )
+        Spacer(Modifier.width(GlassSpace.gap))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = GlassType.cardTitle,
+                color = p.onGlass,
+                maxLines = 1,
+            )
+            Text(
+                text = when (status) {
+                    DetailStatus.Processing -> "显影中"
+                    DetailStatus.Writing -> "写入中"
+                    DetailStatus.Saved -> "已完成"
+                    DetailStatus.Failed -> "冲洗失败"
+                },
+                style = GlassType.badge,
+                color = p.onGlassMuted,
             )
         }
+    }
+}
+
+/**
+ * 印相下面的那一块：失败给重试，完成给参数表，冲洗中什么都不给
+ * （进度在印相框里，重复一次只会更吵）。
+ */
+@Composable
+private fun DetailBody(
+    status: DetailStatus,
+    exif: PhotoExif,
+    capturedAt: Long?,
+    deviceModel: String?,
+    bytes: Long,
+    galleryPublished: Boolean,
+    onRetry: () -> Unit,
+) {
+    val p = MaterialTheme.glass
+    when (status) {
+        DetailStatus.Failed -> {
+            GlassButton(
+                text = "重试",
+                onClick = onRetry,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "重试会重新按一次快门，生成一张新的照片；刚才那张若已落盘，" +
+                    "会留在相册里。",
+                style = GlassType.caption,
+                color = p.onGlassMuted,
+            )
+        }
+
+        DetailStatus.Processing, DetailStatus.Writing -> Unit
+
+        DetailStatus.Saved -> InfoCard(
+            exif = exif,
+            capturedAt = capturedAt,
+            deviceModel = deviceModel,
+            bytes = bytes,
+            galleryPublished = galleryPublished,
+        )
     }
 }
 
@@ -241,25 +434,41 @@ private fun PrintBox(
 ) {
     val p = MaterialTheme.glass
     val shape = GlassShape.image
+    // 印相框跟着照片的朝向走。固定 4:3 时，一张 3:4 竖片只能缩在中间，
+    // 左右各留一条黑边——看起来像加载失败。只允许在 3:4～4:3 之间变化，
+    // 极端长宽比仍有一个稳定的框。
+    val frameRatio = frameRatioOf(photo)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(if (photo != null) 3f / 4f else 4f / 3f)
-            .clip(shape)
-            .background(p.fill),
+            .aspectRatio(frameRatio)
+            // **照片永远贴着深色出画**（D-090）。浅色机身里如果印相框也是暖白，
+            // 照片和纸面只差一条 1dp 线，读起来像"贴了一张纸"；深石墨衬板把它变成
+            // "嵌进机身的取景窗"，和拍摄页那块取景窗是同一个零件。
+            .consolePanel(
+                color = ConsoleColor.viewfinder,
+                shape = shape,
+                elevation = 3.dp,
+                borderColor = ConsoleColor.viewfinderEdge,
+                topLight = false,
+                contactShadow = true,
+            ),
         contentAlignment = Alignment.Center,
     ) {
+        // 照片四周留 4dp 深色边：这才是"嵌在机身里的取景窗"。不留边的话，
+        // 只有长宽比不合适时才看得见深色衬板，正常比例下它等于不存在。
+        Box(Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
         when (status) {
             DetailStatus.Failed -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(24.dp),
             ) {
-                GlassIcon(GlassIconKind.Warning, p.error, size = 30.dp)
+                GlassIcon(GlassIconKind.Warning, OnMatteError, size = 30.dp)
                 Spacer(Modifier.height(GlassSpace.gap))
                 Text(
                     text = failureMessage ?: "冲洗失败",
                     style = GlassType.body,
-                    color = p.onGlass,
+                    color = ConsoleColor.onViewfinder,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -272,13 +481,13 @@ private fun PrintBox(
                 Text(
                     text = if (status == DetailStatus.Writing) "正在写入" else "正在显影",
                     style = GlassType.cardTitle,
-                    color = p.onGlass,
+                    color = ConsoleColor.onViewfinder,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "已用 %02d 秒".format(elapsedSeconds),
                     style = GlassType.numeric,
-                    color = p.onGlassMuted,
+                    color = OnMatteMuted,
                 )
             }
 
@@ -288,21 +497,22 @@ private fun PrintBox(
                     Image(
                         bitmap = bitmap,
                         contentDescription = "成片",
-                        contentScale = ContentScale.Crop,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GlassIcon(GlassIconKind.Gallery, p.onGlassMuted, size = 26.dp)
+                        GlassIcon(GlassIconKind.Gallery, OnMatteMuted, size = 26.dp)
                         Spacer(Modifier.height(GlassSpace.tight))
                         Text(
                             text = "缩略图缺失，原图仍在应用目录里",
                             style = GlassType.caption,
-                            color = p.onGlassMuted,
+                            color = OnMatteMuted,
                         )
                     }
                 }
             }
+        }
         }
     }
 }
@@ -337,7 +547,7 @@ private fun DevelopingRing(progressHint: Int) {
                 style = Stroke(width = stroke),
             )
             drawArc(
-                color = p.accent,
+                color = p.accentBright,
                 startAngle = angle,
                 sweepAngle = 110f,
                 useCenter = false,
@@ -376,7 +586,7 @@ private fun InfoCard(
         contentPadding = PaddingValues(16.dp),
     ) {
         Column {
-            Text(text = "拍摄参数", style = GlassType.caption, color = p.onGlassMuted)
+            Text(text = "EXPOSURE / FILE", style = GlassType.badge, color = p.onGlassMuted)
             Spacer(Modifier.height(GlassSpace.tight))
             InfoRow("时间", capturedAt?.let(::fullStamp) ?: "—")
             InfoRow("曝光", exif.exposureLine() ?: "—")
@@ -410,6 +620,91 @@ private fun InfoRow(label: String, value: String) {
     ) {
         Text(text = label, style = GlassType.caption, color = p.onGlassMuted, modifier = Modifier.width(64.dp))
         Text(text = value, style = GlassType.numeric, color = p.onGlass)
+    }
+}
+
+/**
+ * 横版的动作用竖排。
+ *
+ * 竖版那颗 [ActionItem] 是定宽 104dp 的，三颗并排要 328dp —— 横版右栏只有 236dp，
+ * 照搬会把第三颗挤到屏幕外（第一版就是这样，截图里"在相册打开"只剩一个"在"字）。
+ */
+@Composable
+private fun ActionList(
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onShare: () -> Unit,
+    onOpenInGallery: () -> Unit,
+    galleryPublished: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    GlassSurface(
+        shape = GlassShape.panel,
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(6.dp),
+    ) {
+        Column {
+            ActionRow(
+                label = if (isFavorite) "已收藏" else "收藏",
+                kind = GlassIconKind.Heart,
+                active = isFavorite,
+                onClick = onToggleFavorite,
+            )
+            ActionRow(label = "分享", kind = GlassIconKind.Share, onClick = onShare)
+            ActionRow(
+                label = if (galleryPublished) "在相册打开" else "相册未写入",
+                kind = GlassIconKind.Gallery,
+                enabled = galleryPublished,
+                onClick = onOpenInGallery,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionRow(
+    label: String,
+    kind: GlassIconKind,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    enabled: Boolean = true,
+) {
+    val p = MaterialTheme.glass
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(GlassShape.chip)
+            .background(if (active) p.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
+            .padding(horizontal = 10.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GlassIcon(
+            kind = kind,
+            tint = when {
+                !enabled -> p.onGlassMuted.copy(alpha = 0.5f)
+                active -> p.accentBright
+                else -> p.onGlass
+            },
+            size = 20.dp,
+            filled = active,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = GlassType.label,
+            color = when {
+                !enabled -> p.onGlassMuted.copy(alpha = 0.5f)
+                active -> p.accentBright
+                else -> p.onGlass
+            },
+            maxLines = 1,
+        )
     }
 }
 
@@ -463,7 +758,9 @@ private fun ActionItem(
         modifier = Modifier
             .width(104.dp)
             .clip(GlassShape.chip)
-            .background(if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent)
+                .background(
+                    if (active) p.accent.copy(alpha = 0.12f) else Color.Transparent,
+                )
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -478,7 +775,13 @@ private fun ActionItem(
         Text(
             text = label,
             style = GlassType.badge,
-            color = if (!enabled) p.onGlassMuted.copy(alpha = 0.5f) else if (active) p.accent else p.onGlassMuted,
+            color = if (!enabled) {
+                p.onGlassMuted.copy(alpha = 0.5f)
+            } else if (active) {
+                p.accentBright
+            } else {
+                p.onGlassMuted
+            },
             maxLines = 1,
         )
     }

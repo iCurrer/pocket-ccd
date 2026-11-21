@@ -2,6 +2,7 @@ package com.pocketccd.prototype.ui.gallery
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.pocketccd.prototype.ui.glass.GlassButton
 import com.pocketccd.prototype.ui.glass.GlassChip
+import com.pocketccd.prototype.ui.glass.GlassDivider
 import com.pocketccd.prototype.ui.glass.GlassIcon
 import com.pocketccd.prototype.ui.glass.GlassIconButton
 import com.pocketccd.prototype.ui.glass.GlassIconKind
@@ -97,7 +99,7 @@ fun GalleryScreen(
                     text = if (photos.isEmpty()) {
                         "还没有照片"
                     } else {
-                        "${photos.size} 张 · 收藏 ${photos.count { it.id in favoriteIds }} 张"
+                        "${photos.size} 张 · 收藏 ${photos.count { it.id in favoriteIds }}"
                     },
                     style = GlassType.caption,
                     color = p.onGlassMuted,
@@ -109,6 +111,11 @@ fun GalleryScreen(
                 icon = { tint -> GlassIcon(GlassIconKind.Refresh, tint) },
             )
         }
+
+        // 1dp 刻线把页头和内容分开：没有它，标题、筛选和第一排照片挤在同一片浮空区域里，
+        // 扫描时找不到"页面从这里开始"。
+        GlassDivider(Modifier.padding(horizontal = GlassSpace.page))
+        Spacer(Modifier.height(GlassSpace.gap))
 
         if (photos.isNotEmpty()) {
             LazyRow(
@@ -138,8 +145,8 @@ fun GalleryScreen(
                     // 浮层 TabBar 不占布局，必须自己让出这一截，否则最后一排被压在玻璃底下。
                     bottom = GlassSpace.dockReserve,
                 ),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 itemsIndexed(
@@ -185,9 +192,14 @@ private fun Thumb(
 
     Box(
         Modifier
-            .aspectRatio(3f / 4f)
-            .clip(RoundedCornerShape(14.dp))
-            .background(p.fill)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(4.dp))
+            // 底比页面亮一档：没有缩略图时，格子仍然是一块可辨认的"未曝光画幅"，
+            // 而不是和页面背景糊成一片、只浮着一个图标。
+            // 描边不能省：暖白格子在暖白底上只差 9 级明度，没有这条线，一整面墙就是
+            // 一块白板（浅色主题下的第一版就是这样）。
+            .background(p.surfaceRaised)
+            .border(1.dp, p.border, RoundedCornerShape(4.dp))
             .clickable(
                 role = Role.Button,
                 onClickLabel = "查看这张照片",
@@ -199,25 +211,34 @@ private fun Thumb(
             Image(
                 bitmap = bitmap,
                 contentDescription = null,
+                // 接触印样用 Crop：格子是等宽方形的，Fit 会在横片两侧留出黑边，
+                // 整面墙读起来像"坏掉的缩略图"。完整画面留给查看器与详情页。
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                GlassIcon(GlassIconKind.Gallery, p.onGlassMuted, size = 20.dp)
+                GlassIcon(
+                    GlassIconKind.Gallery,
+                    p.onGlassMuted.copy(alpha = 0.55f),
+                    size = 18.dp,
+                )
             }
         }
         if (favorite) {
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(18.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(Color.Black.copy(alpha = 0.45f)),
+                    .padding(4.dp)
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    // 角标是压在照片上的小件：用近实心暖白 + 深金，和查看器里的按钮
+                    // 同一套语言。原来的黑色块在浅色页面上像一块脏点。
+                    .background(p.veil)
+                    .border(1.dp, p.accent.copy(alpha = 0.55f), RoundedCornerShape(4.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                GlassIcon(GlassIconKind.Heart, p.accent, size = 11.dp, filled = true)
+                GlassIcon(GlassIconKind.Heart, p.accentDeep, size = 11.dp, filled = true)
             }
         }
     }

@@ -3,6 +3,8 @@ package com.pocketccd.prototype.ui.gallery
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -15,11 +17,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -88,7 +94,7 @@ fun PhotoViewer(
 
     BackHandler { onClose() }
 
-    Box(modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier.fillMaxSize().background(Color(0xFF050505))) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val density = LocalDensity.current
             val reqWidth = with(density) { maxWidth.toPx().toInt() }.coerceAtLeast(1)
@@ -195,23 +201,55 @@ fun PhotoViewer(
 
 @Composable
 private fun ViewerPage(item: PhotoWallItem, reqWidth: Int, reqHeight: Int) {
-    val bitmap = rememberViewerBitmap(item, reqWidth, reqHeight)
+    val state = rememberViewerBitmap(item, reqWidth, reqHeight)
+    val p = MaterialTheme.glass
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
+        when (state) {
+            ViewerBitmapState.Loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(42.dp)
+                        .border(1.dp, p.border, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Canvas(Modifier.size(28.dp)) {
+                        drawArc(
+                            color = p.accentBright,
+                            startAngle = -55f,
+                            sweepAngle = 220f,
+                            useCenter = false,
+                            style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(GlassSpace.gap))
+                Text(
+                    text = "正在读取底片",
+                    style = GlassType.badge,
+                    color = p.onGlassMuted,
+                )
+            }
+
+            ViewerBitmapState.Failed -> Text(
+                text = "底片无法读取",
+                style = GlassType.caption,
+                color = p.onGlassMuted,
+            )
+
+            is ViewerBitmapState.Ready -> Image(
+                bitmap = state.bitmap,
                 contentDescription = "${item.stockLabel} 拍摄的照片",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().padding(vertical = 8.dp),
             )
-        } else {
-            Text(
-                text = "这张照片读不出来",
-                style = GlassType.caption,
-                color = Color.White.copy(alpha = 0.6f),
-            )
         }
     }
+}
+
+private sealed interface ViewerBitmapState {
+    data object Loading : ViewerBitmapState
+    data object Failed : ViewerBitmapState
+    data class Ready(val bitmap: ImageBitmap) : ViewerBitmapState
 }
 
 /**
@@ -225,10 +263,10 @@ private fun rememberViewerBitmap(
     item: PhotoWallItem,
     reqWidth: Int,
     reqHeight: Int,
-): ImageBitmap? {
+): ViewerBitmapState {
     val key = item.fullImagePath ?: item.imagePath
-    val state = produceState<ImageBitmap?>(
-        initialValue = null,
+    val state = produceState<ViewerBitmapState>(
+        initialValue = ViewerBitmapState.Loading,
         key1 = key,
         key2 = reqWidth,
         key3 = reqHeight,
@@ -238,8 +276,12 @@ private fun rememberViewerBitmap(
             val fallback = item.imagePath
             val decoded = primary?.let { decodeSampledBitmap(it, reqWidth, reqHeight) }
                 ?: fallback?.let { decodeSampledBitmap(it, reqWidth, reqHeight) }
-                ?: return@withContext null
-            runCatching { decoded.asImageBitmap() }.getOrNull()
+                ?: return@withContext ViewerBitmapState.Failed
+            runCatching { decoded.asImageBitmap() }
+                .fold(
+                    onSuccess = ViewerBitmapState::Ready,
+                    onFailure = { ViewerBitmapState.Failed },
+                )
         }
     }
     return state.value
