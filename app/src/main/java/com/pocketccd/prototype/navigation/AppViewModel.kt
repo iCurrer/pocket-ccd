@@ -15,7 +15,11 @@ import com.pocketccd.prototype.camera.CapturedFrame
 import com.pocketccd.prototype.camera.ImprintSettings
 import com.pocketccd.prototype.camera.PhotoStore
 import com.pocketccd.prototype.camera.SavedPhoto
+import com.pocketccd.prototype.camera.StockPrefs
 import com.pocketccd.prototype.camera.decodeJpeg
+import com.pocketccd.prototype.camera.finalRotationFor
+import com.pocketccd.prototype.camera.frameServesPack
+import com.pocketccd.prototype.camera.landscapeNormalized
 import com.pocketccd.prototype.fotufilm.FilmEngine
 import com.pocketccd.prototype.fotufilm.FilmPack
 import com.pocketccd.prototype.fotufilm.FilmStock
@@ -69,7 +73,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val storageBytes: StateFlow<Long> = _storageBytes.asStateFlow()
 
     private val _stocks = MutableStateFlow<List<FilmStock>>(emptyList())
-    private val _selectedStockId = MutableStateFlow<String?>(null)
+
+    /** 上次装的那支卷（D-089 追加）。落盘是为了"每次开相机不用重选"。 */
+    private val stockPrefs = StockPrefs(application)
+
+    private val _selectedStockId = MutableStateFlow(stockPrefs.loadSelectedStockId())
     private val _camera = MutableStateFlow<CameraState>(CameraState.Pending)
 
     /**
@@ -118,21 +126,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         combine(_stocks, _camera, _roll) { stocks, camera, roll ->
             val bound = camera as? CameraState.Bound
             val sizes = bound?.supportedSizes.orEmpty()
-            val largest = sizes.maxByOrNull { it.width.toLong() * it.height }
             stocks.map { stock ->
-                val serves = sizes.servingSizeFor(stock)
                 val shots = roll.filter { it.stockId == stock.id }
                 FilmCard(
                     id = stock.id,
                     label = stock.label,
+                    // 这是 pack 的校准尺寸，不是成片尺寸 —— 成片尺寸见 CameraUiState.frameLabel。
                     frameLabel = stock.sizeLabel,
-                    supported = bound == null || serves != null,
-                    reason = when {
-                        bound == null -> null
-                        serves != null -> null
-                        largest != null ->
-                            "这台设备只能给 ${largest.width}×${largest.height}"
-                        else -> "相机没有报告可用的采集尺寸"
+                    // 任何一支卷在任何一台设备上都能拍：给不到满幅就走原生直通（D-098），
+                    // 亮度/尺度都正确，只是像素少一点。旧版在这里按"尺寸 ≥ pack"过滤，
+                    // 8MP 机型会看到整库都是灰的。
+                    supported = bound == null || sizes.isNotEmpty(),
+                    reason = if (bound != null && sizes.isEmpty()) {
+                        "相机没有报告可用的采集尺寸"
+                    } else {
+                        null
                     },
                     shots = shots.size,
                     latestThumbnail = shots
@@ -208,6 +216,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun selectStock(id: String) {
         if (_stocks.value.any { it.id == id }) {
             _selectedStockId.value = id
+            // 只有"用户明确装了一支"才落盘。相机绑定后的自动换卷不写（见 StockPrefs）。
+            stockPrefs.saveSelectedStockId(id)
             _stockSwitchedNotice.value = null
         }
     }
@@ -224,22 +234,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // 若还拿着旧句柄，只会得到 "Not bound to a valid Camera"（review P2）。
         lastTaker = handle::takeJpeg
         _camera.value = CameraState.Bound(handle.supportedSizes, handle.hasFlash)
-        // 自动落到一个**当前采集尺寸能服务**的卷上：精确相等最好，更大则中心裁切，
-        // 更小则拍不了。宁可切卷，也不要偷偷缩放（D-037）。
-        val current = _stocks.value.firstOrNull { it.id == _selectedStockId.value }
-        if (current == null || handle.supportedSizes.servingSizeFor(current) == null) {
-            val replacement = _stocks.value
-                .firstOrNull { handle.supportedSizes.servingSizeFor(it) != null }
-            if (replacement != null && replacement.id != _selectedStockId.value) {
-                _selectedStockId.value = replacement.id
-                // 只有"用户明确装过一支、但这台机器给不了"才提示；
-                // 冷启动时 current == null 属于初始化，不打扰用户。
-                if (current != null) {
-                    _stockSwitchedNotice.value =
-                        "这台设备的采集尺寸拍不了「${current.label}」，已换成「${replacement.label}」"
-                }
-            }
-        }
+        // **不再自动切卷**。旧逻辑在"这台设备给不了这卷的尺寸"时把用户选中的卷换掉，
+        // 因为那时尺寸不够等于拍不了。D-098 之后任何尺寸都能出片（不够就按原生尺寸），
+        // 自动切卷只会凭空夺走用户的选择 —— 换卷是用户的动作，不是我们的。
     }
 
     fun onCameraReleased() {
@@ -276,7 +273,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val frame = taker()
                 withContext(Dispatchers.Default) {
                     _capture.value = CaptureState.Developing(stock)
-                    val developed = develop(frame.jpeg, stock, frame.rotationDegrees)
+                    val developed = develop(
+                        frame.jpeg,
+                        stock,
+                        frame.rotationDegrees,
+                        frame.sensorMountRotation,
+                    )
                     try {
                         _capture.value = CaptureState.Saving(stock)
                         val saved = photoStore.save(
@@ -287,11 +289,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             capturedAt = frame.takenAt,
                             renderMillis = developed.renderMillis,
                             strips = developed.strips,
-                            // 解码阶段若已经为了"转置→横向"转过一次，这里必须减掉，
-                            // 否则两处都按"转到正立"处理，成品会多转 90/180°。
-                            rotationDegrees = (
-                                frame.rotationDegrees - developed.appliedRotationDegrees + 360
-                                ) % 360,
+                            // 落盘只补**设备握持角**这一步。
+                            //
+                            // 两个角度不是同一件事，不能相减：
+                            // - 解码只把竖置帧归一化回**传感器帧**（`appliedRotationDegrees`），
+                            //   转完仍是"相机芯片看到的样子"，还不是用户看到的样子；
+                            // - 正立要在它之上再叠握持角。
+                            //
+                            // 但也**不能无条件叠**：握持角是 `(SENSOR_ORIENTATION - displayRotation)`，
+                            // 而 displayRotation 在锁横版的界面里会说谎。所以由 develop 统一
+                            // 收敛成 `developed.rotationDegrees` —— 横帧只接受 0/180，
+                            // 90/270 一律收回 0（见 [finalRotationFor]），成品不会再被翻成竖版。
+                            rotationDegrees = developed.rotationDegrees,
                             // P1-14：把相机原始帧里读到的四项带进落盘这一步。
                             // 晚一步就没了 —— 成片的像素已经重新编码过，EXIF 只剩这里的值。
                             exif = frame.exif,
@@ -369,12 +378,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 冲洗本体：解码（必要时裁切）→ 引擎 → 成品位图。整个函数跑在 [Dispatchers.Default] 上。 */
-    private fun develop(jpeg: ByteArray, stock: FilmStock, rotationDegrees: Int): Developed {
+    /** 冲洗本体：解码（必要时转正/裁切/原生直通）→ 引擎 → 成品位图。跑在 [Dispatchers.Default] 上。 */
+    private fun develop(
+        jpeg: ByteArray,
+        stock: FilmStock,
+        rotationDegrees: Int,
+        sensorMountRotation: Int?,
+    ): Developed {
         val target = Size(stock.width, stock.height)
-        val frame = decodeJpeg(jpeg, target, stock.label)
+        val frame = decodeJpeg(
+            bytes = jpeg,
+            target = target,
+            stockLabel = stock.label,
+            sensorMountRotation = sensorMountRotation,
+            deviceRotationDegrees = rotationDegrees,
+        )
         val source = frame.bitmap
-        val output = Bitmap.createBitmap(stock.width, stock.height, Bitmap.Config.ARGB_8888)
+        // 画布跟**帧**同尺寸，不是跟 pack 同尺寸：帧比 pack 小时走原生直通（D-098），
+        // 引擎按传入的行列数解算空间参数，输出必须与输入同大小。
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         return try {
             FilmPack.fromFile(stock.file).use { pack ->
                 val engine = FilmEngine(pack, shoulderKnee = stock.shoulderKnee)
@@ -382,18 +404,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     "原生内核不可用：${FotufilmNative.loadFailure?.message ?: "Halide 内核未就绪"}"
                 }
                 val result = engine.render(source, output)
+                // 落盘角度：**这里是唯一一处**把"归一化角 + 握持角"收敛成成品的旋转。
+                //
+                // 冲洗用的帧是横的（归一化之后必然如此，竖版帧要么已转正要么已报错），
+                // 所以成品也必须是横的：`rotationDegrees` 只允许决定 0/180，90/270
+                // 一律收回 0。真机上就交过一张横持拍、冲洗成 4000×3000、落盘又转 90°
+                // 变成 3000×4000 的躺倒竖版照片 —— 一加 13 正常、另一台必现。
+                val composedRotation = finalRotationFor(
+                    frameIsLandscape = source.width >= source.height,
+                    requestedRotation = rotationDegrees,
+                )
+                val clamped = composedRotation != ((rotationDegrees % 360) + 360) % 360
+                val finalWidth =
+                    if (composedRotation % 180 == 0) output.width else output.height
+                val finalHeight =
+                    if (composedRotation % 180 == 0) output.height else output.width
                 Log.i(
                     TAG,
                     "developed ${stock.label} ${source.width}x${source.height} " +
                         "in ${result.totalMillis}ms / ${result.strips} strips / " +
-                        "nonFinite=${result.nonFinite} / rotate=$rotationDegrees°" +
-                        frame.describeCrop()?.let { " / $it" }.orEmpty(),
+                        "nonFinite=${result.nonFinite} / " +
+                        "frame=${frame.sourceWidth}x${frame.sourceHeight}" +
+                        " / 归一化=${frame.appliedRotationDegrees}°" +
+                        " / 握持=$rotationDegrees°" +
+                        " / 落盘=$composedRotation°" +
+                        (if (clamped) "（握持角会把横版翻成竖版，已收回）" else "") +
+                        frame.describeCrop()?.let { " / $it" }.orEmpty() +
+                        " / final=${finalWidth}x$finalHeight",
                 )
                 Developed(
                     renderMillis = result.totalMillis,
                     strips = result.strips,
                     bitmap = output,
-                    appliedRotationDegrees = frame.appliedRotationDegrees,
+                    rotationDegrees = composedRotation,
                 )
             }
         } catch (error: Throwable) {
@@ -408,25 +451,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val renderMillis: Long,
         val strips: Int,
         val bitmap: Bitmap,
-        /** 解码阶段已经转过的角度，落盘旋转要把它减掉（否则转两遍）。 */
-        val appliedRotationDegrees: Int,
+        /** 落盘真正要转的角度（已按"横版构图不可翻成竖版"收敛，见 [finalRotationFor]）。 */
+        val rotationDegrees: Int,
     )
-
-    /**
-     * 这份采集尺寸能否服务这卷胶卷。
-     *
-     * - **相等**：直接冲洗，零损失。
-     * - **更大**：中心裁切到 pack 尺寸。裁切不改变 pixels-per-mm，pack 的空间参数
-     *   （扩散/晕光/颗粒半径）依然成立，只是取景范围变窄 —— 这是同一份 pack 能服务
-     *   多种机型的唯一正确办法。
-     * - **更小**：不行。绝不缩放：缩放会改 pixels-per-mm，等于换了光学系统。
-     */
-    private fun Size.canServe(stock: FilmStock): Boolean =
-        width >= stock.width && height >= stock.height
-
-    /** 能服务 [stock] 的最小采集尺寸。挑最小那档：内存与耗时都正比于像素数。 */
-    private fun Set<Size>.servingSizeFor(stock: FilmStock): Size? =
-        filter { it.canServe(stock) }.minByOrNull { it.width.toLong() * it.height }
 
     private fun buildCameraUi(
         stocks: List<FilmStock>,
@@ -436,11 +463,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     ): CameraUiState {
         val supported = (camera as? CameraState.Bound)?.supportedSizes.orEmpty()
         val active = stocks.firstOrNull { it.id == selectedId } ?: stocks.firstOrNull()
-        val largest = supported.maxByOrNull { it.width.toLong() * it.height }
-        val serving = active?.let { supported.servingSizeFor(it) }
+        // 报尺寸一律报「长边×短边」：竖置帧转 90° 后像素一个不少，
+        // 直接印 3072×4096 会让用户以为比 4000×3000 差。
+        val largest = supported.maxByOrNull { it.width.toLong() * it.height }?.landscapeNormalized()
 
         // 请求 pack 的尺寸，让 CameraX 挑最接近的一档：设备有精确档就直接给精确的，
-        // 没有也会给"最接近的更高档"，再由 decodeJpeg 中心裁切。
+        // 没有也会给"最接近的更高档"，再由 decodeJpeg 中心裁切；比 pack 还小的档
+        // 走原生直通（D-098），不再被挡。
         //
         // **只要知道是哪卷就下发**，不再等"已验证能服务"。旧逻辑在相机还是 Pending 时
         // 传 null，于是第一次绑定无约束、拿到真实尺寸后再按 pack 尺寸重绑一次 ——
@@ -448,15 +477,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // 还是 true，按快门静默无反应。
         val programmed = active?.let { Size(it.width, it.height) }
 
+        // 画幅标注必须说实话：设备给不到 pack 满幅时，成片就是设备尺寸（D-098），
+        // 这时还写 4000×3000 就是编数据。
+        val frameLabel = when {
+            active == null -> null
+            largest == null -> active.sizeLabel
+            frameServesPack(largest, Size(active.width, active.height)) -> active.sizeLabel
+            else -> "${largest.width}×${largest.height}"
+        }
+
         val reason = when {
             stocks.isEmpty() -> "没有可用的胶卷"
             camera is CameraState.Pending -> "正在启动相机"
             camera is CameraState.Unavailable -> camera.reason
             supported.isEmpty() -> "相机没有报告可用的采集尺寸"
-            serving == null && active != null && largest != null ->
-                "「${active.label}」需要 ${active.sizeLabel}，" +
-                    "这台设备只能给 ${largest.width}×${largest.height}"
-            serving == null -> "没有与相机分辨率匹配的胶卷"
             capture.isBusy -> "正在冲洗上一张"
             else -> null
         }
@@ -467,6 +501,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             camera = camera,
             canShoot = reason == null,
             blockReason = reason,
+            frameLabel = frameLabel,
             largestSupported = largest,
             programmedSize = programmed,
         )
